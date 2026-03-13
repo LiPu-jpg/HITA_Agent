@@ -1,12 +1,14 @@
 # HITA_Angent Refactor Design (v0)
 
-**Goal:** Migrate HITA_L into a new, layered, Compose-first Android app (HITA_Angent) with JDK 17 and an Agent Workbench that aligns with SSOT for public/private skill separation.
+**Goal:** Migrate HITA_L into a new, layered, Compose-first Android app (HITA_Angent) with JDK 17, starting with Shenzhen v0 core features and a unified multi-campus data model.
 
-**Scope:**
+**Scope (v0 Shenzhen-first):**
 - Source of truth for features: HITA_L (HITA_X only for optional webui login if reused).
 - Compose-first UI migration.
 - Layered modules: `app`, `core-data`, `core-domain`, `core-ui`, `agent/workbench`.
 - Privacy: all EAS sessions and private skills remain on-device.
+- Core only: **login/session + timetable + scores + empty rooms**.
+- Not in v0: course selection, course resources (reserved for agent/pr workflows).
 
 ## Rules / Constraints (Contractual)
 
@@ -46,26 +48,31 @@
 
 ---
 
-## Section 2 — Data Flow + Privacy + Orchestration
+## Section 2 — Shenzhen v0 Scope & API Mapping
 
-### 2.1 Data Flow (Orchestrator view)
-**Flow A — Refresh scores (Private → Local → Optional summary upload)**
-1) User/manual refresh or background worker triggers.
-2) Orchestrator reads local `UnifiedScoreResult` cache.
-3) If `now < expires_at` and not forced → return cache (`source=cache`).
-4) Else call private EAS skill `eas.scores.fetch`.
-5) Normalize to `UnifiedScoreItem[]`, persist with `cached_at` and `expires_at` (TTL from `cached_at + ttl_seconds`).
-6) If user enabled optional upload → upload redacted summary (P1 only).
+### 2.1 Shenzhen v0 Scope
+- Login/Session
+- Timetable (weekly matrix, HITA_L behavior)
+- Scores (list + summary)
+- Empty rooms (date + period + building/area)
 
-**Flow B — PR submit (Public skill)**
-1) Orchestrator builds PR payload (no credentials).
-2) Call server public skill (async).
-3) Poll `/v1/jobs/{id}` with backoff.
-4) Store summary locally.
+### 2.2 Shenzhen API Mapping (HITA_L mode)
+**Login / Session**
+- `/component/queryApplicationSetting/rsa` → `/c_raskey` → `/authentication/ldap`
 
-**Flow C — RAG query (Public skill)**
-1) Orchestrator decides if public knowledge is required.
-2) Call `rag.query` and merge hits into response.
+**Timetable (HITA_L weekly matrix)**
+- Term list: `/app/commapp/queryxnxqlist`
+- Week list: `/app/commapp/queryzclistbyxnxq`
+- Weekly matrix: `/app/Kbcx/query`
+- Schedule structure from `jcList` in weekly matrix response
+
+**Scores**
+- Scores list: `/app/cjgl/xscjList?_lang=zh_CN`
+- Summary (GPA/rank): `/app/cjgl/xfj`
+
+**Empty Rooms**
+- Building list: `/app/commapp/queryjxllist`
+- Occupancy by date + building: `/app/kbrcbyapp/querycdzyxx`
 
 ### 2.2 Privacy & Data Classification
 - **P0 Private:** credentials, session cookies/tokens, student ID, grades, raw timetable. Never leave device.
@@ -95,64 +102,89 @@
 
 ---
 
-## Section 3 — Compose UI Migration + Design System
+## Section 3 — Unified Schema + Cache/TTL + Data Flow
 
-### 3.1 Compose-first原则
-- All new UI is Compose; no new XML.
-- Migrate high-frequency flows first.
+### 3.1 Unified Local Schemas (multi-campus)
+- `CampusSession`: `campus_id`, `bearer_token?`, `cookies_by_host`, `created_at`, `expires_at?`
+- `UnifiedTerm`: `term_id`, `year`, `term`, `name`, `is_current`
+- `UnifiedCourseItem`: `course_code`, `course_name`, `teacher?`, `classroom?`, `weekday`, `start_period`, `end_period` (inclusive), `weeks: int[]`, `weeks_text?`
+- `UnifiedScoreItem`: `course_code`, `course_name`, `credit`, `score_value: number|null`, `score_text`, `status?`, `term_id`
+- `UnifiedTimetableResult`: `data`, `cached_at`, `expires_at`, `stale`, `source`, `error: Error|null`
+- `UnifiedScoreResult`: `data`, `summary?`, `cached_at`, `expires_at`, `stale`, `source`, `error: Error|null`
+- `EmptyRoomQuery`: `date`, `period` (DJ1..DJ6), `building_id`, `building_name?`
+- `EmptyRoomResult`: `rooms`, `cached_at`, `expires_at`, `stale`, `source`, `error: Error|null`
 
-### 3.2 Design System (core-ui)
-- Tokens: colors, typography, spacing.
-- Components: AppBar, Tabs, Card, ListItem, ScoreBadge, CourseChip, StatusPill, Loading/Error/Empty.
-- Preserve HITA_L visual language and palette.
+### 3.2 Cache / TTL Rules
+- `expires_at = cached_at + ttl_seconds` (single source of truth)
+- Force refresh triggers:
+  - manual refresh
+  - background worker
+  - term/session change
+- Failure strategy: if cache exists → return `stale=true` + error; else return error
+- Suggested TTLs:
+  - Timetable: 24h
+  - Scores: 6h–12h
+  - Empty rooms: 2h–4h
 
-### 3.3 Navigation (app)
-- Main routes: `/timetable`, `/scores`, `/resources`, `/profile`, `/workbench`.
-- Subroutes for detail screens.
+### 3.3 Shenzhen v0 Data Flows
+**Login / Session**
+1) RSA init → RSA key → LDAP login
+2) Persist `CampusSession` locally (bearer + cookie)
 
-### 3.4 Migration order (UI)
-1) Tokens + base components
-2) Business components
-3) Feature screens
+**Timetable**
+1) `queryxnxqlist` → terms
+2) `queryzclistbyxnxq` → week count
+3) Loop `Kbcx/query` per week → normalize to `UnifiedCourseItem[]`
 
-### 3.5 Campus awareness in UI
-- Campus switcher triggers cache invalidation and refresh.
-- Public skill calls always pass `campus_id`.
+**Scores**
+1) `xscjList` → `UnifiedScoreItem[]`
+2) `xfj` → summary (optional)
 
----
-
-## Section 4 — Data Layer Migration & API Adapters
-
-### 4.1 EAS Adapter Interface (v0)
-- `login()` → `CampusSession`
-- `validateSession()`
-- `fetchTerms()`
-- `fetchTimetable(term)`
-- `fetchScores(term, qzqmFlag)`
-
-### 4.2 Campus adapters
-- HITSZ: incoSpringBoot bearer + cookie (existing baseline)
-- HITH: iVPN/CAS WebView
-- HITWH: webvpn QR login
-
-### 4.3 Session store
-- `CampusSession` persisted locally, encrypted with Android Keystore.
-- TTL controlled locally; no session data uploaded.
-
-### 4.4 Public skills client
-- `/v1/skills`, `/v1/skills/{name}:invoke`, `/v1/jobs/{id}`
-- Always include `campus_id`.
-- Must follow SSOT invoke/jobs semantics.
+**Empty Rooms**
+1) `queryjxllist` → buildings
+2) `querycdzyxx` → DJ1..DJ6 occupancy
+3) Local filter by `period`
 
 ---
 
-## Section 5 — Phased Migration + Tests + Risks
+## Section 4 — Module Responsibilities + Migration Order + Minimum v0
 
-### 5.1 Phases
-**Phase 0**: module skeleton, Compose baseline, JDK17, Design System v0
-**Phase 1**: core features (timetable, scores, resources)
-**Phase 2**: academic tools (GPA, empty rooms, course snatching)
-**Phase 3**: Agent Workbench
+### 4.1 Module Responsibilities
+- `core-domain`
+  - Unified schemas, result wrappers, repository contracts
+- `core-data`
+  - `EasShenzhenAdapter` (login/session + timetable + scores + empty rooms)
+  - Local cache + TTL
+  - `CampusSessionStore` (Keystore encryption)
+- `core-ui`
+  - tokens + reusable components for timetable/scores/empty rooms
+- `app`
+  - Compose routes/screens + ViewModels
+- `agent/workbench`
+  - Stub only in v0 (no functional dependency)
+
+### 4.2 Migration Order (v0 core only)
+1) Shenzhen session + adapter skeleton
+2) Timetable weekly matrix pipeline
+3) Scores list + summary
+4) Empty rooms (buildings + occupancy)
+5) UI wiring for timetable/scores/empty rooms
+6) Background refresh + error handling
+
+### 4.3 Minimum v0 Checklist
+- Login/Session (RSA init → RSA key → LDAP login)
+- Timetable (term → week list → weekly matrix)
+- Scores (list + summary)
+- Empty rooms (building list + occupancy, filter by period)
+- UI: Timetable + Scores + Empty Rooms + Profile login card
+
+---
+
+## Section 5 — Compose UI + Tests + Risks
+
+### 5.1 Navigation (app)
+- Main routes (v0): `/timetable`, `/scores`, `/empty-rooms`, `/profile`, `/workbench`
+- Home remains Timetable; Workbench is present but stubbed
 
 ### 5.2 Tests
 - Domain: use-case unit tests

@@ -7,8 +7,10 @@
 - Defined layered architecture and Compose-first migration strategy
 - Captured data flow, privacy constraints, orchestration model
 - Added campus-aware public skill requirement
+- Updated design with Shenzhen v0 scope (login/session + timetable + scores + empty rooms)
+- Added unified local schemas + TTL rules + Shenzhen data flows
 
 ## Next
 - Create implementation plan (writing-plans)
-- Scaffold new multi-module Gradle project in `HITA_Angent`
-- Begin Phase 0 (module skeleton + Compose baseline + JDK17)
+- Implement Shenzhen adapter skeleton in `core-data`
+- Wire timetable/scores/empty rooms pipelines to unified schema
