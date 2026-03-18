@@ -25,6 +25,7 @@ data class EmptyRoomItem(
 
 data class EmptyRoomResult(
     val rooms: List<EmptyRoomItem>,
+    val buildingName: String? = null,
     val cachedAt: java.time.Instant,
     val expiresAt: java.time.Instant,
     val stale: Boolean,

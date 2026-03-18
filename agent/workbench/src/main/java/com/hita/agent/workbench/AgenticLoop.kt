@@ -146,8 +146,8 @@ class AgenticLoop(
                 builder.append("   $content\n")
             }
         }
-        if (output.summary != null) {
-            builder.append("\nSummary: ${output.summary.take(300)}\n")
+        output.summary?.let { summary ->
+            builder.append("\nSummary: ${summary.take(300)}\n")
         }
         return builder.toString().trimEnd()
     }

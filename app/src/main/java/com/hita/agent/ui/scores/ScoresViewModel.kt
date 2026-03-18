@@ -30,9 +30,9 @@ class ScoresViewModel(
             val result = repository.getScores(current, qzqmFlag = "qm")
             val err = result.error
             _uiState.value = when {
-                result.data.isEmpty() && err != null -> ScoresUiState.Error(err)
+                result.data.isEmpty() && err != null -> ScoresUiState.Error(err.toString())
                 result.data.isEmpty() -> ScoresUiState.Empty
-                else -> ScoresUiState.Empty
+                else -> ScoresUiState.Content(result.data)
             }
         }
     }

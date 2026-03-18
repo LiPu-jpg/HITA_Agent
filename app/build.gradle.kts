@@ -19,6 +19,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {
@@ -48,6 +49,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation(project(":core-data"))
     implementation(project(":core-domain"))
+    implementation(project(":core-ui"))
     implementation(project(":agent:workbench"))
 
     testImplementation("junit:junit:4.13.2")

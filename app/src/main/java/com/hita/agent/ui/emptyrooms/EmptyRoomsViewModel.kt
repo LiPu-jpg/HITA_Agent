@@ -20,10 +20,10 @@ class EmptyRoomsViewModel(
             val result = repository.getEmptyRooms(date, buildingId, period)
             val err = result.error
             _uiState.value = if (result.rooms.isEmpty()) {
-                if (err != null) EmptyRoomsUiState.Error(err.message)
+                if (err != null) EmptyRoomsUiState.Error(err.toString())
                 else EmptyRoomsUiState.Empty
             } else {
-                EmptyRoomsUiState.Empty
+                EmptyRoomsUiState.Content(result.rooms.map { it.name }, result.buildingName)
             }
         }
     }

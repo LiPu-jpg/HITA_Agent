@@ -31,7 +31,7 @@ class LoginViewModel(
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
 
     fun setCampus(campusId: CampusId) {
-        DebugLog.d("LoginVM", "setCampus ${campusId.value}")
+        DebugLog.d("LoginVM", "setCampus ${campusId.name}")
         _state.update { it.copy(campusId = campusId, message = null) }
         refreshStatus()
     }
@@ -53,7 +53,7 @@ class LoginViewModel(
             } else {
                 session != null
             }
-            DebugLog.d("LoginVM", "refreshStatus campus=${campus.value} hasSession=${session != null} valid=$valid")
+            DebugLog.d("LoginVM", "refreshStatus campus=${campus.name} hasSession=${session != null} valid=$valid")
             _state.update { it.copy(status = resolveStatus(session, valid), message = null) }
         }
     }
@@ -99,7 +99,7 @@ class LoginViewModel(
     }
 
     fun logout() {
-        DebugLog.i("LoginVM", "logout campus=${_state.value.campusId.value}")
+        DebugLog.i("LoginVM", "logout campus=${_state.value.campusId.name}")
         sessionStore.clear(_state.value.campusId)
         _state.update { it.copy(status = LoginStatus.LOGGED_OUT, message = null) }
     }

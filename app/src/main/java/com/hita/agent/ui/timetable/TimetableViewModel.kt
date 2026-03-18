@@ -38,7 +38,7 @@ class TimetableViewModel(
             val result = repository.getTimetable(current)
             val err = result.error
             _uiState.value = when {
-                result.data.isEmpty() && err != null -> TimetableUiState.Error(err)
+                result.data.isEmpty() && err != null -> TimetableUiState.Error(err.toString())
                 result.data.isEmpty() -> TimetableUiState.Empty
                 else -> TimetableUiState.Content(result.data)
             }

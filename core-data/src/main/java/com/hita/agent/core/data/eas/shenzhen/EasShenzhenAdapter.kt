@@ -116,6 +116,7 @@ class EasShenzhenAdapter(
         val now = Instant.now()
         return EmptyRoomResult(
             rooms = rooms,
+            buildingName = buildingId,
             cachedAt = now,
             expiresAt = now,
             stale = false,

@@ -11,7 +11,9 @@ data class ErrorInfo(
     val code: String,
     val message: String,
     val retryable: Boolean? = null
-)
+) {
+    override fun toString(): String = message
+}
 
 data class UnifiedTimetableResult(
     val data: List<UnifiedCourseItem>,
