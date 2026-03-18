@@ -1,0 +1,9 @@
+{
+  "code": 200,
+  "msg": "操作成功",
+  "msg_en": "操作成功_en",
+  "content": [
+    {"MC": "教学楼II", "DM": "14", "MC_EN": "Teaching Building II"},
+    {"MC": "教学楼III", "DM": "15", "MC_EN": "Teaching Building III"}
+  ]
+}

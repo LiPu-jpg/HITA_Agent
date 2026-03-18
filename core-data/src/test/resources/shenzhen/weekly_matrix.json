@@ -1,0 +1,22 @@
+{
+  "code": 200,
+  "msg": "操作成功",
+  "msg_en": "操作成功_en",
+  "content": [
+    {
+      "rqList": [
+        {"XQMC": "星期一", "XQMC_EN": "Mon", "XQDM": 1, "RQ": "2026-03-09"}
+      ]
+    },
+    {
+      "jcList": [
+        {"JSJC": 2, "KSJC": 1, "DJ": 1, "SJ": "08:30—10:15"}
+      ]
+    },
+    {
+      "kcxxList": [
+        {"XQJ": 1, "KCDM": "COMP2054", "KCMC": "机器学习", "KBXX": "机器学习\n[A309]", "KBXX_EN": "Machine Le...\n[A309]", "DJ": 3, "XB": 2, "SYLB": null}
+      ]
+    }
+  ]
+}
