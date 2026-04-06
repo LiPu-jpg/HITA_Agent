@@ -12,6 +12,7 @@ import com.stupidtree.hitax.R
 import com.stupidtree.hitax.data.model.timetable.EventItem
 import com.stupidtree.hitax.ui.main.MainActivity
 import com.stupidtree.hitax.ui.widgets.WidgetUtils
+import com.stupidtree.hitax.ui.widgets.WidgetThemeUtils
 import com.stupidtree.hitax.ui.widgets.today.normal.TodayWidget
 import com.stupidtree.hitax.ui.widgets.today.slim.TodayWidgetSlim
 import com.stupidtree.hitax.utils.TimeTools
@@ -47,10 +48,16 @@ object TodayUtils {
         appWidgetId: Int,
         slim: Boolean
     ) {
+        val palette = WidgetThemeUtils.palette(context)
         val views = RemoteViews(
             context.packageName ?: "",
             if (slim) R.layout.widget_today_slim else R.layout.widget_today
         )
+        views.setInt(R.id.widget_root, "setBackgroundResource", palette.backgroundDrawableRes)
+        views.setTextColor(R.id.tv_title, palette.primaryTextColor)
+        views.setInt(R.id.imageView12, "setBackgroundResource", palette.dividerDrawableRes)
+        views.setInt(R.id.loading_icon, "setBackgroundResource", palette.placeholderDrawableRes)
+        views.setTextColor(R.id.loading, palette.secondaryTextColor)
         val btIntent = Intent().setAction(WidgetUtils.EVENT_REFRESH)
         btIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId)
         btIntent.setClass(

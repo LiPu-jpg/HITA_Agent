@@ -8,10 +8,10 @@ import android.os.Bundle
 import android.text.TextUtils
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
-import android.graphics.Color
 import com.stupidtree.hitax.R
 import com.stupidtree.hitax.data.model.timetable.EventItem
 import com.stupidtree.hitax.data.repository.TimetableRepository
+import com.stupidtree.hitax.ui.widgets.WidgetThemeUtils
 import com.stupidtree.hitax.ui.widgets.today.normal.TodayWidget.Companion.EVENT_EXTRA
 import com.stupidtree.hitax.utils.TimeTools
 
@@ -28,6 +28,7 @@ internal class ListRemoteViewsFactory(val mContext: Context, intent: Intent) :
     override fun getViewAt(position: Int): RemoteViews {
         // 获取 item_widget_device.xml 对应的RemoteViews
         val rv = RemoteViews(mContext.packageName, R.layout.widget_today_item)
+        val palette = WidgetThemeUtils.palette(mContext)
 
         // 设置 第position位的“视图”的数据
         val event = mBeans[position]
@@ -41,16 +42,18 @@ internal class ListRemoteViewsFactory(val mContext: Context, intent: Intent) :
         val result =
             if (TextUtils.isEmpty(place)) mContext.getString(R.string.unknown_location_widget) else place
         rv.setTextViewText(R.id.location, result)
+        rv.setInt(R.id.ic_sub, "setBackgroundResource", palette.clockDrawableRes)
+        rv.setInt(R.id.location_chip, "setBackgroundResource", palette.locationChipDrawableRes)
 
         if (position == highlightIndex) {
-            val accent = mContext.getColor(R.color.cruel_summer_primary)
+            val accent = palette.accentColor
             rv.setInt(R.id.icon, "setBackgroundResource", R.drawable.element_round_primary)
             rv.setTextColor(R.id.name, accent)
             rv.setTextColor(R.id.time, accent)
         } else {
             rv.setInt(R.id.icon, "setBackgroundResource", R.drawable.element_round_blue)
-            rv.setTextColor(R.id.name, Color.parseColor("#202020"))
-            rv.setTextColor(R.id.time, Color.parseColor("#66202020"))
+            rv.setTextColor(R.id.name, palette.primaryTextColor)
+            rv.setTextColor(R.id.time, palette.secondaryTextColor)
         }
 
         val lockIntent = Intent()

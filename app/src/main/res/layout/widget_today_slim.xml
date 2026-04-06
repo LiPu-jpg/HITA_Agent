@@ -3,6 +3,7 @@
     android:layout_height="match_parent">
 
     <LinearLayout
+        android:id="@+id/widget_root"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_marginTop="4dp"
@@ -53,6 +54,7 @@
                 android:layout_height="match_parent">
 
                 <ImageView
+                    android:id="@+id/refresh_icon"
                     android:layout_width="14dp"
                     android:layout_height="14dp"
                     android:layout_margin="12dp"

@@ -16,6 +16,7 @@ import com.stupidtree.hitax.ui.eas.imp.ImportTimetableActivity
 import com.stupidtree.hitax.utils.ActivityUtils
 import com.stupidtree.hitax.utils.EditModeHelper
 import com.stupidtree.hitax.utils.FileProviderUtils
+import com.stupidtree.hitax.utils.IcsImportUtils
 import com.stupidtree.hitax.utils.ImageUtils
 import com.stupidtree.hitax.utils.ShareUtils
 import com.stupidtree.style.base.BaseActivity
@@ -30,7 +31,7 @@ class TimetableManagerActivity :
     private var editModeHelper: EditModeHelper<Timetable>? = null
     
     // ICS 文件选择器
-    private val selectIcsLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri: android.net.Uri? ->
+    private val selectIcsLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri: android.net.Uri? ->
         uri?.let { importICS(it) }
     }
 
@@ -87,7 +88,7 @@ class TimetableManagerActivity :
                         )
                     }
                     TimetableListAdapter.SOURCE.ICS -> {
-                        selectIcsLauncher.launch("text/calendar")
+                        selectIcsLauncher.launch(IcsImportUtils.pickerMimeTypes())
                     }
                     else -> {}
                 }
@@ -264,8 +265,33 @@ override fun onDelete(toDelete: Collection<Timetable>?) {
         val targetTimetable = timetables[0]
         
         try {
-            val inputStream = contentResolver.openInputStream(uri) ?: return
-            viewModel.importFromICS(inputStream, targetTimetable.id)
+            contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: SecurityException) {
+        }
+
+        try {
+            val inputStream = contentResolver.openInputStream(uri)
+            if (inputStream == null) {
+                Toast.makeText(this, "无法读取所选 ICS 文件", Toast.LENGTH_SHORT).show()
+                return
+            }
+            viewModel.importFromICS(inputStream, targetTimetable.id).observe(this) {
+                when (it.state) {
+                    DataState.STATE.SUCCESS -> {
+                        val count = it.data ?: 0
+                        Toast.makeText(this, "成功导入 $count 个课程", Toast.LENGTH_SHORT).show()
+                    }
+                    DataState.STATE.FETCH_FAILED -> {
+                        Toast.makeText(this, "导入失败: ${it.message}", Toast.LENGTH_SHORT).show()
+                    }
+                    else -> {
+                        Toast.makeText(this, "导入失败", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
             Toast.makeText(this, "正在导入...", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(this, "读取文件失败: ${e.message}", Toast.LENGTH_SHORT).show()

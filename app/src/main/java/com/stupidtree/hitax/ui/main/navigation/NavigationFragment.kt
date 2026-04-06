@@ -22,6 +22,7 @@ import com.stupidtree.style.widgets.PopUpText
 import com.stupidtree.hitax.data.source.preference.CourseReminderStore
 import com.stupidtree.hitax.data.work.CourseReminderScheduler
 import com.stupidtree.hitax.data.repository.TimetableRepository
+import com.stupidtree.hitax.utils.IcsImportUtils
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
@@ -30,7 +31,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationBinding>() {
     
     // ICS 文件选择器
-    private val selectIcsLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+    private val selectIcsLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let { importICS(it) }
     }
     
@@ -160,7 +161,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
         
         // ICS 导入
         binding?.cardIcsImport?.setOnClickListener {
-            selectIcsLauncher.launch("text/calendar")
+            selectIcsLauncher.launch(IcsImportUtils.pickerMimeTypes())
         }
     }
 
@@ -296,7 +297,19 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
         }
         
         try {
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        } catch (_: SecurityException) {
+        }
+
+        try {
+            val inputStream = context.contentResolver.openInputStream(uri)
+            if (inputStream == null) {
+                Toast.makeText(context, "无法读取所选 ICS 文件", Toast.LENGTH_SHORT).show()
+                return
+            }
             val timetableRepo = TimetableRepository.getInstance(context.applicationContext as android.app.Application)
             
             timetableRepo.importFromICS(inputStream, recentTimetable.id)
