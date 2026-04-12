@@ -49,8 +49,8 @@ class EASource internal constructor() : EASService {
     private val basicAuth = "Basic aW5jb246MTIzNDU="
     private val timeout = 15000
     private val TAG = "EASource"
-    private val DEBUG_WEEK = 5
-    private val DEBUG_DOW = 7
+    private val DEBUG_WEEK = 6
+    private val DEBUG_DOW = 1
 
     // ---------------------------------------------------------------- 公共头
     private fun baseHeaders(authorization: String, rolecode: String = "06"): Map<String, String> =
