@@ -938,14 +938,6 @@ class EASource internal constructor() : EASService {
         val leftEndPeriod = left.begin + left.last - 1
         if (leftEndPeriod + 1 != right.begin) return false
 
-        val schedule = defaultScheduleStructure()
-        if (leftEndPeriod !in 1..schedule.size || right.begin !in 1..schedule.size) return false
-
-        val leftEndTime = schedule[leftEndPeriod - 1].to
-        val rightStartTime = schedule[right.begin - 1].from
-        val gapMinutes = leftEndTime.getDistanceInMinutes(rightStartTime)
-        if (gapMinutes < 0 || gapMinutes >= 30) return false
-
         val leftClassroom = normalized(left.classroom)
         val rightClassroom = normalized(right.classroom)
         if (leftClassroom.isNotEmpty() && rightClassroom.isNotEmpty() && leftClassroom != rightClassroom) {
@@ -1067,14 +1059,6 @@ class EASource internal constructor() : EASService {
 
         val leftEndPeriod = left.begin + left.last - 1
         if (leftEndPeriod + 1 != right.begin) return "period"
-
-        val schedule = defaultScheduleStructure()
-        if (leftEndPeriod !in 1..schedule.size || right.begin !in 1..schedule.size) return "schedule-range"
-
-        val leftEndTime = schedule[leftEndPeriod - 1].to
-        val rightStartTime = schedule[right.begin - 1].from
-        val gapMinutes = leftEndTime.getDistanceInMinutes(rightStartTime)
-        if (gapMinutes < 0 || gapMinutes >= 30) return "gap=$gapMinutes"
 
         val leftClassroom = normalized(left.classroom)
         val rightClassroom = normalized(right.classroom)
