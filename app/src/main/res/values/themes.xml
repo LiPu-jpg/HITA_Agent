@@ -49,6 +49,14 @@
         <item name="behavior_peekHeight">400dp</item>
     </style>
 
+    <style name="WebViewLoginSilentTheme" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
     <style name="ToolBarTheme_Light" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="colorButtonNormal">#FFFFFF</item>
         <item name="colorControlNormal">#FFFFFF</item>

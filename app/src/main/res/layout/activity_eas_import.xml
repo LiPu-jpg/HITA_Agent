@@ -172,6 +172,62 @@
                 </LinearLayout>
 
                 <androidx.cardview.widget.CardView
+                    android:id="@+id/benbu_calibration_card"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginEnd="16dp"
+                    android:layout_marginBottom="8dp"
+                    android:visibility="gone"
+                    app:cardBackgroundColor="?attr/backgroundColorSecond"
+                    app:cardCornerRadius="24dp"
+                    app:cardElevation="0dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <TextView
+                            android:id="@+id/benbu_calibration_hint"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/benbu_start_date_calibration_hint"
+                            android:textColor="?attr/textColorPrimary"
+                            android:textSize="14sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <Button
+                                android:id="@+id/button_prev_week"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/benbu_start_date_prev_week" />
+
+                            <Space
+                                android:layout_width="12dp"
+                                android:layout_height="wrap_content" />
+
+                            <Button
+                                android:id="@+id/button_next_week"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/benbu_start_date_next_week" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </androidx.cardview.widget.CardView>
+
+                <androidx.cardview.widget.CardView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="16dp"

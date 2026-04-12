@@ -20,6 +20,7 @@ class EasPreferenceSource(context: Context) {
         preference.edit()
             .putString("accessToken", token.accessToken)
             .putString("refreshToken", token.refreshToken)
+            .putString("campus", token.campus.name)
             .putString("username", token.username)
             .putString("password", token.password)
             .putString("cookies", Gson().toJson(token.cookies))
@@ -31,6 +32,7 @@ class EasPreferenceSource(context: Context) {
             .putString("school", token.school)
             .putString("major", token.major)
             .putString("grade", token.grade)
+            .putString("className", token.className)
             .putString("sfxsx", token.sfxsx)
             .putString("email", token.email)
             .putString("phone", token.phone)
@@ -50,6 +52,9 @@ class EasPreferenceSource(context: Context) {
         val result = EASToken()
         result.accessToken = preference.getString("accessToken", null)
         result.refreshToken = preference.getString("refreshToken", null)
+        result.campus = preference.getString("campus", EASToken.Campus.SHENZHEN.name)?.let {
+            runCatching { EASToken.Campus.valueOf(it) }.getOrNull()
+        } ?: EASToken.Campus.SHENZHEN
         result.username = preference.getString("username", null)
         result.password = preference.getString("password", null)
         result.name = preference.getString("name", null)
@@ -62,6 +67,7 @@ class EasPreferenceSource(context: Context) {
         result.school = preference.getString("school", null)
         result.major = preference.getString("major", null)
         result.grade = preference.getString("grade", "")
+        result.className = preference.getString("className", null)
         result.sfxsx = preference.getString("sfxsx", null)
         result.email = preference.getString("email", null)
         result.phone = preference.getString("phone", null)

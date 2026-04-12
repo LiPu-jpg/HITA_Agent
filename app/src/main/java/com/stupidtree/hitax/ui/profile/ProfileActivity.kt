@@ -172,7 +172,7 @@ class ProfileActivity : BaseActivity<ProfileViewModel, ActivityProfileBinding>()
             binding.fans.text = userInfo.fansNum.toString()
             binding.following.text = userInfo.followingNum.toString()
             if (userInfo.signature.isNullOrEmpty()) {
-                binding.textSignature.setText(R.string.place_holder_no_signature)
+                binding.textSignature.setText(R.string.drawer_signature_none)
             } else {
                 binding.textSignature.text = userInfo.signature
             }

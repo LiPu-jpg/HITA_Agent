@@ -38,7 +38,7 @@ class ScoreReminderWorker(appContext: Context, params: WorkerParameters) : Worke
         }
         val term = selectTerm(termsState.data!!)
         val scoresState = awaitLiveData(
-            repository.getPersonalScoresWithSummary(term, EASService.TestType.ALL),
+            repository.getPersonalScoresWithSummary(term, EASService.TestType.NORMAL),
             12
         )
         if (scoresState.state != DataState.STATE.SUCCESS || scoresState.data == null) {

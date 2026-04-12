@@ -30,7 +30,9 @@ class ScoresListAdapter(mContext: Context, mBeans: MutableList<CourseScoreItem>)
             holder.binding.divider2.visibility = View.VISIBLE
         }
         holder.binding.title.text = data?.courseName
-        holder.binding.scores.text = data?.finalScores.toString()
+        holder.binding.scores.text = data?.finalScoresText?.takeIf { it.isNotBlank() }
+            ?: data?.finalScores?.takeIf { it >= 0 }?.toString()
+            ?: "--"
         holder.binding.item.setOnClickListener{view -> mOnItemClickListener?.onItemClick(data, view, position)}
     }
 

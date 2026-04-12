@@ -32,7 +32,16 @@ object ImageUtils {
 
 
     fun loadEASPictureInto(pictureUrl: String, iv: ImageView) {
-        Glide.with(iv.context).load("http://jw.hitsz.edu.cn${pictureUrl}")
+        if (isEmpty(pictureUrl)) {
+            iv.setImageResource(R.drawable.place_holder_avatar)
+            return
+        }
+        val resolvedUrl = if (pictureUrl.startsWith("http://") || pictureUrl.startsWith("https://")) {
+            pictureUrl
+        } else {
+            "http://jw.hitsz.edu.cn$pictureUrl"
+        }
+        Glide.with(iv.context).load(resolvedUrl)
             .apply(
                 RequestOptions.bitmapTransform(CircleCrop())
             )

@@ -146,7 +146,7 @@ class MyProfileActivity : BaseActivity<MyProfileViewModel, ActivityMyProfileBind
         if (!profile.signature.isNullOrEmpty()) {
             binding.signature.text = profile.signature
         } else {
-            binding.signature.setText(R.string.place_holder_no_signature)
+            binding.signature.setText(R.string.drawer_signature_none)
         }
         binding.username.text = profile.username
         binding.gender.setText(when (profile.gender){

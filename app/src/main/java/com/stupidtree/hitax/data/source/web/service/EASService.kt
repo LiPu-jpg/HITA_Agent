@@ -77,6 +77,7 @@ interface EASService {
         testType: TestType
      ):LiveData<DataState<List<CourseScoreItem>>>
 
+
     enum class TestType(val value:String){
         ALL("-1"), NORMAL("0"), RESIT("1"), RETAKE("2")
     }
@@ -87,5 +88,7 @@ interface EASService {
     fun getExamItems(
         token: EASToken
     ):LiveData<DataState<List<ExamItem>>>
+
+    fun getSafePersonalInfo(token: EASToken): LiveData<DataState<EASToken>>
 
 }

@@ -48,6 +48,9 @@ class EASource internal constructor() : EASService {
     private val jwHostName = "https://jw.hitsz.edu.cn"
     private val basicAuth = "Basic aW5jb246MTIzNDU="
     private val timeout = 15000
+    private val TAG = "EASource"
+    private val DEBUG_WEEK = 5
+    private val DEBUG_DOW = 7
 
     // ---------------------------------------------------------------- 公共头
     private fun baseHeaders(authorization: String, rolecode: String = "06"): Map<String, String> =
@@ -85,17 +88,27 @@ class EASource internal constructor() : EASService {
         body: String,
         rolecode: String = "06"
     ): Connection.Response {
-        return Jsoup.newSession()
-            .url("$hostName$path")
-            .headers(baseHeaders("bearer ${token.accessToken}", rolecode))
-            .header("Content-Type", "application/json")
-            .cookies(token.cookies)
-            .requestBody(body)
-            .timeout(timeout)
-            .ignoreContentType(true)
-            .ignoreHttpErrors(true)
-            .method(Connection.Method.POST)
-            .execute()
+        fun executeOnce(): Connection.Response {
+            val resp = Jsoup.newSession()
+                .url("$hostName$path")
+                .headers(baseHeaders("bearer ${token.accessToken}", rolecode))
+                .header("Content-Type", "application/json")
+                .cookies(token.cookies)
+                .requestBody(body)
+                .timeout(timeout)
+                .ignoreContentType(true)
+                .ignoreHttpErrors(true)
+                .method(Connection.Method.POST)
+                .execute()
+            token.cookies.putAll(resp.cookies())
+            return resp
+        }
+
+        var resp = executeOnce()
+        if (isAuthExpiredResponse(resp) && tryRelogin(token)) {
+            resp = executeOnce()
+        }
+        return resp
     }
 
     /** Form POST（登录后，带已存 cookies） */
@@ -104,17 +117,28 @@ class EASource internal constructor() : EASService {
         path: String,
         data: Map<String, String> = emptyMap()
     ): Connection.Response {
-        val req = Jsoup.newSession()
-            .url("$hostName$path")
-            .headers(baseHeaders("bearer ${token.accessToken}"))
-            .cookies(token.cookies)
-            .timeout(timeout)
-            .ignoreContentType(true)
-            .ignoreHttpErrors(true)
-            .method(Connection.Method.POST)
-        data.forEach { (k, v) -> req.data(k, v) }
-        return req.execute()
+        fun executeOnce(): Connection.Response {
+            val req = Jsoup.newSession()
+                .url("$hostName$path")
+                .headers(baseHeaders("bearer ${token.accessToken}"))
+                .cookies(token.cookies)
+                .timeout(timeout)
+                .ignoreContentType(true)
+                .ignoreHttpErrors(true)
+                .method(Connection.Method.POST)
+            data.forEach { (k, v) -> req.data(k, v) }
+            val resp = req.execute()
+            token.cookies.putAll(resp.cookies())
+            return resp
+        }
+
+        var resp = executeOnce()
+        if (isAuthExpiredResponse(resp) && tryRelogin(token)) {
+            resp = executeOnce()
+        }
+        return resp
     }
+
 
     /** 新教务网页接口（xszykb），依赖登录后会话 cookies */
     private fun jwFormPost(
@@ -161,6 +185,51 @@ class EASource internal constructor() : EASService {
             token.cookies.putAll(resp.cookies())
         }
         return resp
+    }
+
+    private fun isAuthExpiredResponse(resp: Connection.Response): Boolean {
+        if (resp.statusCode() == 401 || resp.statusCode() == 403) {
+            return true
+        }
+        val jo = JsonUtils.getJsonObject(resp.body()) ?: return false
+        val code = jo.optInt("code", Int.MIN_VALUE)
+        if (code in setOf(401, 403, 2005)) {
+            return true
+        }
+        val msg = listOf(
+            jo.optString("msg", ""),
+            jo.optString("message", ""),
+            jo.optString("error_description", "")
+        ).joinToString(" ").lowercase()
+        if (msg.isBlank()) return false
+        return msg.contains("token") ||
+            msg.contains("expired") ||
+            msg.contains("not logged") ||
+            msg.contains("登录") ||
+            msg.contains("未登录") ||
+            msg.contains("失效") ||
+            msg.contains("过期")
+    }
+
+    private fun isAuthExpiredJson(jo: JSONObject?): Boolean {
+        if (jo == null) return false
+        val code = jo.optInt("code", Int.MIN_VALUE)
+        if (code in setOf(401, 403, 2005)) {
+            return true
+        }
+        val msg = listOf(
+            jo.optString("msg", ""),
+            jo.optString("message", ""),
+            jo.optString("error_description", "")
+        ).joinToString(" ").lowercase()
+        if (msg.isBlank()) return false
+        return msg.contains("token") ||
+            msg.contains("expired") ||
+            msg.contains("not logged") ||
+            msg.contains("登录") ||
+            msg.contains("未登录") ||
+            msg.contains("失效") ||
+            msg.contains("过期")
     }
 
     private fun tryRelogin(token: EASToken): Boolean {
@@ -210,6 +279,7 @@ class EASource internal constructor() : EASService {
         val accessToken = payload?.optString("access_token")
         if (accessToken.isNullOrEmpty()) return null
         val token = EASToken()
+        token.campus = EASToken.Campus.SHENZHEN
         token.accessToken = accessToken
         token.refreshToken = payload.optString("refresh_token")
         token.username = username
@@ -541,6 +611,7 @@ class EASource internal constructor() : EASService {
 
                 var emptyWeeks = 0
                 for (week in 1..25) {
+                    val debugWeekRows = mutableListOf<CourseItem>()
                     val kbBody = """{"xn":"${term.yearCode}","xq":"${term.termCode}","zc":"$week","type":"json"}"""
                     val kbResp = jsonPost(token, "/app/Kbcx/query", kbBody)
                     val kbJo = JsonUtils.getJsonObject(kbResp.body()) ?: continue
@@ -582,18 +653,44 @@ class EASource internal constructor() : EASService {
                             this.last = last
                             this.weeks = mutableListOf(week)
                         }
+                        if (week == DEBUG_WEEK && dow == DEBUG_DOW) {
+                            debugWeekRows.add(copyCourse(course))
+                        }
                         upsertCourse(merged, course)
+                    }
+                    if (week == DEBUG_WEEK) {
+                        val summary = debugWeekRows
+                            .sortedWith(compareBy<CourseItem> { it.dow }.thenBy { it.begin })
+                            .joinToString(" || ") { debugCourseIdentity(it) }
+                        Log.d(TAG, "raw week=$week dow=$DEBUG_DOW rows=${debugWeekRows.size} term=${term.getCode()} -> $summary")
                     }
                 }
 
                 val result = merged.values.toMutableList()
                 result.forEach { it.weeks = it.weeks.distinct().sorted().toMutableList() }
                 result.sortWith(compareBy<CourseItem> { it.dow }.thenBy { it.begin }.thenBy { it.name })
+                val debugBeforeMerge = result
+                    .filter { it.dow == DEBUG_DOW && it.weeks.contains(DEBUG_WEEK) }
+                    .sortedWith(compareBy<CourseItem> { it.begin }.thenBy { it.name })
+                Log.d(
+                    TAG,
+                    "dedup week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugBeforeMerge.size} term=${term.getCode()} -> " +
+                        debugBeforeMerge.joinToString(" || ") { debugCourseIdentity(it) }
+                )
+                val mergedAdjacent = mergeAdjacentCourses(result)
+                val debugAfterMerge = mergedAdjacent
+                    .filter { it.dow == DEBUG_DOW && it.weeks.contains(DEBUG_WEEK) }
+                    .sortedWith(compareBy<CourseItem> { it.begin }.thenBy { it.name })
+                Log.d(
+                    TAG,
+                    "merged week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugAfterMerge.size} term=${term.getCode()} -> " +
+                        debugAfterMerge.joinToString(" || ") { debugCourseIdentity(it) }
+                )
 
-                if (result.isEmpty()) {
+                if (mergedAdjacent.isEmpty()) {
                     res.postValue(DataState(DataState.STATE.FETCH_FAILED, "未获取到课表数据"))
                 } else {
-                    res.postValue(DataState(result, DataState.STATE.SUCCESS))
+                    res.postValue(DataState(mergedAdjacent, DataState.STATE.SUCCESS))
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -728,6 +825,274 @@ class EASource internal constructor() : EASService {
         if (existing.code.isNullOrBlank() && !incoming.code.isNullOrBlank()) {
             existing.code = incoming.code
         }
+    }
+
+    private fun mergeAdjacentCourses(courses: List<CourseItem>): List<CourseItem> {
+        if (courses.isEmpty()) return courses
+        val sorted = courses.sortedWith(
+            compareBy<CourseItem> { it.dow }
+                .thenBy { it.begin }
+                .thenBy { normalized(it.name) }
+                .thenBy { normalized(it.teacher) }
+                .thenBy { it.weeks.sorted().joinToString(",") }
+        )
+
+        val merged = mutableListOf<CourseItem>()
+        val residualCourses = mutableListOf<CourseItem>()
+        for (course in sorted) {
+            val last = merged.lastOrNull()
+            if (last != null) {
+                val weekSplitMerged = tryMergeWithWeekSplit(last, course, residualCourses)
+                if (weekSplitMerged) continue
+
+                val canMerge = canMergeCourses(last, course)
+                if (canMerge) {
+                    last.last += course.last
+                    if (last.classroom.isNullOrBlank()) {
+                        last.classroom = course.classroom
+                    }
+                    if (last.code.isNullOrBlank()) {
+                        last.code = course.code
+                    }
+                    continue
+                }
+                if (shouldDebugPair(last, course)) {
+                    Log.d(
+                        TAG,
+                        "no-merge week=$DEBUG_WEEK dow=$DEBUG_DOW reason=${mergeBlockReason(last, course)} left=${debugCourseIdentity(last)} right=${debugCourseIdentity(course)}"
+                    )
+                }
+            }
+            merged.add(copyCourse(course))
+        }
+
+        if (residualCourses.isNotEmpty()) {
+            merged.addAll(residualCourses)
+        }
+
+        return merged.sortedWith(
+            compareBy<CourseItem> { it.dow }
+                .thenBy { it.begin }
+                .thenBy { normalized(it.name) }
+                .thenBy { it.weeks.sorted().joinToString(",") }
+        )
+    }
+
+    private fun tryMergeWithWeekSplit(
+        left: CourseItem,
+        right: CourseItem,
+        residualCourses: MutableList<CourseItem>
+    ): Boolean {
+        if (!canMergeBaseIgnoringWeeks(left, right)) return false
+
+        val leftWeeks = left.weeks.distinct().sorted()
+        val rightWeeks = right.weeks.distinct().sorted()
+        if (leftWeeks == rightWeeks) return false
+
+        val sharedWeeks = leftWeeks.intersect(rightWeeks.toSet()).sorted()
+        if (sharedWeeks.isEmpty()) return false
+
+        val leftOnlyWeeks = leftWeeks.filter { it !in sharedWeeks }
+        val rightOnlyWeeks = rightWeeks.filter { it !in sharedWeeks }
+
+        if (leftOnlyWeeks.isNotEmpty()) {
+            residualCourses.add(copyCourse(left).apply {
+                weeks = leftOnlyWeeks.toMutableList()
+            })
+        }
+        if (rightOnlyWeeks.isNotEmpty()) {
+            residualCourses.add(copyCourse(right).apply {
+                weeks = rightOnlyWeeks.toMutableList()
+            })
+        }
+
+        left.weeks = sharedWeeks.toMutableList()
+        left.last += right.last
+        if (left.classroom.isNullOrBlank()) {
+            left.classroom = right.classroom
+        }
+        if (left.code.isNullOrBlank()) {
+            left.code = right.code
+        }
+
+        if (shouldDebugPair(left, right)) {
+            Log.d(
+                TAG,
+                "week-split-merge shared=$sharedWeeks leftOnly=$leftOnlyWeeks rightOnly=$rightOnlyWeeks left=${debugCourseIdentity(left)} right=${debugCourseIdentity(right)}"
+            )
+        }
+
+        return true
+    }
+
+    private fun canMergeCourses(left: CourseItem, right: CourseItem): Boolean {
+        if (!canMergeBaseIgnoringWeeks(left, right)) return false
+        return left.weeks.distinct().sorted() == right.weeks.distinct().sorted()
+    }
+
+    private fun canMergeBaseIgnoringWeeks(left: CourseItem, right: CourseItem): Boolean {
+        if (left.dow != right.dow) return false
+        if (!sameCourseIdentity(left, right)) return false
+        if (!teacherCompatible(left, right)) return false
+
+        val leftEndPeriod = left.begin + left.last - 1
+        if (leftEndPeriod + 1 != right.begin) return false
+
+        val schedule = defaultScheduleStructure()
+        if (leftEndPeriod !in 1..schedule.size || right.begin !in 1..schedule.size) return false
+
+        val leftEndTime = schedule[leftEndPeriod - 1].to
+        val rightStartTime = schedule[right.begin - 1].from
+        val gapMinutes = leftEndTime.getDistanceInMinutes(rightStartTime)
+        if (gapMinutes < 0 || gapMinutes >= 30) return false
+
+        val leftClassroom = normalized(left.classroom)
+        val rightClassroom = normalized(right.classroom)
+        if (leftClassroom.isNotEmpty() && rightClassroom.isNotEmpty() && leftClassroom != rightClassroom) {
+            return false
+        }
+
+        val leftCode = normalized(left.code)
+        val rightCode = normalized(right.code)
+        if (leftCode.isNotEmpty() && rightCode.isNotEmpty() && leftCode != rightCode) {
+            return false
+        }
+
+        return true
+    }
+
+    private fun sameCourseIdentity(left: CourseItem, right: CourseItem): Boolean {
+        val leftName = normalized(left.name)
+        val rightName = normalized(right.name)
+        if (leftName == rightName) return true
+
+        val leftCode = normalized(left.code)
+        val rightCode = normalized(right.code)
+        if (leftCode.isNotEmpty() && rightCode.isNotEmpty() && leftCode == rightCode) {
+            return true
+        }
+
+        return false
+    }
+
+
+    private fun teacherCompatible(left: CourseItem, right: CourseItem): Boolean {
+        val leftTeacher = normalizedTeacher(left.teacher)
+        val rightTeacher = normalizedTeacher(right.teacher)
+        if (leftTeacher.isEmpty() || rightTeacher.isEmpty()) return true
+        if (leftTeacher == rightTeacher) return true
+        if (leftTeacher.contains(rightTeacher) || rightTeacher.contains(leftTeacher)) return true
+
+        val leftCode = normalized(left.code)
+        val rightCode = normalized(right.code)
+        if (leftCode.isNotEmpty() && rightCode.isNotEmpty() && leftCode == rightCode) {
+            return true
+        }
+
+        return false
+    }
+
+    private fun normalized(value: String?): String {
+        return value
+            ?.replace("\u00A0", " ")
+            ?.replace(Regex("\\s+"), "")
+            ?.trim()
+            .orEmpty()
+    }
+
+    private fun normalizedTeacher(value: String?): String {
+        val raw = value
+            ?.replace("\u00A0", " ")
+            ?.replace(Regex("\\s+"), " ")
+            ?.trim()
+            .orEmpty()
+        if (raw.isEmpty()) return ""
+
+        val tokens = raw
+            .split(Regex("[、,，/|；;]+"))
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { token ->
+                token
+                    .replace(Regex("^(教师|老师|Teacher)[:： ]*", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("\\(.*?\\)|（.*?）"), "")
+                    .replace(Regex("\\p{Cntrl}"), "")
+                    .trim()
+            }
+            .filterNot { token ->
+                token.isBlank() ||
+                    token.contains("周") ||
+                    token.contains("节") ||
+                    token.contains("星期") ||
+                    token.contains("课程") ||
+                    token.contains("上课") ||
+                    token.contains("教室") ||
+                    token.contains("地点") ||
+                    token.any { it.isDigit() }
+            }
+            .distinct()
+            .sorted()
+
+        if (tokens.isNotEmpty()) {
+            return tokens.joinToString("|")
+        }
+
+        return normalized(raw)
+    }
+
+    private fun copyCourse(source: CourseItem): CourseItem {
+        return CourseItem().apply {
+            code = source.code
+            name = source.name
+            weeks = source.weeks.toMutableList()
+            teacher = source.teacher
+            classroom = source.classroom
+            dow = source.dow
+            begin = source.begin
+            last = source.last
+        }
+    }
+
+    private fun shouldDebugPair(left: CourseItem, right: CourseItem): Boolean {
+        if (left.dow != DEBUG_DOW || right.dow != DEBUG_DOW) return false
+        if (!left.weeks.contains(DEBUG_WEEK) || !right.weeks.contains(DEBUG_WEEK)) return false
+        return true
+    }
+
+    private fun mergeBlockReason(left: CourseItem, right: CourseItem): String {
+        if (left.dow != right.dow) return "dow"
+        if (!sameCourseIdentity(left, right)) return "identity"
+        if (!teacherCompatible(left, right)) return "teacher"
+        if (left.weeks.distinct().sorted() != right.weeks.distinct().sorted()) return "weeks"
+
+        val leftEndPeriod = left.begin + left.last - 1
+        if (leftEndPeriod + 1 != right.begin) return "period"
+
+        val schedule = defaultScheduleStructure()
+        if (leftEndPeriod !in 1..schedule.size || right.begin !in 1..schedule.size) return "schedule-range"
+
+        val leftEndTime = schedule[leftEndPeriod - 1].to
+        val rightStartTime = schedule[right.begin - 1].from
+        val gapMinutes = leftEndTime.getDistanceInMinutes(rightStartTime)
+        if (gapMinutes < 0 || gapMinutes >= 30) return "gap=$gapMinutes"
+
+        val leftClassroom = normalized(left.classroom)
+        val rightClassroom = normalized(right.classroom)
+        if (leftClassroom.isNotEmpty() && rightClassroom.isNotEmpty() && leftClassroom != rightClassroom) {
+            return "classroom"
+        }
+
+        val leftCode = normalized(left.code)
+        val rightCode = normalized(right.code)
+        if (leftCode.isNotEmpty() && rightCode.isNotEmpty() && leftCode != rightCode) {
+            return "code"
+        }
+
+        return "unknown"
+    }
+
+    private fun debugCourseIdentity(course: CourseItem): String {
+        return "name=${course.name.orEmpty()} begin=${course.begin} last=${course.last} weeks=${course.weeks.sorted()} teacher=${course.teacher.orEmpty()} classroom=${course.classroom.orEmpty()} code=${course.code.orEmpty()}"
     }
 
     private fun parseXszykbCourseRow(row: JSONObject, weekHint: Int?): CourseItem? {
@@ -1045,6 +1410,10 @@ class EASource internal constructor() : EASService {
                 val body = """{"xn":"${term.yearCode}","xq":"${term.termCode}","qzqmFlag":"$qzqmFlag","type":"json"}"""
                 val resp = jsonPost(token, "/app/cjgl/xscjList?_lang=zh_CN", body)
                 val jo = JsonUtils.getJsonObject(resp.body())
+                if (isAuthExpiredResponse(resp) || isAuthExpiredJson(jo)) {
+                    res.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
+                    return@Thread
+                }
                 val content = jo?.optJSONArray("content")
                 content?.let {
                     for (i in 0 until it.length()) {
@@ -1053,7 +1422,8 @@ class EASource internal constructor() : EASService {
                         item.courseCode = tp.optString("kcdm")
                         item.courseName = tp.optString("kcmc")
                         item.credits = tp.optString("xf").toIntOrNull() ?: 0
-                        item.finalScores = tp.optString("zf").toIntOrNull() ?: -1
+                        item.finalScoresText = tp.optString("zf").trim().ifBlank { null }
+                        item.finalScores = item.finalScoresText?.toIntOrNull() ?: -1
                         item.courseProperty = tp.optString("kcxz")
                         item.courseCategory = tp.optString("kclb", tp.optString("kclbmc", ""))
                         item.termName = tp.optString("xnxq", term.yearCode + term.termCode)
@@ -1089,6 +1459,10 @@ class EASource internal constructor() : EASService {
                 val body = """{"xn":"${term.yearCode}","xq":"${term.termCode}","qzqmFlag":"$qzqmFlag","type":"json"}"""
                 val resp = jsonPost(token, "/app/cjgl/xscjList?_lang=zh_CN", body)
                 val jo = JsonUtils.getJsonObject(resp.body())
+                if (isAuthExpiredResponse(resp) || isAuthExpiredJson(jo)) {
+                    res.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
+                    return@Thread
+                }
                 val content = jo?.optJSONArray("content")
                 content?.let {
                     for (i in 0 until it.length()) {
@@ -1097,7 +1471,8 @@ class EASource internal constructor() : EASService {
                         item.courseCode = tp.optString("kcdm")
                         item.courseName = tp.optString("kcmc")
                         item.credits = tp.optString("xf").toIntOrNull() ?: 0
-                        item.finalScores = tp.optString("zf").toIntOrNull() ?: -1
+                        item.finalScoresText = tp.optString("zf").trim().ifBlank { null }
+                        item.finalScores = item.finalScoresText?.toIntOrNull() ?: -1
                         item.courseProperty = tp.optString("kcxz")
                         item.courseCategory = tp.optString("kclb", tp.optString("kclbmc", ""))
                         item.termName = tp.optString("xnxq", term.yearCode + term.termCode)
@@ -1122,6 +1497,9 @@ class EASource internal constructor() : EASService {
             val body = """{"type":"json","ksxnxq":"-1-1","jsxnxq":"-1-1","pylx":"${token.getStudentType()}"}"""
             val resp = jsonPost(token, "/app/cjgl/xfj", body, rolecode = "06")
             val jo = JsonUtils.getJsonObject(resp.body())
+            if (isAuthExpiredResponse(resp) || isAuthExpiredJson(jo)) {
+                return null
+            }
             val xfj = jo?.optJSONObject("content")?.optJSONObject("xfj") ?: return null
             val gpa = xfj.optString("XFJ", "").trim()
             val rank = xfj.optString("RANK", "").trim()
@@ -1279,88 +1657,9 @@ class EASource internal constructor() : EASService {
         return res
     }
 
-    // ================================================================ 选课（加入购物车 = 实际选课动作）
-    fun selectCourse(
-        token: EASToken,
-        term: TermItem,
-        courseId: String,
-        poolCode: String = "bx-b-b"
-    ): LiveData<DataState<String>> {
-        val res = MutableLiveData<DataState<String>>()
-        Thread {
-            try {
-                val body = """{"RoleCode":"01","p_pylx":"${token.getStudentType()}","p_xn":"${term.yearCode}","p_xq":"${term.termCode}","p_xkfsdm":"$poolCode","p_xktjz":"rwtjzyx","p_id":"$courseId"}"""
-                val resp = jsonPost(token, "/app/Xsxk/addGouwuche?_lang=zh_CN", body)
-                if (resp.statusCode() >= 400) {
-                    val snippet = resp.body().take(240)
-                    res.postValue(DataState(DataState.STATE.FETCH_FAILED, "HTTP ${resp.statusCode()}: $snippet"))
-                    return@Thread
-                }
-                val jo = JsonUtils.getJsonObject(resp.body())
-                val content = jo?.optJSONObject("content")
-                val jg = content?.optString("jg", "-1") ?: "-1"
-                val rawMsg = content?.optString("message")
-                var msg = if (!rawMsg.isNullOrBlank()) rawMsg else jo?.optString("msg", "").orEmpty()
-                if (rawMsg.isNullOrBlank() && msg.trim() == "操作失败") {
-                    msg = ""
-                }
-                val message = buildString {
-                    if (jg.isNotBlank()) append("jg=").append(jg)
-                    if (msg.isNotBlank()) {
-                        if (isNotEmpty()) append("，")
-                        append(msg)
-                    }
-                    if (isEmpty()) append("未知错误")
-                }
-                if (jg != "-1") {
-                    res.postValue(DataState(message, DataState.STATE.SUCCESS))
-                } else {
-                    res.postValue(DataState(DataState.STATE.FETCH_FAILED, message))
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
-            }
-        }.start()
-        return res
+    override fun getSafePersonalInfo(token: EASToken): LiveData<DataState<EASToken>> {
+        return MutableLiveData(DataState(token, DataState.STATE.SUCCESS))
     }
 
-    // ================================================================ 查询可选课程列表
-    fun getAvailableCourses(
-        token: EASToken,
-        term: TermItem,
-        poolCode: String = "bx-b-b",
-        page: Int = 1,
-        pageSize: Int = 20
-    ): LiveData<DataState<List<TermSubject>>> {
-        val res = MutableLiveData<DataState<List<TermSubject>>>()
-        Thread {
-            val result = mutableListOf<TermSubject>()
-            try {
-                val body = """{"RoleCode":"01","p_pylx":"${token.getStudentType()}","p_xn":"${term.yearCode}","p_xq":"${term.termCode}","p_xnxq":"${term.getCode()}","p_gjz":"","p_kc_gjz":"","p_xkfsdm":"$poolCode","pageNum":$page,"pageSize":$pageSize}"""
-                val resp = jsonPost(token, "/app/Xsxk/queryKxrw?_lang=zh_CN", body)
-                val jo = JsonUtils.getJsonObject(resp.body())
-                val list = jo?.optJSONArray("yxkcList")
-                list?.let {
-                    for (i in 0 until it.length()) {
-                        val item = it.optJSONObject(i) ?: continue
-                        val s = TermSubject()
-                        val rawCode = item.optString("kcdm")
-                        s.code = CourseCodeUtils.normalize(rawCode) ?: rawCode
-                        s.name = item.optString("kcmc", "")
-                        s.school = item.optString("kkyxmc")
-                        s.credit = item.optString("xf").toFloatOrNull() ?: 0f
-                        s.key = item.optString("id")  // p_id 用于选课
-                        s.field = optStringFirst(item, listOf("kclbmc", "KCLBMC"))
-                        result.add(s)
-                    }
-                }
-                res.postValue(DataState(result))
-            } catch (e: Exception) {
-                e.printStackTrace()
-                res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
-            }
-        }.start()
-        return res
-    }
+
 }

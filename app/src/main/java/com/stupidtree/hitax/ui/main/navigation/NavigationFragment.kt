@@ -2,34 +2,34 @@ package com.stupidtree.hitax.ui.main.navigation
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.content.res.ColorStateList
+import android.content.Intent
+import android.net.Uri
 import android.view.View
-import com.bumptech.glide.Glide
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.Observer
 import com.stupidtree.hitax.R
 import com.stupidtree.hitax.data.repository.EASRepository
+import com.stupidtree.hitax.data.repository.TimetableRepository
+import com.stupidtree.hitax.data.source.preference.CourseReminderStore
+import com.stupidtree.hitax.data.work.CourseReminderScheduler
 import com.stupidtree.hitax.databinding.FragmentNavigationBinding
-import com.stupidtree.style.base.BaseFragment
 import com.stupidtree.hitax.ui.eas.classroom.EmptyClassroomActivity
 import com.stupidtree.hitax.ui.eas.exam.ExamActivity
 import com.stupidtree.hitax.ui.eas.imp.ImportTimetableActivity
 import com.stupidtree.hitax.ui.eas.login.PopUpLoginEAS
 import com.stupidtree.hitax.ui.eas.score.ScoreInquiryActivity
-import com.stupidtree.hitax.utils.ActivityUtils.CourseResourceMode
 import com.stupidtree.hitax.utils.ActivityUtils
-import com.stupidtree.hitax.utils.ImageUtils
-import com.stupidtree.stupiduser.data.repository.LocalUserRepository
-import com.stupidtree.style.widgets.PopUpText
-import com.stupidtree.hitax.data.source.preference.CourseReminderStore
-import com.stupidtree.hitax.data.work.CourseReminderScheduler
-import com.stupidtree.hitax.data.repository.TimetableRepository
+import com.stupidtree.hitax.utils.ActivityUtils.CourseResourceMode
 import com.stupidtree.hitax.utils.IcsImportUtils
-import android.content.Intent
-import android.net.Uri
-import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
+import com.stupidtree.stupiduser.data.repository.LocalUserRepository
+import com.stupidtree.style.base.BaseFragment
 
 class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationBinding>() {
-    
+    private val easTokenObserver = Observer<com.stupidtree.hitax.data.model.eas.EASToken> {
+        refreshEasUserCard()
+    }
+
     // ICS 文件选择器
     private val selectIcsLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
         uri?.let { importICS(it) }
@@ -64,60 +64,21 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
             }
         }
         binding?.cardImport?.setOnClickListener {
-            ActivityUtils.showEasVerifyWindow(
+            ActivityUtils.startActivity(
                 requireContext(),
-                directTo = ImportTimetableActivity::class.java,
-                onResponseListener = object : PopUpLoginEAS.OnResponseListener {
-                    override fun onSuccess(window: PopUpLoginEAS) {
-                        ActivityUtils.startActivity(
-                            requireContext(),
-                            ImportTimetableActivity::class.java
-                        )
-                        window.dismiss()
-                    }
-
-                    override fun onFailed(window: PopUpLoginEAS) {
-
-                    }
-
-                })
+                ImportTimetableActivity::class.java
+            )
         }
         binding?.cardEmptyClassroom?.setOnClickListener {
-            ActivityUtils.showEasVerifyWindow(
+            ActivityUtils.startActivity(
                 requireContext(),
-                directTo = EmptyClassroomActivity::class.java,
-                onResponseListener = object : PopUpLoginEAS.OnResponseListener {
-                    override fun onSuccess(window: PopUpLoginEAS) {
-                        ActivityUtils.startActivity(
-                            requireContext(),
-                            EmptyClassroomActivity::class.java
-                        )
-                        window.dismiss()
-                    }
-
-                    override fun onFailed(window: PopUpLoginEAS) {
-
-                    }
-
-                })
+                EmptyClassroomActivity::class.java
+            )
         }
         binding?.cardScores?.setOnClickListener {
-            ActivityUtils.showEasVerifyWindow(
+            ActivityUtils.startActivity(
                 requireContext(),
-                directTo = ScoreInquiryActivity::class.java,
-                onResponseListener = object : PopUpLoginEAS.OnResponseListener {
-                    override fun onSuccess(window: PopUpLoginEAS) {
-                        ActivityUtils.startActivity(
-                            requireContext(),
-                            ScoreInquiryActivity::class.java
-                        )
-                        window.dismiss()
-                    }
-
-                    override fun onFailed(window: PopUpLoginEAS) {
-
-                    }
-                }
+                ScoreInquiryActivity::class.java
             )
         }
         binding?.cardSubjects?.setOnClickListener {
@@ -169,10 +130,15 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
     override fun onStart() {
         super.onStart()
         viewModel.startRefresh()
+        activity?.application?.let {
+            EASRepository.getInstance(it).observeEasToken().observe(viewLifecycleOwner, easTokenObserver)
+        }
+        refreshEasUserCard()
+    }
 
+    private fun refreshEasUserCard() {
         LocalUserRepository.getInstance(requireContext()).getLoggedInUser().let {
             if (it.isValid()) { //如果已登录
-                //装载头像
                 binding?.avatar?.let { it1 ->
                     com.stupidtree.stupiduser.util.ImageUtils.loadAvatarInto(
                         requireContext(),
@@ -187,7 +153,6 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
                         it1
                     )
                 }
-                //设置各种文字
                 binding?.username?.text = it.username
                 binding?.nickname?.text = it.nickname
                 binding?.userCard?.setOnClickListener { _ ->
@@ -198,12 +163,27 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
                     )
                 }
             } else {
-                //未登录的信息显示
-                val easToken = activity?.application?.let { EASRepository.getInstance(it).getEasToken() }
+                val easToken = activity?.application?.let { app -> EASRepository.getInstance(app).getEasToken() }
                 if (easToken?.isLogin() == true) {
-                    binding?.username?.text = easToken.name?.ifBlank { easToken.username }
+                    binding?.username?.text = easToken.name?.ifBlank { easToken.stuId?.ifBlank { easToken.username } }
+                        ?: easToken.stuId?.ifBlank { easToken.username }
                         ?: easToken.username
-                    binding?.nickname?.text = easToken.stuId?.ifBlank { easToken.username } ?: ""
+                        ?: getString(R.string.eas_account_not_logged_in_title)
+                    binding?.nickname?.text = buildString {
+                        val primary = easToken.stuId?.trim().orEmpty()
+                        val secondary = listOf(
+                            easToken.school,
+                            easToken.major,
+                            easToken.grade,
+                            easToken.className
+                        ).mapNotNull { info -> info?.trim()?.takeIf(String::isNotBlank) }
+                            .joinToString(" · ")
+                        append(primary)
+                        if (secondary.isNotBlank()) {
+                            if (isNotEmpty()) append("\n")
+                            append(secondary)
+                        }
+                    }.ifBlank { easToken.username.orEmpty() }
                 } else {
                     binding?.username?.setText(R.string.eas_account_not_logged_in_title)
                     binding?.nickname?.setText(R.string.eas_account_not_logged_in_subtitle)
@@ -216,7 +196,6 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
                         onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                             override fun onSuccess(window: PopUpLoginEAS) {
                                 window.dismiss()
-                                refreshEasState()
                             }
 
                             override fun onFailed(window: PopUpLoginEAS) {}
@@ -225,64 +204,19 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
                 }
             }
         }
-        refreshEasState()
     }
-
-    private fun refreshEasState() {
-        val token = activity?.application?.let { EASRepository.getInstance(it).getEasToken() }
-        token?.let { easToken ->
-            if (easToken.isLogin()) {
-                binding?.easTitle?.text = "教务登录为 ${easToken.username}"
-                binding?.easDot?.imageTintList = ColorStateList.valueOf(getColorPrimary())
-                binding?.easAvatar?.let { it1 ->
-                    ImageUtils.loadEASPictureInto(
-                        easToken.picture ?: "",
-                        it1
-                    )
-                }
-                binding?.easActionIcon?.setOnClickListener {
-                    PopUpText().setTitle(R.string.menu_logout_jw).setOnConfirmListener(object :PopUpText.OnConfirmListener{
-                        override fun OnConfirm() {
-                            activity?.application?.let {
-                                EASRepository.getInstance(it).logout()
-                                refreshEasState()
-                            }
-                        }
-
-                    }).show(parentFragmentManager,"logout")
-
-                }
-                binding?.easActionIcon?.visibility = View.VISIBLE
-                binding?.easLayout?.isClickable = false
-            } else {
-                binding?.easTitle?.text = "未登录教务"
-                binding?.easDot?.imageTintList = ColorStateList.valueOf(getColorPrimaryDisabled())
-                binding?.easActionIcon?.visibility = View.INVISIBLE
-                binding?.easLayout?.isClickable = true
-                binding?.easLayout?.setOnClickListener {
-                    ActivityUtils.showEasVerifyWindow<Activity>(
-                        requireContext(),
-                        directTo = null,
-                        onResponseListener = object : PopUpLoginEAS.OnResponseListener {
-                            override fun onSuccess(window: PopUpLoginEAS) {
-                                window.dismiss()
-                                refreshEasState()
-                            }
-                            override fun onFailed(window: PopUpLoginEAS) {
-
-                            }
-
-                        })
-                }
-            }
-        }
-    }
-
 
     override fun initViewBinding(): FragmentNavigationBinding {
         return FragmentNavigationBinding.inflate(layoutInflater)
     }
-    
+
+    override fun onStop() {
+        activity?.application?.let {
+            EASRepository.getInstance(it).observeEasToken().removeObserver(easTokenObserver)
+        }
+        super.onStop()
+    }
+
     /**
      * 导入 ICS 文件
      */

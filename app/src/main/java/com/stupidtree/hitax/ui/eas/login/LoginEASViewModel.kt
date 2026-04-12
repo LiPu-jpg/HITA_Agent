@@ -6,6 +6,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.switchMap
 import com.stupidtree.component.data.DataState
+import com.stupidtree.hitax.data.model.eas.EASToken
 import com.stupidtree.hitax.data.repository.EASRepository
 
 class LoginEASViewModel(application: Application) : AndroidViewModel(application){
@@ -22,7 +23,7 @@ class LoginEASViewModel(application: Application) : AndroidViewModel(application
     val loginResultLiveData:LiveData<DataState<Boolean>>
         get() {
             return  loginController.switchMap{
-                return@switchMap easRepository.login(it.username,it.password)
+                return@switchMap easRepository.login(it.username, it.password, it.campus)
             }
         }
 
@@ -31,8 +32,8 @@ class LoginEASViewModel(application: Application) : AndroidViewModel(application
      * 方法区
      */
 
-    fun startLogin(username:String,password:String){
-        loginController.value = LoginTrigger.getActioning(username,password,null)
+    fun startLogin(username:String,password:String, campus: EASToken.Campus){
+        loginController.value = LoginTrigger.getActioning(username, password, campus, null)
     }
 
 }

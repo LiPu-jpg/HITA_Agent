@@ -4,39 +4,46 @@ import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.appbar.AppBarLayout
+import com.stupidtree.component.data.DataState
 import com.stupidtree.hitax.R
+import com.stupidtree.hitax.data.model.eas.EASToken
 import com.stupidtree.hitax.data.model.eas.TermItem
 import com.stupidtree.hitax.data.model.timetable.TimePeriodInDay
 import com.stupidtree.hitax.data.repository.EASRepository
 import com.stupidtree.hitax.databinding.ActivityEasImportBinding
-import com.stupidtree.style.base.BaseListAdapter
-import com.stupidtree.component.data.DataState
-import com.stupidtree.hitax.data.model.eas.EASToken
 import com.stupidtree.hitax.ui.eas.EASActivity
 import com.stupidtree.hitax.ui.widgets.PopUpCalendarPicker
-import com.stupidtree.style.widgets.PopUpCheckableList
 import com.stupidtree.hitax.ui.widgets.PopUpTimePeriodPicker
 import com.stupidtree.hitax.ui.widgets.WidgetUtils
+import com.stupidtree.hitax.utils.ActivityUtils
 import com.stupidtree.hitax.utils.AnimationUtils
 import com.stupidtree.hitax.utils.ImageUtils.dp2px
 import com.stupidtree.hitax.utils.TermNameFormatter
 import com.stupidtree.hitax.utils.TextTools
-import java.util.*
-
+import com.stupidtree.style.base.BaseListAdapter
+import com.stupidtree.style.widgets.PopUpCheckableList
 
 class ImportTimetableActivity :
     EASActivity<ImportTimetableViewModel, ActivityEasImportBinding>() {
 
+    override fun shouldRefreshOnStart(): Boolean = false
+
+    override fun shouldCheckLoginOnStart(): Boolean = false
+
     private lateinit var scheduleStructureAdapter: TimetableStructureListAdapter
     private var autoImportPending: Boolean = false
     private var autoImportTriggered: Boolean = false
+    private var importActionInFlight: Boolean = false
+    private var termQueryInFlight: Boolean = false
+    private var calibrationPromptTermCode: String? = null
+    private var openTermPickerWhenLoaded: Boolean = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         setToolbarActionBack(binding.toolbar)
     }
 
@@ -64,7 +71,6 @@ class ImportTimetableActivity :
             binding.buttonImport.scaleY = 0.7f + 0.3f * scale
             binding.buttonImport.translationX =
                 (binding.buttonImport.width / 2) * (1 - binding.buttonImport.scaleX)
-
         })
         binding.cardName.isEnabled = false
         val token = EASRepository.getInstance(application).getEasToken()
@@ -73,45 +79,108 @@ class ImportTimetableActivity :
         viewModel.changeIsUndergraduate(isUndergrad)
         binding.termPick.setOnClickListener {
             val terms = viewModel.startGetAllTerms()
-            val names = terms.map { getDisplayTermName(it) }
-            if (names.isEmpty()) {
+            if (terms.isEmpty()) {
+                openTermPickerWhenLoaded = true
+                ensureLoggedInForImport {
+                    refresh()
+                }
                 return@setOnClickListener
             }
-            PopUpCheckableList<TermItem>()
-                .setListData(names, terms)
-                .setTitle(getString(R.string.pick_import_term))
-                .setOnConfirmListener(object :
-                    PopUpCheckableList.OnConfirmListener<TermItem> {
-                    override fun OnConfirm(title: String?, key: TermItem) {
-                        viewModel.changeSelectedTerm(key)
-                    }
-                }).show(supportFragmentManager, "terms")
+            showTermPicker(terms)
         }
-        binding.buttonImport.setOnClickListener {
-            if (viewModel.startImportTimetable()) {
-                it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-                binding.buttonImport.startAnimation()
+        binding.buttonImport.setOnClickListener { button ->
+            ensureLoggedInForImport {
+                if (viewModel.isBenbuTerm() && viewModel.benbuCalibrationConfirmedLiveData.value != true) {
+                    showBenbuCalibrationPrompt(force = true)
+                    return@ensureLoggedInForImport
+                }
+                if (startImportFlow()) {
+                    button.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+                }
             }
         }
         binding.cardDate.onCardClickListener = View.OnClickListener {
             viewModel.startDateLiveData.value?.data?.let {
                 PopUpCalendarPicker().setInitValue(it.timeInMillis)
                     .setOnConfirmListener(object : PopUpCalendarPicker.OnConfirmListener {
-                        override fun onConfirm(c: Calendar) {
+                        override fun onConfirm(c: java.util.Calendar) {
                             viewModel.changeStartDate(c)
                         }
                     }).show(supportFragmentManager, "pick")
             }
-
+        }
+        binding.buttonPrevWeek.setOnClickListener {
+            viewModel.shiftStartDateByWeek(-1)
+        }
+        binding.buttonNextWeek.setOnClickListener {
+            viewModel.shiftStartDateByWeek(1)
         }
         binding.stutype.setOnCheckedChangeListener { bt, b ->
-            if(bt.isPressed){
+            if (bt.isPressed) {
                 viewModel.changeIsUndergraduate(b)
             }
         }
 
+        refreshLocalUiOnly()
+        if (EASRepository.getInstance(application).getEasToken().isLogin()) {
+            refresh()
+        }
+        if (autoImportPending) {
+            ensureLoggedInForImport {
+                refresh()
+            }
+        }
     }
 
+    override fun refresh() {
+        binding.buttonImport.background = ContextCompat.getDrawable(
+            getThis(),
+            R.drawable.element_rounded_button_bg_grey
+        )
+        binding.buttonImport.isEnabled = false
+        binding.refresh.isRefreshing = true
+        termQueryInFlight = true
+        viewModel.startRefreshTerms()
+    }
+
+    override fun onLoginCheckSuccess(retry: Boolean) {
+        val token = EASRepository.getInstance(application).getEasToken()
+        binding.stutype.isChecked = (token.stutype == EASToken.TYPE.UNDERGRAD)
+        viewModel.changeIsUndergraduate(binding.stutype.isChecked)
+        refresh()
+    }
+
+    private fun refreshLocalUiOnly() {
+        binding.buttonImport.background = ContextCompat.getDrawable(
+            getThis(),
+            R.drawable.element_rounded_button_bg_grey
+        )
+        binding.buttonImport.isEnabled = false
+        binding.refresh.isRefreshing = false
+        binding.termText.setText(R.string.pick_import_term)
+        binding.cardName.setTitle(getString(R.string.timetable_name))
+        binding.cardDate.setTitle(R.string.no_valid_date)
+        updateBenbuCalibrationVisibility()
+    }
+
+    private fun ensureLoggedInForImport(onSuccess: () -> Unit) {
+        if (EASRepository.getInstance(application).getEasToken().isLogin()) {
+            onSuccess()
+            return
+        }
+        ActivityUtils.showEasVerifyWindow<android.app.Activity>(
+            from = this,
+            directTo = null,
+            onResponseListener = object : com.stupidtree.hitax.ui.eas.login.PopUpLoginEAS.OnResponseListener {
+                override fun onSuccess(window: com.stupidtree.hitax.ui.eas.login.PopUpLoginEAS) {
+                    window.dismiss()
+                    onSuccess()
+                }
+
+                override fun onFailed(window: com.stupidtree.hitax.ui.eas.login.PopUpLoginEAS) = Unit
+            }
+        )
+    }
 
     private fun bindLiveData() {
         viewModel.selectedTermLiveData.observe(this) {
@@ -119,23 +188,56 @@ class ImportTimetableActivity :
                 val label = getDisplayTermName(it)
                 binding.termText.text = label
                 binding.cardName.setTitle(label)
+                updateBenbuCalibrationVisibility()
                 maybeAutoImport()
             }
         }
         viewModel.termsLiveData.observe(this) { data ->
             binding.refresh.isRefreshing = false
-            if (data.state == DataState.STATE.SUCCESS) {
-                if (!data.data.isNullOrEmpty()) {
-                    for (t in data.data!!) {
-                        if (t.isCurrent) {
-                            viewModel.changeSelectedTerm(t)
-                            return@observe
+            when (data.state) {
+                DataState.STATE.SUCCESS -> {
+                    termQueryInFlight = false
+                    resetSessionRetryState()
+                    if (!data.data.isNullOrEmpty()) {
+                        for (t in data.data!!) {
+                            if (t.isCurrent) {
+                                viewModel.changeSelectedTerm(t)
+                                if (openTermPickerWhenLoaded) {
+                                    openTermPickerWhenLoaded = false
+                                    showTermPicker(data.data!!)
+                                }
+                                return@observe
+                            }
+                        }
+                        viewModel.changeSelectedTerm(data.data!![0])
+                        if (openTermPickerWhenLoaded) {
+                            openTermPickerWhenLoaded = false
+                            showTermPicker(data.data!!)
                         }
                     }
-                    viewModel.changeSelectedTerm(data.data!![0])
                 }
-            } else {
-                binding.termText.setText(R.string.load_failed)
+
+                DataState.STATE.NOT_LOGGED_IN -> {
+                    if (termQueryInFlight) {
+                        if (!handleSessionExpired {
+                                termQueryInFlight = true
+                                binding.refresh.isRefreshing = true
+                                viewModel.startRefreshTerms()
+                                true
+                            }) {
+                            termQueryInFlight = false
+                        }
+                    }
+                }
+
+                DataState.STATE.NOTHING -> Unit
+
+                else -> {
+                    termQueryInFlight = false
+                    resetSessionRetryState()
+                    binding.termText.setText(R.string.load_failed)
+                    openTermPickerWhenLoaded = false
+                }
             }
             maybeAutoImport()
         }
@@ -150,6 +252,13 @@ class ImportTimetableActivity :
             } else {
                 binding.cardDate.setTitle(R.string.no_valid_date)
             }
+            updateBenbuCalibrationVisibility()
+            maybeShowBenbuCalibrationPrompt()
+            maybeAutoImport()
+        }
+        viewModel.benbuCalibrationConfirmedLiveData.observe(this) {
+            updateBenbuCalibrationVisibility()
+            maybeShowBenbuCalibrationPrompt()
             maybeAutoImport()
         }
         viewModel.scheduleStructureLiveData.observe(this) {
@@ -161,8 +270,8 @@ class ImportTimetableActivity :
             }
             maybeAutoImport()
         }
-        viewModel.isUndergraduateLiveData.observe(this){
-            binding.stutype.text = if(it) getString(R.string.undergrad_structure) else
+        viewModel.isUndergraduateLiveData.observe(this) {
+            binding.stutype.text = if (it) getString(R.string.undergrad_structure) else
                 getString(R.string.postgrad_structure)
         }
         viewModel.importTimetableResultLiveData.observe(this) {
@@ -170,55 +279,93 @@ class ImportTimetableActivity :
                 binding.buttonImport, it.state == DataState.STATE.SUCCESS,
                 successStr = R.string.import_success, failStr = R.string.import_failed
             )
-            if (it.state != DataState.STATE.SUCCESS) {
+            if (it.state == DataState.STATE.SUCCESS) {
+                importActionInFlight = false
+                resetSessionRetryState()
+            } else if (it.state == DataState.STATE.NOT_LOGGED_IN && importActionInFlight) {
+                if (!handleSessionExpired { retryImportFlow() }) {
+                    importActionInFlight = false
+                }
+            } else if (it.state != DataState.STATE.SUCCESS) {
+                importActionInFlight = false
+                resetSessionRetryState()
                 val msg = it.message?.trim().orEmpty()
                 if (msg.isNotEmpty()) {
                     Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
                 }
             }
-            //通知小组件
             WidgetUtils.sendRefreshToAll(this)
-//            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-//                binding.buttonImport.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-//            } else {
-//                binding.buttonImport.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-//            }
-//            val iconId: Int
-//            if (it.state == DataState.STATE.SUCCESS) {
-//                iconId = R.drawable.ic_baseline_done_24
-//                Toast.makeText(getThis(), R.string.import_success, Toast.LENGTH_SHORT).show()
-//            } else {
-//                iconId = R.drawable.ic_baseline_error_24
-//                Toast.makeText(getThis(), R.string.import_failed, Toast.LENGTH_SHORT).show()
-//            }
-//            val bitmap = ImageUtils.getResourceBitmap(getThis(), iconId)
-//            binding.buttonImport.doneLoadingAnimation(
-//                getColorPrimary(), bitmap
-//            )
-//            binding.buttonImport.postDelayed({
-//                binding.buttonImport.revertAnimation()
-//            }, 600)
         }
     }
 
     private fun maybeAutoImport() {
         if (!autoImportPending || autoImportTriggered) return
-        if (viewModel.startImportTimetable()) {
+        if (viewModel.isBenbuTerm() && viewModel.benbuCalibrationConfirmedLiveData.value != true) return
+        if (startImportFlow()) {
             autoImportTriggered = true
-            binding.buttonImport.startAnimation()
         }
     }
 
-    /**
-     * 初始化课表结构列表
-     */
+    private fun startImportFlow(): Boolean {
+        if (viewModel.startImportTimetable()) {
+            importActionInFlight = true
+            if (viewModel.isBenbuTerm()) {
+                viewModel.saveBenbuCalibration()
+            }
+            binding.buttonImport.startAnimation()
+            return true
+        }
+        return false
+    }
+
+    private fun retryImportFlow(): Boolean {
+        if (viewModel.retryImportTimetable()) {
+            importActionInFlight = true
+            binding.buttonImport.startAnimation()
+            return true
+        }
+        return false
+    }
+
+    private fun updateBenbuCalibrationVisibility() {
+        val visible = viewModel.isBenbuTerm()
+        binding.benbuCalibrationCard.visibility = if (visible) View.VISIBLE else View.GONE
+    }
+
+    private fun maybeShowBenbuCalibrationPrompt() {
+        showBenbuCalibrationPrompt(force = false)
+    }
+
+    private fun showBenbuCalibrationPrompt(force: Boolean) {
+        val term = viewModel.selectedTermLiveData.value ?: return
+        val startDate = viewModel.startDateLiveData.value?.data ?: return
+        if (!viewModel.isBenbuTerm(term)) return
+        if (!force && viewModel.benbuCalibrationConfirmedLiveData.value == true) return
+        if (!force && calibrationPromptTermCode == term.getCode()) return
+        calibrationPromptTermCode = term.getCode()
+        AlertDialog.Builder(this)
+            .setTitle(R.string.benbu_start_date_confirm_title)
+            .setMessage(
+                getString(R.string.benbu_start_date_confirm_message) + "\n\n" +
+                    TextTools.getNormalDateText(this, startDate)
+            )
+            .setPositiveButton(R.string.benbu_start_date_confirm_positive) { _, _ ->
+                viewModel.saveBenbuCalibration()
+                maybeAutoImport()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
     private fun initList() {
         scheduleStructureAdapter = TimetableStructureListAdapter(getThis(), mutableListOf())
         binding.scheduleStructure.adapter = scheduleStructureAdapter
         binding.scheduleStructure.layoutManager = LinearLayoutManager(getThis())
         binding.refresh.setColorSchemeColors(getColorPrimary())
         binding.refresh.setOnRefreshListener {
-            viewModel.startRefreshTerms()
+            ensureLoggedInForImport {
+                refresh()
+            }
         }
         scheduleStructureAdapter.setOnItemClickListener(object :
             BaseListAdapter.OnItemClickListener<TimePeriodInDay> {
@@ -240,32 +387,24 @@ class ImportTimetableActivity :
         })
     }
 
+    private fun showTermPicker(terms: List<TermItem>) {
+        val names = terms.map { getDisplayTermName(it) }
+        PopUpCheckableList<TermItem>()
+            .setListData(names, terms)
+            .setTitle(getString(R.string.pick_import_term))
+            .setOnConfirmListener(object : PopUpCheckableList.OnConfirmListener<TermItem> {
+                override fun OnConfirm(title: String?, key: TermItem) {
+                    viewModel.changeSelectedTerm(key)
+                }
+            }).show(supportFragmentManager, "terms")
+    }
+
     private fun getDisplayTermName(term: TermItem): String {
         return TermNameFormatter.shortTermName(term.termName, term.name)
     }
 
-
     override fun initViewBinding(): ActivityEasImportBinding {
         return ActivityEasImportBinding.inflate(layoutInflater)
-    }
-
-    override fun onLoginCheckSuccess(retry:Boolean) {
-        super.onLoginCheckSuccess(retry)
-        val token = EASRepository.getInstance(application).getEasToken()
-        binding.stutype.isChecked = (token.stutype==EASToken.TYPE.UNDERGRAD)
-        viewModel.changeIsUndergraduate(binding.stutype.isChecked)
-    }
-
-
-
-    override fun refresh() {
-        binding.buttonImport.background = ContextCompat.getDrawable(
-            getThis(),
-            R.drawable.element_rounded_button_bg_grey
-        )
-        binding.buttonImport.isEnabled = false
-        binding.refresh.isRefreshing = true
-        viewModel.startRefreshTerms()
     }
 
     override fun getViewModelClass(): Class<ImportTimetableViewModel> {

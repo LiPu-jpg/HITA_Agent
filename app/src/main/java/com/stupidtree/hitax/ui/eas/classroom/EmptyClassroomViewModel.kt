@@ -49,26 +49,28 @@ class EmptyClassroomViewModel(application: Application) : EASViewModel(applicati
     val classroomLiveData: MediatorLiveData<DataState<List<ClassroomItem>>> =
         MTransformations.switchMap(timetableStructureLiveData) {
             val res = MediatorLiveData<DataState<List<ClassroomItem>>>()
+            var currentQuerySource: LiveData<DataState<List<ClassroomItem>>>? = null
+
+            fun launchClassroomQuery(term: TermItem, building: BuildingItem, week: Int) {
+                currentQuerySource?.let { res.removeSource(it) }
+                val source = easRepository.queryEmptyClassroom(term, building, week)
+                currentQuerySource = source
+                res.addSource(source) { state ->
+                    res.value = state
+                }
+            }
+
             res.addSource(selectedWeekLiveData) { week ->
                 selectedTermLiveData.value?.let { term ->
                     selectedBuildingLiveData.value?.let { building ->
-                        res.addSource(easRepository.queryEmptyClassroom(term, building, week)) {
-                            res.value = it
-                        }
+                        launchClassroomQuery(term, building, week)
                     }
                 }
             }
             res.addSource(selectedBuildingLiveData) { building ->
                 selectedTermLiveData.value?.let { term ->
-                    res.addSource(
-                        easRepository.queryEmptyClassroom(
-                            term,
-                            building,
-                            selectedWeekLiveData.value ?: 1
-                        )
-                    ) {
-                        res.value = it
-                    }
+                    val week = selectedWeekLiveData.value ?: 1
+                    launchClassroomQuery(term, building, week)
                 }
             }
             return@switchMap res
@@ -77,5 +79,15 @@ class EmptyClassroomViewModel(application: Application) : EASViewModel(applicati
 
     fun startRefresh() {
         pageController.value = Trigger.actioning
+    }
+
+    fun retryCurrentQuery(): Boolean {
+        val term = selectedTermLiveData.value ?: return false
+        val building = selectedBuildingLiveData.value ?: return false
+        val week = selectedWeekLiveData.value ?: return false
+        selectedTermLiveData.value = term
+        selectedBuildingLiveData.value = building
+        selectedWeekLiveData.value = week
+        return true
     }
 }

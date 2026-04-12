@@ -3,6 +3,7 @@ package com.stupidtree.hitax.data.repository
 import android.app.Application
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
@@ -18,7 +19,9 @@ import com.stupidtree.hitax.data.model.timetable.TimePeriodInDay
 import com.stupidtree.hitax.data.model.timetable.Timetable
 import com.stupidtree.hitax.data.source.preference.EasPreferenceSource
 import com.stupidtree.hitax.data.source.preference.TimetablePreferenceSource
+import com.stupidtree.hitax.data.source.web.eas.BenbuEASSource
 import com.stupidtree.hitax.data.source.web.eas.EASource
+import com.stupidtree.hitax.data.source.web.eas.WeihaiEASSource
 import com.stupidtree.hitax.data.source.web.service.EASService
 import com.stupidtree.hitax.ui.eas.classroom.BuildingItem
 import com.stupidtree.hitax.ui.eas.classroom.ClassroomItem
@@ -36,23 +39,69 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class EASRepository internal constructor(application: Application) {
     private val appContext = application.applicationContext
-    private val easService: EASService = EASource()
+    private val shenzhenService: EASource = EASource()
+    private val benbuService: EASService = BenbuEASSource()
+    private val weihaiService: EASService = WeihaiEASSource()
     private var easPreferenceSource = EasPreferenceSource.getInstance(application)
     private var eventItemDao = AppDatabase.getDatabase(application).eventItemDao()
     private var timetableDao = AppDatabase.getDatabase(application).timetableDao()
     private var subjectDao = AppDatabase.getDatabase(application).subjectDao()
+    private val easTokenLiveData = MutableLiveData(easPreferenceSource.getEasToken())
+
+    private fun getService(campus: EASToken.Campus): EASService {
+        return when (campus) {
+            EASToken.Campus.SHENZHEN -> shenzhenService
+            EASToken.Campus.BENBU -> benbuService
+            EASToken.Campus.WEIHAI -> weihaiService
+        }
+    }
 
     /**
      * 进行登录
      */
     fun login(username: String, password: String): LiveData<DataState<Boolean>> {
-        return easService.login(username, password, null).map {
-            if (it.state == DataState.STATE.SUCCESS) {
-                it.data?.let { it1 -> easPreferenceSource.saveEasToken(it1) }
-                return@map DataState(true, DataState.STATE.SUCCESS)
+        return login(username, password, EASToken.Campus.SHENZHEN)
+    }
+
+    fun login(
+        username: String,
+        password: String,
+        campus: EASToken.Campus
+    ): LiveData<DataState<Boolean>> {
+        val result = MediatorLiveData<DataState<Boolean>>()
+        val loginSource = getService(campus).login(username, password, null)
+        result.addSource(loginSource) { state ->
+            if (state.state == DataState.STATE.NOTHING) {
+                return@addSource
             }
-            return@map DataState(false, it.state).apply { message = it.message }
+            if (state.state != DataState.STATE.SUCCESS) {
+                result.value = DataState(false, state.state).apply { message = state.message }
+                return@addSource
+            }
+            val token = state.data
+            if (token == null) {
+                result.value = DataState(false, DataState.STATE.FETCH_FAILED).apply { message = state.message }
+                return@addSource
+            }
+            token.campus = campus
+            val enrichSource = getService(campus).getSafePersonalInfo(token)
+            result.addSource(enrichSource) { enrichedState ->
+                if (enrichedState.state == DataState.STATE.NOTHING) {
+                    return@addSource
+                }
+                val finalToken = if (enrichedState.state == DataState.STATE.SUCCESS) {
+                    enrichedState.data ?: token
+                } else {
+                    token
+                }
+                finalToken.campus = campus
+                saveEasToken(finalToken)
+                result.value = DataState(true, DataState.STATE.SUCCESS)
+                result.removeSource(enrichSource)
+            }
+            result.removeSource(loginSource)
         }
+        return result
     }
 
     /**
@@ -63,12 +112,12 @@ class EASRepository internal constructor(application: Application) {
         if (!token.isLogin()) {
             return LiveDataUtils.getMutableLiveData(DataState(false))
         }
-        return easService.loginCheck(token).switchMap {
+        return getService(token.campus).loginCheck(token).switchMap {
             if (it.state == DataState.STATE.SUCCESS && it.data != null) {
                 if (!it.data!!.first) {
-                    easPreferenceSource.clearEasToken()
+                    clearEasToken()
                 } else {
-                    easPreferenceSource.saveEasToken(it.data!!.second)
+                    saveEasToken(it.data!!.second)
                 }
             }
             return@switchMap MutableLiveData(DataState(it.data?.first == true))
@@ -81,7 +130,7 @@ class EASRepository internal constructor(application: Application) {
     fun getStartDateOfTerm(term: TermItem): LiveData<DataState<Calendar>> {
         val easToken = easPreferenceSource.getEasToken()
         if (easToken.isLogin()) {
-            return easService.getStartDate(easToken, term)
+            return getService(easToken.campus).getStartDate(easToken, term)
         }
         return LiveDataUtils.getMutableLiveData<DataState<Calendar>>(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
@@ -93,7 +142,7 @@ class EASRepository internal constructor(application: Application) {
     fun getAllTerms(): LiveData<DataState<List<TermItem>>> {
         val easToken = easPreferenceSource.getEasToken()
         if (easToken.isLogin()) {
-            return easService.getAllTerms(easToken)
+            return getService(easToken.campus).getAllTerms(easToken)
         }
         return LiveDataUtils.getMutableLiveData<DataState<List<TermItem>>>(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
@@ -107,7 +156,7 @@ class EASRepository internal constructor(application: Application) {
     ): LiveData<DataState<MutableList<TimePeriodInDay>>> {
         val easToken = easPreferenceSource.getEasToken()
         if (easToken.isLogin()) {
-            return easService.getScheduleStructure(term, isUndergraduate, easToken)
+            return getService(easToken.campus).getScheduleStructure(term, isUndergraduate, easToken)
         }
         return LiveDataUtils.getMutableLiveData<DataState<MutableList<TimePeriodInDay>>>(
             DataState(
@@ -123,7 +172,7 @@ class EASRepository internal constructor(application: Application) {
     fun getTeachingBuildings(): LiveData<DataState<List<BuildingItem>>> {
         val easToken = easPreferenceSource.getEasToken()
         if (easToken.isLogin()) {
-            return easService.getTeachingBuildings(easToken)
+            return getService(easToken.campus).getTeachingBuildings(easToken)
         }
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
 
@@ -139,7 +188,7 @@ class EASRepository internal constructor(application: Application) {
     ): LiveData<DataState<List<ClassroomItem>>> {
         val easToken = easPreferenceSource.getEasToken()
         if (easToken.isLogin()) {
-            return easService.queryEmptyClassroom(
+            return getService(easToken.campus).queryEmptyClassroom(
                 easToken,
                 term,
                 buildingItem,
@@ -158,7 +207,7 @@ class EASRepository internal constructor(application: Application) {
     ): LiveData<DataState<List<CourseScoreItem>>> {
         val easToken = easPreferenceSource.getEasToken()
         if (easToken.isLogin()) {
-            return easService.getPersonalScores(term, easToken, testType)
+            return getService(easToken.campus).getPersonalScores(term, easToken, testType)
         }
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
@@ -168,10 +217,22 @@ class EASRepository internal constructor(application: Application) {
         testType: EASService.TestType
     ): LiveData<DataState<ScoreQueryResult>> {
         val easToken = easPreferenceSource.getEasToken()
-        if (easToken.isLogin()) {
-            return (easService as EASource).getPersonalScoresWithSummary(term, easToken, testType)
+        if (!easToken.isLogin()) {
+            return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
         }
-        return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
+        val service = getService(easToken.campus)
+        return when (service) {
+            is EASource -> service.getPersonalScoresWithSummary(term, easToken, testType)
+            is BenbuEASSource -> service.getPersonalScoresWithSummary(term, easToken, testType)
+            is WeihaiEASSource -> service.getPersonalScoresWithSummary(term, easToken, testType)
+            else -> service.getPersonalScores(term, easToken, testType).map { state ->
+                if (state.state == DataState.STATE.SUCCESS) {
+                    DataState(ScoreQueryResult(items = state.data ?: emptyList(), summary = null), state.state)
+                } else {
+                    DataState<ScoreQueryResult>(state.state, state.message)
+                }
+            }
+        }
     }
 
     /**
@@ -180,7 +241,7 @@ class EASRepository internal constructor(application: Application) {
     fun getExamInfo(): LiveData<DataState<List<ExamItem>>> {
         val easToken = easPreferenceSource.getEasToken()
         if (easToken.isLogin()) {
-            return easService.getExamItems(easToken)
+            return getService(easToken.campus).getExamItems(easToken)
         }
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
@@ -200,6 +261,10 @@ class EASRepository internal constructor(application: Application) {
         startDate.firstDayOfWeek = Calendar.MONDAY
         startDate.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
         val easToken = easPreferenceSource.getEasToken()
+        Log.d(
+            TAG,
+            "startImportTimetableOfTerm term=${term.getCode()} campus=${easToken.campus} start=${startDate.time} scheduleSize=${schedule.size} loggedIn=${easToken.isLogin()}"
+        )
         if (easToken.isLogin()) {
             val finished = AtomicBoolean(false)
             val timeoutHandler = Handler(Looper.getMainLooper())
@@ -212,171 +277,185 @@ class EASRepository internal constructor(application: Application) {
             timeoutHandler.postDelayed(timeoutRunnable, 90_000L)
             timetableWebLiveData?.let { importTimetableLiveData.removeSource(it) }
             timetableWebLiveData =
-                easService.getTimetableOfTerm(term, easToken)
+                getService(easToken.campus).getTimetableOfTerm(term, easToken)
             importTimetableLiveData.addSource(timetableWebLiveData!!) {
-                if (it.state == DataState.STATE.SUCCESS) {
-                    val courseItems = it.data
-                    if (courseItems.isNullOrEmpty()) {
-                        if (finished.compareAndSet(false, true)) {
-                            timeoutHandler.removeCallbacks(timeoutRunnable)
-                            importTimetableLiveData.value =
-                                DataState(DataState.STATE.FETCH_FAILED, "empty timetable")
+                when (it.state) {
+                    DataState.STATE.SUCCESS -> {
+                        val courseItems = it.data
+                        Log.d(TAG, "import timetable response state=${it.state} term=${term.getCode()} courseCount=${courseItems?.size ?: -1} message=${it.message}")
+                        if (courseItems.isNullOrEmpty()) {
+                            if (finished.compareAndSet(false, true)) {
+                                timeoutHandler.removeCallbacks(timeoutRunnable)
+                                importTimetableLiveData.value =
+                                    DataState(DataState.STATE.FETCH_FAILED, "empty timetable")
+                            }
+                            return@addSource
                         }
-                        return@addSource
-                    }
-                    Thread {
-                        try {
-                            val meta = fetchSelectedSubjectMeta(term, easToken)
-                            val teacherMap = meta.teacherMap
-                            val creditMap = meta.creditMap
-                            val maxPeriod = courseItems.maxOfOrNull { item ->
-                                (item.begin + item.last - 1).coerceAtLeast(item.begin)
-                            } ?: 0
-                            val safeSchedule = buildSafeSchedule(schedule, maxPeriod)
-                            //更新timetable信息
-                            var timetable = timetableDao.getTimetableByEASCodeSync(term.getCode())
-                            if (timetable == null) {
-                                timetable = Timetable()
-                            } else {
-                                //若存在，则先清空原有课表课程
-                                val eventIds =
-                                    eventItemDao.getEventIdsFromTimetablesSync(listOf(timetable.id))
-                                StupidSync.putHistorySync("event", History.ACTION.REMOVE, eventIds)
-                                eventItemDao.deleteCourseFromTimetable(timetable.id)
-                            }
-                            StupidSync.putHistorySync(
-                                "timetable",
-                                History.ACTION.REQUIRE,
-                                listOf(timetable.id)
-                            )
-                            //记录最后的时间戳，作为学期结束的标志
-                            var maxTs: Long = 0
-                            //添加时间表
-                            val events = mutableListOf<EventItem>()
-                            val requireSubjects = mutableMapOf<String, String>()
-                            for (item in courseItems) {
-                                val startIndex = item.begin - 1
-                                val endIndex = item.begin + item.last - 2
-                                if (startIndex !in safeSchedule.indices || endIndex !in safeSchedule.indices) {
-                                    continue
+                        Thread {
+                            try {
+                                val meta = fetchSelectedSubjectMeta(term, easToken)
+                                val teacherMap = meta.teacherMap
+                                val creditMap = meta.creditMap
+                                val maxPeriod = courseItems.maxOfOrNull { item ->
+                                    (item.begin + item.last - 1).coerceAtLeast(item.begin)
+                                } ?: 0
+                                val safeSchedule = buildSafeSchedule(schedule, maxPeriod)
+                                Log.d(
+                                    TAG,
+                                    "import processing term=${term.getCode()} courseCount=${courseItems.size} maxPeriod=$maxPeriod safeScheduleSize=${safeSchedule.size}"
+                                )
+                                //更新timetable信息
+                                var timetable = timetableDao.getTimetableByEASCodeSync(term.getCode())
+                                if (timetable == null) {
+                                    timetable = Timetable()
+                                } else {
+                                    //若存在，则先清空原有课表课程
+                                    val eventIds =
+                                        eventItemDao.getEventIdsFromTimetablesSync(listOf(timetable.id))
+                                    StupidSync.putHistorySync("event", History.ACTION.REMOVE, eventIds)
+                                    eventItemDao.deleteCourseFromTimetable(timetable.id)
                                 }
-                                val spStart = safeSchedule[startIndex]
-                                val spEnd = safeSchedule[endIndex]
+                                StupidSync.putHistorySync(
+                                    "timetable",
+                                    History.ACTION.REQUIRE,
+                                    listOf(timetable.id)
+                                )
+                                //记录最后的时间戳，作为学期结束的标志
+                                var maxTs: Long = 0
+                                //添加时间表
+                                val events = mutableListOf<EventItem>()
+                                val requireSubjects = mutableMapOf<String, String>()
+                                for (item in courseItems) {
+                                    val startIndex = item.begin - 1
+                                    val endIndex = item.begin + item.last - 2
+                                    if (startIndex !in safeSchedule.indices || endIndex !in safeSchedule.indices) {
+                                        continue
+                                    }
+                                    val spStart = safeSchedule[startIndex]
+                                    val spEnd = safeSchedule[endIndex]
 
-                                //添加科目
-                                var subject = subjectDao.getSubjectByName(timetable.id, item.name)
-                                if (subject == null) {//不存在，新建
-                                    subject = TermSubject()
-                                    subject.name = item.name.toString()
-                                    subject.timetableId = timetable.id
-                                    subject.id = UUID.randomUUID().toString()
-                                }
-                            val code = CourseCodeUtils.normalize(item.code) ?: item.code?.trim().orEmpty()
-                            if (code.isNotBlank() && subject.code.isNullOrBlank()) {
-                                subject.code = code
-                            }
-                            if (subject.credit <= 0f) {
-                                val mappedCredit = creditMap[code]
-                                    ?: item.name?.let { name -> creditMap[name] }
-                                if (mappedCredit != null && mappedCredit > 0f) {
-                                    subject.credit = mappedCredit
-                                }
-                            }
-                            if (subject.field.isNullOrBlank()) {
-                                val mappedField = meta.fieldMap[code]
-                                    ?: item.name?.let { name -> meta.fieldMap[name] }
-                                if (!mappedField.isNullOrBlank()) {
-                                    subject.field = mappedField
-                                }
-                            }
-                            if (subject.selectCategory.isNullOrBlank()) {
-                                val mappedSelect = meta.selectCategoryMap[code]
-                                    ?: item.name?.let { name -> meta.selectCategoryMap[name] }
-                                if (!mappedSelect.isNullOrBlank()) {
-                                    subject.selectCategory = mappedSelect
-                                }
-                            }
-                            if (subject.nature.isNullOrBlank()) {
-                                val mappedNature = meta.natureMap[code]
-                                    ?: item.name?.let { name -> meta.natureMap[name] }
-                                if (!mappedNature.isNullOrBlank()) {
-                                    subject.nature = mappedNature
-                                }
-                            }
-                            subjectDao.saveSubjectSync(subject)
-                                if (requireSubjects[subject.id] == null) {
-                                    requireSubjects[subject.id] = subject.id
-                                    StupidSync.putHistorySync(
-                                        "subject",
-                                        History.ACTION.REQUIRE,
-                                        listOf(subject.id)
-                                    )
-                                }
+                                    //添加科目
+                                    var subject = subjectDao.getSubjectByName(timetable.id, item.name)
+                                    if (subject == null) {//不存在，新建
+                                        subject = TermSubject()
+                                        subject.name = item.name.toString()
+                                        subject.timetableId = timetable.id
+                                        subject.id = UUID.randomUUID().toString()
+                                    }
+                                    val code = CourseCodeUtils.normalize(item.code) ?: item.code?.trim().orEmpty()
+                                    if (code.isNotBlank() && subject.code.isNullOrBlank()) {
+                                        subject.code = code
+                                    }
+                                    if (subject.credit <= 0f) {
+                                        val mappedCredit = creditMap[code]
+                                            ?: item.name?.let { name -> creditMap[name] }
+                                        if (mappedCredit != null && mappedCredit > 0f) {
+                                            subject.credit = mappedCredit
+                                        }
+                                    }
+                                    if (subject.field.isNullOrBlank()) {
+                                        val mappedField = meta.fieldMap[code]
+                                            ?: item.name?.let { name -> meta.fieldMap[name] }
+                                        if (!mappedField.isNullOrBlank()) {
+                                            subject.field = mappedField
+                                        }
+                                    }
+                                    if (subject.selectCategory.isNullOrBlank()) {
+                                        val mappedSelect = meta.selectCategoryMap[code]
+                                            ?: item.name?.let { name -> meta.selectCategoryMap[name] }
+                                        if (!mappedSelect.isNullOrBlank()) {
+                                            subject.selectCategory = mappedSelect
+                                        }
+                                    }
+                                    if (subject.nature.isNullOrBlank()) {
+                                        val mappedNature = meta.natureMap[code]
+                                            ?: item.name?.let { name -> meta.natureMap[name] }
+                                        if (!mappedNature.isNullOrBlank()) {
+                                            subject.nature = mappedNature
+                                        }
+                                    }
+                                    subjectDao.saveSubjectSync(subject)
+                                    if (requireSubjects[subject.id] == null) {
+                                        requireSubjects[subject.id] = subject.id
+                                        StupidSync.putHistorySync(
+                                            "subject",
+                                            History.ACTION.REQUIRE,
+                                            listOf(subject.id)
+                                        )
+                                    }
 
-                                for (week in item.weeks) {
-                                    val from = getDateAtWOT(startDate, week, item.dow)
-                                    val to = getDateAtWOT(startDate, week, item.dow)
-                                    from.set(Calendar.HOUR_OF_DAY, spStart.from.hour)
-                                    from.set(Calendar.MINUTE, spStart.from.minute)
-                                    to.set(Calendar.HOUR_OF_DAY, spEnd.to.hour)
-                                    to.set(Calendar.MINUTE, spEnd.to.minute)
-                                    val e = EventItem()
-                                    e.name = item.name.toString()
-                                    e.from.time = from.timeInMillis
-                                    e.fromNumber = item.begin
-                                    e.subjectId = subject.id
-                                    e.lastNumber = item.last
-                                    e.to.time = to.timeInMillis
-                                    val mappedTeacher = item.teacher?.takeIf { t -> t.isNotBlank() }
-                                        ?: code.takeIf { it.isNotBlank() }?.let { teacherMap[it] }
-                                        ?: item.name?.let { name -> teacherMap[name] }
-                                    e.teacher = mappedTeacher
-                                    e.place = item.classroom
-                                    e.timetableId = timetable.id
-                                    if (e.to.time > maxTs) maxTs = e.to.time
-                                    events.add(e)
+                                    for (week in item.weeks) {
+                                        val from = getDateAtWOT(startDate, week, item.dow)
+                                        val to = getDateAtWOT(startDate, week, item.dow)
+                                        from.set(Calendar.HOUR_OF_DAY, spStart.from.hour)
+                                        from.set(Calendar.MINUTE, spStart.from.minute)
+                                        to.set(Calendar.HOUR_OF_DAY, spEnd.to.hour)
+                                        to.set(Calendar.MINUTE, spEnd.to.minute)
+                                        val e = EventItem()
+                                        e.name = item.name.toString()
+                                        e.from.time = from.timeInMillis
+                                        e.fromNumber = item.begin
+                                        e.subjectId = subject.id
+                                        e.lastNumber = item.last
+                                        e.to.time = to.timeInMillis
+                                        val mappedTeacher = item.teacher?.takeIf { t -> t.isNotBlank() }
+                                            ?: code.takeIf { it.isNotBlank() }?.let { teacherMap[it] }
+                                            ?: item.name?.let { name -> teacherMap[name] }
+                                        e.teacher = mappedTeacher
+                                        e.place = item.classroom
+                                        e.timetableId = timetable.id
+                                        if (e.to.time > maxTs) maxTs = e.to.time
+                                        events.add(e)
+                                    }
                                 }
-                            }
-                            if (events.isEmpty()) {
+                                if (events.isEmpty()) {
+                                    Log.w(TAG, "import generated empty events for term=${term.getCode()}")
+                                    if (finished.compareAndSet(false, true)) {
+                                        timeoutHandler.removeCallbacks(timeoutRunnable)
+                                        importTimetableLiveData.postValue(
+                                            DataState(DataState.STATE.FETCH_FAILED, "empty events")
+                                        )
+                                    }
+                                    return@Thread
+                                }
+                                Log.d(TAG, "import saving ${events.size} events for term=${term.getCode()}")
+                                eventItemDao.saveEvents(events)
+                                StupidSync.putHistorySync("event", History.ACTION.REQUIRE, events.getIds())
+
+                                //更新timetable对象
+                                timetable.name = buildTimetableName(term)
+                                timetable.startTime = Timestamp(startDate.timeInMillis)
+                                timetable.endTime = Timestamp(maxTs)
+                                timetable.code = term.getCode()
+                                timetable.scheduleStructure = safeSchedule
+                                timetableDao.saveTimetableSync(timetable)
+
+                                if (finished.compareAndSet(false, true)) {
+                                    timeoutHandler.removeCallbacks(timeoutRunnable)
+                                    Log.d(TAG, "import success term=${term.getCode()} timetable=${timetable.name} events=${events.size}")
+                                    importTimetableLiveData.postValue(DataState(true, DataState.STATE.SUCCESS))
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                Log.e(TAG, "import failed term=${term.getCode()}: ${e.message}", e)
                                 if (finished.compareAndSet(false, true)) {
                                     timeoutHandler.removeCallbacks(timeoutRunnable)
                                     importTimetableLiveData.postValue(
-                                        DataState(DataState.STATE.FETCH_FAILED, "empty events")
+                                        DataState(DataState.STATE.FETCH_FAILED, e.message)
                                     )
                                 }
-                                return@Thread
                             }
-                            eventItemDao.saveEvents(events)
-                            StupidSync.putHistorySync("event", History.ACTION.REQUIRE, events.getIds())
-
-                            //更新timetable对象
-                            timetable.name = buildTimetableName(term)
-                            timetable.startTime = Timestamp(startDate.timeInMillis)
-                            timetable.endTime = Timestamp(maxTs)
-                            timetable.code = term.getCode()
-                            timetable.scheduleStructure = safeSchedule
-                            timetableDao.saveTimetableSync(timetable)
-
-                            if (finished.compareAndSet(false, true)) {
-                                timeoutHandler.removeCallbacks(timeoutRunnable)
-                                importTimetableLiveData.postValue(DataState(true, DataState.STATE.SUCCESS))
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            if (finished.compareAndSet(false, true)) {
-                                timeoutHandler.removeCallbacks(timeoutRunnable)
-                                importTimetableLiveData.postValue(
-                                    DataState(DataState.STATE.FETCH_FAILED, e.message)
-                                )
-                            }
-                        }
-                    }.start()
-                } else {
-                    if (finished.compareAndSet(false, true)) {
-                        timeoutHandler.removeCallbacks(timeoutRunnable)
-                        importTimetableLiveData.value =
-                            DataState(DataState.STATE.FETCH_FAILED, it.message)
+                        }.start()
                     }
+                    DataState.STATE.FETCH_FAILED, DataState.STATE.NOT_LOGGED_IN -> {
+                        Log.w(TAG, "import timetable fetch failed term=${term.getCode()} message=${it.message}")
+                        if (finished.compareAndSet(false, true)) {
+                            timeoutHandler.removeCallbacks(timeoutRunnable)
+                            importTimetableLiveData.value =
+                                DataState(DataState.STATE.FETCH_FAILED, it.message)
+                        }
+                    }
+                    else -> Unit
                 }
             }
         } else {
@@ -416,7 +495,7 @@ class EASRepository internal constructor(application: Application) {
         val selectCategoryMap = mutableMapOf<String, String>()
         val natureMap = mutableMapOf<String, String>()
         val latch = CountDownLatch(1)
-        val live = easService.getSubjectsOfTerm(token, term)
+        val live = getService(token.campus).getSubjectsOfTerm(token, term)
         val observer = Observer<DataState<MutableList<TermSubject>>> { state ->
             if (state.state == DataState.STATE.SUCCESS || state.state == DataState.STATE.FETCH_FAILED) {
                 state.data?.forEach { subject ->
@@ -463,19 +542,23 @@ class EASRepository internal constructor(application: Application) {
             return
         }
         Thread {
-            val termsState = awaitLiveData(easService.getAllTerms(token), 6)
+            val service = getService(token.campus)
+            val termsState = awaitLiveData(service.getAllTerms(token), 6)
+            Log.d(TAG, "autoImport terms state=${termsState.state} count=${termsState.data?.size ?: -1} message=${termsState.message}")
             val term = termsState.data?.firstOrNull { it.isCurrent } ?: termsState.data?.firstOrNull()
             if (term == null) {
                 onResult?.invoke(false)
                 return@Thread
             }
-            val startState = awaitLiveData(easService.getStartDate(token, term), 6)
+            val startState = awaitLiveData(service.getStartDate(token, term), 6)
             val startDate = startState.data
+            Log.d(TAG, "autoImport startDate state=${startState.state} value=${startDate?.time} message=${startState.message}")
             val scheduleState = awaitLiveData(
-                easService.getScheduleStructure(term, isUndergraduate, token),
+                service.getScheduleStructure(term, isUndergraduate, token),
                 6
             )
             val schedule = scheduleState.data ?: TimetablePreferenceSource.getInstance(appContext).getSchedule()
+            Log.d(TAG, "autoImport schedule state=${scheduleState.state} size=${schedule.size} message=${scheduleState.message}")
             if (startDate == null) {
                 onResult?.invoke(false)
                 return@Thread
@@ -521,31 +604,28 @@ class EASRepository internal constructor(application: Application) {
         return easPreferenceSource.getEasToken()
     }
 
-    fun logout() {
+    fun observeEasToken(): LiveData<EASToken> {
+        return easTokenLiveData
+    }
+
+    private fun saveEasToken(token: EASToken) {
+        easPreferenceSource.saveEasToken(token)
+        easTokenLiveData.postValue(token)
+    }
+
+    private fun clearEasToken() {
         easPreferenceSource.clearEasToken()
+        easTokenLiveData.postValue(easPreferenceSource.getEasToken())
     }
 
-    fun getAvailableCourses(
-        term: TermItem,
-        poolCode: String = "bx-b-b",
-        page: Int = 1,
-        pageSize: Int = 20
-    ): LiveData<DataState<List<TermSubject>>> {
-        val token = easPreferenceSource.getEasToken()
-        return (easService as EASource).getAvailableCourses(token, term, poolCode, page, pageSize)
-    }
-
-    fun selectCourse(
-        term: TermItem,
-        courseId: String,
-        poolCode: String = "bx-b-b"
-    ): LiveData<DataState<String>> {
-        val token = easPreferenceSource.getEasToken()
-        return (easService as EASource).selectCourse(token, term, courseId, poolCode)
+    fun logout() {
+        clearEasToken()
     }
 
 
     companion object {
+        private const val TAG = "EASRepository"
+
         @Volatile
         private var instance: EASRepository? = null
         fun getInstance(application: Application): EASRepository {

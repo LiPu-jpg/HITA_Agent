@@ -66,6 +66,14 @@ class ScoreInquiryViewModel(application: Application) : EASViewModel(application
         pageController.value = Trigger.actioning
     }
 
+    fun retryCurrentQuery(): Boolean {
+        val term = selectedTermLiveData.value ?: return false
+        val testType = selectedTestTypeLiveData.value ?: return false
+        selectedTermLiveData.value = term
+        selectedTestTypeLiveData.value = testType
+        return true
+    }
+
     private fun parseStartYear(raw: String?): Int? {
         if (raw.isNullOrBlank()) return null
         val match = Regex("(\\d{4})").find(raw) ?: return null

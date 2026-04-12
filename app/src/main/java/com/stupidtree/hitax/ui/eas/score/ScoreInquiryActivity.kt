@@ -2,7 +2,6 @@ package com.stupidtree.hitax.ui.eas.score
 
 import android.os.Bundle
 import android.view.View
-import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.stupidtree.component.data.DataState
 import com.stupidtree.hitax.R
@@ -13,9 +12,6 @@ import com.stupidtree.hitax.data.work.ScoreReminderScheduler
 import com.stupidtree.hitax.data.source.web.service.EASService
 import com.stupidtree.hitax.databinding.ActivityEasScoreFirstBinding
 import com.stupidtree.hitax.ui.eas.EASActivity
-import com.stupidtree.hitax.ui.eas.classroom.ClassroomItem
-import com.stupidtree.hitax.ui.eas.classroom.EmptyClassroomListAdapter
-import com.stupidtree.hitax.ui.eas.classroom.detail.EmptyClassroomDetailFragment
 import com.stupidtree.style.base.BaseListAdapter
 import com.stupidtree.style.widgets.PopUpCheckableList
 import com.stupidtree.hitax.utils.TermNameFormatter
@@ -24,6 +20,7 @@ class ScoreInquiryActivity :
     EASActivity<ScoreInquiryViewModel, ActivityEasScoreFirstBinding>() {
     lateinit var listAdapter: ScoresListAdapter
     private lateinit var scoreReminderStore: ScoreReminderStore
+    private var scoreQueryInFlight = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,19 +29,36 @@ class ScoreInquiryActivity :
 
     private fun bindLiveData() {
         viewModel.termsLiveData.observe(this) { data ->
-            if (data.state == DataState.STATE.SUCCESS) {
-                if (!data.data.isNullOrEmpty()) {
-                    for (t in data.data!!) {
-                        if (t.isCurrent) {
-                            viewModel.selectedTermLiveData.value = t
-                            return@observe
+            when (data.state) {
+                DataState.STATE.SUCCESS -> {
+                    if (!data.data.isNullOrEmpty()) {
+                        for (t in data.data!!) {
+                            if (t.isCurrent) {
+                                viewModel.selectedTermLiveData.value = t
+                                return@observe
+                            }
                         }
+                        viewModel.selectedTermLiveData.value = data.data?.get(0)
                     }
-                    viewModel.selectedTermLiveData.value = data.data?.get(0)
                 }
-            } else {
-                binding.refresh.isRefreshing = false
-                binding.schoolSemesterText.setText(R.string.load_failed)
+
+                DataState.STATE.NOT_LOGGED_IN -> {
+                    if (!handleSessionExpired {
+                            scoreQueryInFlight = true
+                            binding.refresh.isRefreshing = true
+                            viewModel.startRefresh()
+                            true
+                        }) {
+                        scoreQueryInFlight = false
+                    }
+                }
+
+                DataState.STATE.NOTHING -> Unit
+
+                else -> {
+                    binding.refresh.isRefreshing = false
+                    binding.schoolSemesterText.setText(R.string.load_failed)
+                }
             }
         }
         viewModel.selectedTermLiveData.observe(this) {
@@ -55,16 +69,40 @@ class ScoreInquiryActivity :
         }
         viewModel.scoresLiveData.observe(this) {
             binding.refresh.isRefreshing = false
-            if (it.state == DataState.STATE.SUCCESS) {
-                it.data?.let { it1 -> listAdapter.notifyItemChangedSmooth(it1) }
+            val latestItems = it.data ?: emptyList()
+            when (it.state) {
+                DataState.STATE.SUCCESS -> {
+                    scoreQueryInFlight = false
+                    resetSessionRetryState()
+                    listAdapter.notifyItemChangedSmooth(latestItems)
+                }
+
+                DataState.STATE.NOT_LOGGED_IN -> {
+                    listAdapter.notifyItemChangedSmooth(emptyList())
+                    if (scoreQueryInFlight) {
+                        if (!handleSessionExpired { retryCurrentScoreQuery() }) {
+                            scoreQueryInFlight = false
+                        }
+                    }
+                }
+
+                else -> {
+                    scoreQueryInFlight = false
+                    resetSessionRetryState()
+                    listAdapter.notifyItemChangedSmooth(emptyList())
+                }
             }
-            binding.emptyView.visibility = if(it.data?.size?:0 >0){
+            binding.emptyView.visibility = if (latestItems.isNotEmpty()) {
                 View.GONE
-            }else{
+            } else {
                 View.VISIBLE
             }
         }
         viewModel.scoreSummaryLiveData.observe(this) { summary ->
+            val hasSummary = summary != null && (
+                summary.gpa.isNotBlank() || summary.rank.isNotBlank() || summary.total.isNotBlank()
+            )
+            binding.scoreSummaryCard.visibility = if (hasSummary) View.VISIBLE else View.GONE
             val gpaRaw = summary?.gpa?.ifBlank { "-" } ?: "-"
             val gpa = gpaRaw.toDoubleOrNull()?.let { String.format("%.2f", it) } ?: gpaRaw
             val rank = summary?.rank?.ifBlank { "-" } ?: "-"
@@ -80,10 +118,10 @@ class ScoreInquiryActivity :
             it?.let {
                 binding.refresh.isRefreshing = true
                 binding.testTypeText.text = when (it) {
-                    EASService.TestType.ALL -> getString(R.string.test_type_all)
-                    EASService.TestType.NORMAL -> getString(R.string.test_type_normal)
-                    EASService.TestType.RESIT -> getString(R.string.test_type_resit)
+                    EASService.TestType.NORMAL -> getString(R.string.test_type_final)
+                    EASService.TestType.RESIT -> getString(R.string.test_type_midterm)
                     EASService.TestType.RETAKE -> getString(R.string.test_type_retake)
+                    EASService.TestType.ALL -> getString(R.string.test_type_final)
                 }
             }
         }
@@ -107,7 +145,10 @@ class ScoreInquiryActivity :
             binding.scoreReminderSwitch.isChecked = next
         }
         binding.refresh.setColorSchemeColors(getColorPrimary())
-        binding.refresh.setOnRefreshListener { refresh() }
+        binding.refresh.setOnRefreshListener {
+            scoreQueryInFlight = true
+            refresh()
+        }
         listAdapter = ScoresListAdapter(this, mutableListOf())
         binding.scoreStructure.adapter = listAdapter
         binding.scoreStructure.layoutManager = LinearLayoutManager(getThis())
@@ -121,6 +162,7 @@ class ScoreInquiryActivity :
                     .setOnConfirmListener(object :
                         PopUpCheckableList.OnConfirmListener<TermItem> {
                         override fun OnConfirm(title: String?, key: TermItem) {
+                            scoreQueryInFlight = true
                             viewModel.selectedTermLiveData.value = key
                         }
                     }).show(supportFragmentManager, "terms")
@@ -128,16 +170,12 @@ class ScoreInquiryActivity :
         }
         binding.testTypeLayout.setOnClickListener {
             val names = mutableListOf(
-                getString(R.string.test_type_all),
-                getString(R.string.test_type_normal),
-                getString(R.string.test_type_resit),
-                getString(R.string.test_type_retake)
+                getString(R.string.test_type_final),
+                getString(R.string.test_type_midterm)
             )
             val list = arrayListOf(
-                EASService.TestType.ALL,
                 EASService.TestType.NORMAL,
-                EASService.TestType.RESIT,
-                EASService.TestType.RETAKE
+                EASService.TestType.RESIT
             )
             PopUpCheckableList<EASService.TestType>()
                 .setListData(names, list)
@@ -145,6 +183,7 @@ class ScoreInquiryActivity :
                 .setOnConfirmListener(object :
                     PopUpCheckableList.OnConfirmListener<EASService.TestType> {
                     override fun OnConfirm(title: String?, key: EASService.TestType) {
+                        scoreQueryInFlight = true
                         viewModel.selectedTestTypeLiveData.value = key
                     }
                 }).show(supportFragmentManager, "types")
@@ -157,7 +196,16 @@ class ScoreInquiryActivity :
                 }
             }
         })
-        viewModel.selectedTestTypeLiveData.value = EASService.TestType.ALL
+        viewModel.selectedTestTypeLiveData.value = EASService.TestType.NORMAL
+    }
+
+    private fun retryCurrentScoreQuery(): Boolean {
+        if (viewModel.retryCurrentQuery()) {
+            scoreQueryInFlight = true
+            binding.refresh.isRefreshing = true
+            return true
+        }
+        return false
     }
 
     private fun getDisplayTermName(term: TermItem): String {
@@ -174,6 +222,7 @@ class ScoreInquiryActivity :
 
     override fun refresh() {
         binding.refresh.isRefreshing = true
+        scoreQueryInFlight = true
         viewModel.startRefresh()
     }
 }

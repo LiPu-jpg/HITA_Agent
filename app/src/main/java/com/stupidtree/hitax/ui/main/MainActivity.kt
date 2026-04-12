@@ -17,6 +17,7 @@ import android.widget.TextView
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout.DrawerListener
 import androidx.drawerlayout.widget.DrawerLayout.GONE
+import androidx.lifecycle.Observer
 import androidx.fragment.app.Fragment
 import androidx.viewpager.widget.ViewPager.OnPageChangeListener
 import com.stupidtree.component.data.DataState
@@ -47,6 +48,10 @@ import me.ibrahimsn.lib.OnItemSelectedListener
  */
 class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
     TimetableFragment.MainPageController, FragmentTimeLine.MainPageController {
+
+    private val easTokenObserver = Observer<com.stupidtree.hitax.data.model.eas.EASToken> {
+        refreshDrawerEasInfo()
+    }
 
     /**
      * 抽屉里的View
@@ -125,6 +130,8 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
         super.onStart()
         viewModel.startRefreshUser()
         refreshTheme()
+        refreshDrawerEasInfo()
+        EASRepository.getInstance(application).observeEasToken().observe(this, easTokenObserver)
         maybeAutoReimportTimetable()
         try {
             val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -266,52 +273,71 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
         }
         viewModel.loggedInUserLiveData.observe(this) {
             Log.e("user", it.toString())
-            if (it.isValid()) { //如果已登录
-                //装载头像
-                com.stupidtree.stupiduser.util.ImageUtils.loadAvatarInto(
-                    this,
-                    it.avatar,
-                    drawerAvatar!!
-                )
-                //设置各种文字
-                drawerUsername?.text = it.username
-                drawerNickname?.text = it.nickname
-                drawerHeader?.setOnClickListener {
-                    ActivityUtils.startProfileActivity(
-                        getThis(),
-                        LocalUserRepository.getInstance(applicationContext).getLoggedInUser().id,
-                        drawerAvatar
-                    )
-                }
-            } else {
-                //未登录的信息显示
-                val easToken = EASRepository.getInstance(application).getEasToken()
-                if (easToken.isLogin()) {
-                    drawerUsername?.text = easToken.name?.ifBlank { easToken.username }
-                        ?: easToken.username
-                    drawerNickname?.text = easToken.stuId?.ifBlank { easToken.username } ?: ""
-                } else {
-                    drawerUsername?.setText(R.string.eas_account_not_logged_in_title)
-                    drawerNickname?.setText(R.string.eas_account_not_logged_in_subtitle)
-                }
-                drawerAvatar?.setImageResource(R.drawable.place_holder_avatar)
-                drawerHeader?.setOnClickListener {
-                    ActivityUtils.showEasVerifyWindow<Activity>(
-                        getThis(),
-                        directTo = null,
-                        onResponseListener = object : PopUpLoginEAS.OnResponseListener {
-                            override fun onSuccess(window: PopUpLoginEAS) {
-                                window.dismiss()
-                            }
-
-                            override fun onFailed(window: PopUpLoginEAS) {}
-                        }
-                    )
-                }
-            }
+            refreshDrawerEasInfo()
         }
     }
 
+
+    private fun refreshDrawerEasInfo() {
+        val localUser = LocalUserRepository.getInstance(applicationContext).getLoggedInUser()
+        if (localUser.isValid()) {
+            com.stupidtree.stupiduser.util.ImageUtils.loadAvatarInto(
+                this,
+                localUser.avatar,
+                drawerAvatar!!
+            )
+            drawerUsername?.text = localUser.username
+            drawerNickname?.text = localUser.nickname
+            drawerHeader?.setOnClickListener {
+                ActivityUtils.startProfileActivity(
+                    getThis(),
+                    localUser.id,
+                    drawerAvatar
+                )
+            }
+            return
+        }
+
+        val easToken = EASRepository.getInstance(application).getEasToken()
+        if (easToken.isLogin()) {
+            drawerUsername?.text = easToken.name?.ifBlank { easToken.stuId?.ifBlank { easToken.username } }
+                ?: easToken.stuId?.ifBlank { easToken.username }
+                ?: easToken.username
+                ?: getString(R.string.eas_account_not_logged_in_title)
+            drawerNickname?.text = buildString {
+                val primary = easToken.stuId?.trim().orEmpty()
+                val secondary = listOf(
+                    easToken.school,
+                    easToken.major,
+                    easToken.grade,
+                    easToken.className
+                ).mapNotNull { it?.trim()?.takeIf(String::isNotBlank) }
+                    .joinToString(" · ")
+                append(primary)
+                if (secondary.isNotBlank()) {
+                    if (isNotEmpty()) append("\n")
+                    append(secondary)
+                }
+            }.ifBlank { easToken.username.orEmpty() }
+        } else {
+            drawerUsername?.setText(R.string.eas_account_not_logged_in_title)
+            drawerNickname?.setText(R.string.eas_account_not_logged_in_subtitle)
+        }
+        drawerAvatar?.setImageResource(R.drawable.place_holder_avatar)
+        drawerHeader?.setOnClickListener {
+            ActivityUtils.showEasVerifyWindow<Activity>(
+                getThis(),
+                directTo = null,
+                onResponseListener = object : PopUpLoginEAS.OnResponseListener {
+                    override fun onSuccess(window: PopUpLoginEAS) {
+                        window.dismiss()
+                    }
+
+                    override fun onFailed(window: PopUpLoginEAS) {}
+                }
+            )
+        }
+    }
 
     @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
     override fun onBackPressed() {
@@ -325,6 +351,11 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         intent.addCategory(Intent.CATEGORY_HOME)
         startActivity(intent)
+    }
+
+    override fun onStop() {
+        EASRepository.getInstance(application).observeEasToken().removeObserver(easTokenObserver)
+        super.onStop()
     }
 
 

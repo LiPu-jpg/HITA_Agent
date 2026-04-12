@@ -17,6 +17,7 @@ import java.util.*
 class EmptyClassroomActivity :
     EASActivity<EmptyClassroomViewModel, ActivityEasClassroomBinding>() {
     lateinit var listAdapter: EmptyClassroomListAdapter
+    private var classroomQueryInFlight = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,29 +35,59 @@ class EmptyClassroomActivity :
 
     private fun bindLiveData() {
         viewModel.termsLiveData.observe(this) { data ->
-            if (data.state == DataState.STATE.SUCCESS) {
-                if (!data.data.isNullOrEmpty()) {
-                    for (t in data.data!!) {
-                        if (t.isCurrent) {
-                            viewModel.selectedTermLiveData.value = t
-                            return@observe
+            when (data.state) {
+                DataState.STATE.SUCCESS -> {
+                    if (!data.data.isNullOrEmpty()) {
+                        for (t in data.data!!) {
+                            if (t.isCurrent) {
+                                viewModel.selectedTermLiveData.value = t
+                                return@observe
+                            }
+                        }
+                        viewModel.selectedTermLiveData.value = data.data?.get(0)
+                    }
+                }
+
+                DataState.STATE.NOT_LOGGED_IN -> {
+                    if (classroomQueryInFlight) {
+                        if (!handleSessionExpired {
+                                retryCurrentClassroomQuery()
+                            }) {
+                            classroomQueryInFlight = false
+                            binding.refresh.isRefreshing = false
                         }
                     }
-                    viewModel.selectedTermLiveData.value = data.data?.get(0)
                 }
-            } else {
-                binding.refresh.isRefreshing = false
-                binding.termText.setText(R.string.load_failed)
+
+                else -> {
+                    binding.refresh.isRefreshing = false
+                    binding.termText.setText(R.string.load_failed)
+                }
             }
         }
         viewModel.buildingsLiveData.observe(this) { data ->
-            if (data.state == DataState.STATE.SUCCESS) {
-                if (!data.data.isNullOrEmpty()) {
-                    viewModel.selectedBuildingLiveData.value = data.data?.get(0)
+            when (data.state) {
+                DataState.STATE.SUCCESS -> {
+                    if (!data.data.isNullOrEmpty()) {
+                        viewModel.selectedBuildingLiveData.value = data.data?.get(0)
+                    }
                 }
-            } else {
-                binding.refresh.isRefreshing = false
-                binding.buildingText.setText(R.string.load_failed)
+
+                DataState.STATE.NOT_LOGGED_IN -> {
+                    if (classroomQueryInFlight) {
+                        if (!handleSessionExpired {
+                                retryCurrentClassroomQuery()
+                            }) {
+                            classroomQueryInFlight = false
+                            binding.refresh.isRefreshing = false
+                        }
+                    }
+                }
+
+                else -> {
+                    binding.refresh.isRefreshing = false
+                    binding.buildingText.setText(R.string.load_failed)
+                }
             }
         }
         viewModel.selectedBuildingLiveData.observe(this) {
@@ -73,8 +104,25 @@ class EmptyClassroomActivity :
         }
         viewModel.classroomLiveData.observe(this) {
             binding.refresh.isRefreshing = false
-            if (it.state == DataState.STATE.SUCCESS) {
-                it.data?.let { it1 -> listAdapter.notifyItemChangedSmooth(it1) }
+            when (it.state) {
+                DataState.STATE.SUCCESS -> {
+                    classroomQueryInFlight = false
+                    resetSessionRetryState()
+                    it.data?.let { it1 -> listAdapter.notifyItemChangedSmooth(it1) }
+                }
+
+                DataState.STATE.NOT_LOGGED_IN -> {
+                    if (classroomQueryInFlight) {
+                        if (!handleSessionExpired { retryCurrentClassroomQuery() }) {
+                            classroomQueryInFlight = false
+                        }
+                    }
+                }
+
+                else -> {
+                    classroomQueryInFlight = false
+                    resetSessionRetryState()
+                }
             }
         }
 
@@ -82,6 +130,7 @@ class EmptyClassroomActivity :
 
     override fun refresh() {
         binding.refresh.isRefreshing = true
+        classroomQueryInFlight = true
         viewModel.startRefresh()
     }
 
@@ -91,6 +140,7 @@ class EmptyClassroomActivity :
         binding.refresh.setColorSchemeColors(getColorPrimary())
         listAdapter = EmptyClassroomListAdapter(this, mutableListOf(), viewModel)
         binding.refresh.setOnRefreshListener {
+            classroomQueryInFlight = true
             refresh()
         }
         binding.list.adapter = listAdapter
@@ -105,6 +155,7 @@ class EmptyClassroomActivity :
                     .setOnConfirmListener(object :
                         PopUpCheckableList.OnConfirmListener<TermItem> {
                         override fun OnConfirm(title: String?, key: TermItem) {
+                            classroomQueryInFlight = true
                             viewModel.selectedTermLiveData.value = key
                         }
                     }).show(supportFragmentManager, "terms")
@@ -126,6 +177,7 @@ class EmptyClassroomActivity :
                     .setOnConfirmListener(object :
                         PopUpCheckableList.OnConfirmListener<BuildingItem> {
                         override fun OnConfirm(title: String?, key: BuildingItem) {
+                            classroomQueryInFlight = true
                             viewModel.selectedBuildingLiveData.value = key
                         }
                     }).show(supportFragmentManager, "building")
@@ -142,6 +194,7 @@ class EmptyClassroomActivity :
                 .setOnConfirmListener(object :
                     PopUpCheckableList.OnConfirmListener<Int> {
                     override fun OnConfirm(title: String?, key: Int) {
+                        classroomQueryInFlight = true
                         viewModel.selectedWeekLiveData.value = key
                     }
                 }).show(supportFragmentManager, "terms")
@@ -167,6 +220,17 @@ class EmptyClassroomActivity :
 
             }
         })
+    }
+
+    private fun retryCurrentClassroomQuery(): Boolean {
+        val started = viewModel.retryCurrentQuery()
+        if (started) {
+            classroomQueryInFlight = true
+            binding.refresh.isRefreshing = true
+        } else {
+            refresh()
+        }
+        return true
     }
 
     private fun getDisplayTermName(term: TermItem): String {

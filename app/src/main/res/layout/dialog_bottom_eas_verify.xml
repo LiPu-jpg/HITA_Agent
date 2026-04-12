@@ -60,6 +60,36 @@
             app:spinning_bar_width="4dp" />
     </LinearLayout>
 
+    <RadioGroup
+        android:id="@+id/campus_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="16dp"
+        android:orientation="horizontal">
+
+        <RadioButton
+            android:id="@+id/campus_shenzhen"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/eas_campus_shenzhen" />
+
+        <RadioButton
+            android:id="@+id/campus_benbu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="@string/eas_campus_benbu" />
+
+        <RadioButton
+            android:id="@+id/campus_weihai"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:text="@string/eas_campus_weihai" />
+    </RadioGroup>
+
     <androidx.appcompat.widget.AppCompatEditText
         android:id="@+id/username"
         android:layout_width="match_parent"
@@ -87,6 +117,17 @@
         android:paddingTop="16dp"
         android:paddingBottom="16dp"
         android:singleLine="true" />
+
+    <Button
+        android:id="@+id/webview_login_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="24dp"
+        android:text="@string/webview_login"
+        android:visibility="gone"
+        tools:visibility="gone" />
 
 </LinearLayout>
 

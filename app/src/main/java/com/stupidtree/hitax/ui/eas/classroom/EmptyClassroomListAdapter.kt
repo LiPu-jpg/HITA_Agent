@@ -27,14 +27,21 @@ class EmptyClassroomListAdapter(
         viewModel.timetableStructureLiveData.value?.data?.let {
             val current = TimeTools.getCurrentScheduleNumber(it)
             val currentDow: Int = TimeTools.getDow(System.currentTimeMillis())
-            for (je in data.scheduleList) {
-                val num: Int = je.optInt("XJ") * 10
-                val dow: Int = je.optInt("XQJ")
-                if (num == current && currentDow == dow) return "被占"
-                else if (num == current + 5 && currentDow == dow)
-                    return "将占"
+            val occupiedNumbers = data.scheduleList
+                .filter { je ->
+                    val dow = je.optInt("XQJ")
+                    val num = je.optInt("XJ") * 10
+                    val occupied = je.optString("JYBJ").isNotBlank() || je.optString("PKBJ").isNotBlank()
+                    dow == currentDow && occupied
+                }
+                .map { je -> je.optInt("XJ") * 10 }
+                .toSet()
+            return when {
+                current in occupiedNumbers -> "被占"
+                current % 10 == 5 && (current + 5) in occupiedNumbers -> "将占"
+                current % 10 == 0 && (current + 10) in occupiedNumbers -> "将占"
+                else -> "空闲"
             }
-            return "空闲"
         }
         return "未知"
     }
@@ -54,7 +61,6 @@ class EmptyClassroomListAdapter(
 
     override fun bindHolder(holder: KHolder, data: ClassroomItem?, position: Int) {
         holder.binding.name.text = data?.name
-        holder.binding.capacity.text = data?.capacity.toString()
         holder.binding.state.text = data?.let { getState(it) }
         if (holder.binding.state.text != "空闲") {
             holder.binding.state.setBackgroundResource(R.drawable.element_rounded_button_bg_grey)

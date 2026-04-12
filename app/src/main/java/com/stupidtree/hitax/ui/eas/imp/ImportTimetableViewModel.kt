@@ -1,52 +1,61 @@
 package com.stupidtree.hitax.ui.eas.imp
 
 import android.app.Application
-import androidx.lifecycle.*
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MediatorLiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.switchMap
+import com.stupidtree.component.data.DataState
+import com.stupidtree.component.data.Trigger
 import com.stupidtree.hitax.data.model.eas.TermItem
 import com.stupidtree.hitax.data.model.timetable.TimePeriodInDay
 import com.stupidtree.hitax.data.repository.EASRepository
-import com.stupidtree.component.data.DataState
-import com.stupidtree.component.data.Trigger
+import com.stupidtree.hitax.data.source.preference.BenbuStartDatePreferenceSource
 import com.stupidtree.hitax.ui.eas.EASViewModel
-import com.stupidtree.component.data.MTransformations
-import java.util.*
+import java.util.Calendar
 
 class ImportTimetableViewModel(application: Application) : EASViewModel(application) {
-    /**
-     * 仓库区
-     */
     private val easRepository = EASRepository.getInstance(application)
-
-    /**
-     * LiveData区
-     */
+    private val benbuStartDatePreference = BenbuStartDatePreferenceSource.getInstance(application)
 
     private val termsController = MutableLiveData<Trigger>()
+    private var startDateSource: LiveData<DataState<Calendar>>? = null
 
-    val termsLiveData: LiveData<DataState<List<TermItem>>> = termsController.switchMap{
-            return@switchMap easRepository.getAllTerms()
-        }
+    val termsLiveData: LiveData<DataState<List<TermItem>>> = termsController.switchMap {
+        easRepository.getAllTerms()
+    }
 
     val selectedTermLiveData: MutableLiveData<TermItem?> = MutableLiveData()
-
-    val startDateLiveData: MediatorLiveData<DataState<Calendar>> =
-        MTransformations.switchMap(selectedTermLiveData) {
-            it?.let { it1 ->
-                return@switchMap easRepository.getStartDateOfTerm(it1)
-            }
-            val r = MutableLiveData<DataState<Calendar>>()
-            r.value = DataState(Calendar.getInstance())
-            return@switchMap r
-        }
-
+    val startDateLiveData = MediatorLiveData<DataState<Calendar>>()
+    val benbuCalibrationConfirmedLiveData = MediatorLiveData<Boolean>()
     val importTimetableResultLiveData = MediatorLiveData<DataState<Boolean>>()
-
     val isUndergraduateLiveData = MutableLiveData<Boolean>()
     val scheduleStructureLiveData: MediatorLiveData<DataState<MutableList<TimePeriodInDay>>> =
         MediatorLiveData()
 
-
     init {
+        startDateLiveData.value = DataState(Calendar.getInstance())
+        benbuCalibrationConfirmedLiveData.value = true
+
+        startDateLiveData.addSource(selectedTermLiveData) { term ->
+            startDateSource?.let { startDateLiveData.removeSource(it) }
+            if (term == null) {
+                startDateLiveData.value = DataState(Calendar.getInstance())
+                benbuCalibrationConfirmedLiveData.value = true
+                return@addSource
+            }
+            val source = easRepository.getStartDateOfTerm(term)
+            startDateSource = source
+            startDateLiveData.addSource(source) { state ->
+                startDateLiveData.value = resolveStartDateState(term, state)
+                benbuCalibrationConfirmedLiveData.value = isBenbuCalibrationConfirmed(term)
+            }
+        }
+
+        benbuCalibrationConfirmedLiveData.addSource(selectedTermLiveData) { term ->
+            benbuCalibrationConfirmedLiveData.value = term?.let { isBenbuCalibrationConfirmed(it) } ?: true
+        }
+
         scheduleStructureLiveData.addSource(selectedTermLiveData) {
             isUndergraduateLiveData.value?.let { isu ->
                 scheduleStructureLiveData.addSource(
@@ -72,10 +81,6 @@ class ImportTimetableViewModel(application: Application) : EASViewModel(applicat
         }
     }
 
-
-    /**
-     * 方法区
-     */
     fun startRefreshTerms() {
         termsController.value = Trigger.actioning
     }
@@ -89,10 +94,7 @@ class ImportTimetableViewModel(application: Application) : EASViewModel(applicat
     }
 
     fun startGetAllTerms(): List<TermItem> {
-        if (termsLiveData.value != null && termsLiveData.value!!.data != null) {
-            return termsLiveData.value!!.data!!
-        }
-        return listOf()
+        return termsLiveData.value?.data ?: listOf()
     }
 
     fun startImportTimetable(): Boolean {
@@ -109,11 +111,13 @@ class ImportTimetableViewModel(application: Application) : EASViewModel(applicat
                         return true
                     }
                 }
-
             }
-
         }
         return false
+    }
+
+    fun retryImportTimetable(): Boolean {
+        return startImportTimetable()
     }
 
 
@@ -125,7 +129,50 @@ class ImportTimetableViewModel(application: Application) : EASViewModel(applicat
     }
 
     fun changeStartDate(date: Calendar) {
-        startDateLiveData.value = DataState(date)
+        startDateLiveData.value = DataState(cloneCalendar(date))
     }
 
+    fun shiftStartDateByWeek(offsetWeeks: Int) {
+        val current = startDateLiveData.value?.data ?: return
+        val shifted = cloneCalendar(current).apply {
+            add(Calendar.DAY_OF_MONTH, offsetWeeks * 7)
+        }
+        startDateLiveData.value = DataState(shifted)
+    }
+
+    fun saveBenbuCalibration() {
+        val term = selectedTermLiveData.value ?: return
+        val date = startDateLiveData.value?.data ?: return
+        if (!isBenbuTerm(term)) return
+        benbuStartDatePreference.saveCalibration(term.getCode(), date.timeInMillis, true)
+        benbuCalibrationConfirmedLiveData.value = true
+    }
+
+    fun isBenbuTerm(term: TermItem? = selectedTermLiveData.value): Boolean {
+        return term != null && easRepository.getEasToken().isBenbuCampus()
+    }
+
+    private fun resolveStartDateState(term: TermItem, state: DataState<Calendar>): DataState<Calendar> {
+        val sourceDate = state.data ?: return state
+        val resolved = cloneCalendar(sourceDate)
+        if (isBenbuTerm(term)) {
+            benbuStartDatePreference.getStartDateMillis(term.getCode())?.let {
+                resolved.timeInMillis = it
+            }
+        }
+        return DataState(resolved, state.state).apply {
+            message = state.message
+        }
+    }
+
+    private fun isBenbuCalibrationConfirmed(term: TermItem): Boolean {
+        return !isBenbuTerm(term) || benbuStartDatePreference.isConfirmed(term.getCode())
+    }
+
+    private fun cloneCalendar(calendar: Calendar): Calendar {
+        return (calendar.clone() as Calendar).apply {
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+    }
 }

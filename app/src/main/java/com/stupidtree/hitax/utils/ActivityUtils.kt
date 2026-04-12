@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityOptionsCompat
 import com.stupidtree.hita.theta.ThetaActivity
 import com.stupidtree.hitax.R
+import com.stupidtree.hitax.data.model.eas.EASToken
 import com.stupidtree.hitax.data.repository.EASRepository
 import com.stupidtree.hitax.ui.eas.login.PopUpLoginEAS
 import com.stupidtree.hitax.ui.myprofile.MyProfileActivity
@@ -110,6 +111,8 @@ object ActivityUtils {
         from: Context,
         directTo: Class<T>? = null,
         lock: Boolean = false,
+        autoLaunchWebLogin: Boolean = false,
+        preferredCampus: EASToken.Campus? = null,
         onResponseListener: PopUpLoginEAS.OnResponseListener
     ) {
         if (from is BaseActivity<*, *>) {
@@ -124,6 +127,8 @@ object ActivityUtils {
             }
             val window = PopUpLoginEAS()
             window.lock = lock
+            window.autoLaunchWebLogin = autoLaunchWebLogin
+            window.preferredCampus = preferredCampus
             window.onResponseListener = onResponseListener
             window.show(from.supportFragmentManager, "verify")
         }
