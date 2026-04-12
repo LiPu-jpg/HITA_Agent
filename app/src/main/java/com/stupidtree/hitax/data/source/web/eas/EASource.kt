@@ -829,6 +829,30 @@ class EASource internal constructor() : EASService {
 
     private fun mergeAdjacentCourses(courses: List<CourseItem>): List<CourseItem> {
         if (courses.isEmpty()) return courses
+
+        var current = courses.map { copyCourse(it) }
+        repeat(6) {
+            val (next, changed) = mergeAdjacentCoursesSinglePass(current)
+            current = next
+            if (!changed) {
+                return current.sortedWith(
+                    compareBy<CourseItem> { it.dow }
+                        .thenBy { it.begin }
+                        .thenBy { normalized(it.name) }
+                        .thenBy { it.weeks.sorted().joinToString(",") }
+                )
+            }
+        }
+
+        return current.sortedWith(
+            compareBy<CourseItem> { it.dow }
+                .thenBy { it.begin }
+                .thenBy { normalized(it.name) }
+                .thenBy { it.weeks.sorted().joinToString(",") }
+        )
+    }
+
+    private fun mergeAdjacentCoursesSinglePass(courses: List<CourseItem>): Pair<List<CourseItem>, Boolean> {
         val sorted = courses.sortedWith(
             compareBy<CourseItem> { it.dow }
                 .thenBy { it.begin }
@@ -837,46 +861,76 @@ class EASource internal constructor() : EASService {
                 .thenBy { it.weeks.sorted().joinToString(",") }
         )
 
+        if (sorted.isEmpty()) return Pair(emptyList(), false)
+
+        val used = BooleanArray(sorted.size)
         val merged = mutableListOf<CourseItem>()
         val residualCourses = mutableListOf<CourseItem>()
-        for (course in sorted) {
-            val last = merged.lastOrNull()
-            if (last != null) {
-                val weekSplitMerged = tryMergeWithWeekSplit(last, course, residualCourses)
-                if (weekSplitMerged) continue
+        var changed = false
 
-                val canMerge = canMergeCourses(last, course)
-                if (canMerge) {
-                    last.last += course.last
-                    if (last.classroom.isNullOrBlank()) {
-                        last.classroom = course.classroom
+        for (index in sorted.indices) {
+            if (used[index]) continue
+            val base = copyCourse(sorted[index])
+            used[index] = true
+
+            while (true) {
+                val expectedBegin = base.begin + base.last
+                var mergedIndex = -1
+
+                for (candidateIndex in (index + 1) until sorted.size) {
+                    if (used[candidateIndex]) continue
+                    val candidate = sorted[candidateIndex]
+
+                    if (candidate.dow != base.dow) {
+                        if (candidate.dow > base.dow) break
+                        continue
                     }
-                    if (last.code.isNullOrBlank()) {
-                        last.code = course.code
+                    if (candidate.begin < expectedBegin) continue
+                    if (candidate.begin > expectedBegin) break
+
+                    val weekSplitMerged = tryMergeWithWeekSplit(base, candidate, residualCourses)
+                    if (weekSplitMerged) {
+                        mergedIndex = candidateIndex
+                        break
                     }
-                    continue
+
+                    val canMerge = canMergeCourses(base, candidate)
+                    if (canMerge) {
+                        base.last += candidate.last
+                        if (base.classroom.isNullOrBlank()) {
+                            base.classroom = candidate.classroom
+                        }
+                        if (base.code.isNullOrBlank()) {
+                            base.code = candidate.code
+                        }
+                        mergedIndex = candidateIndex
+                        break
+                    }
+
+                    if (shouldDebugPair(base, candidate)) {
+                        Log.d(
+                            TAG,
+                            "no-merge week=$DEBUG_WEEK dow=$DEBUG_DOW reason=${mergeBlockReason(base, candidate)} left=${debugCourseIdentity(base)} right=${debugCourseIdentity(candidate)}"
+                        )
+                    }
                 }
-                if (shouldDebugPair(last, course)) {
-                    Log.d(
-                        TAG,
-                        "no-merge week=$DEBUG_WEEK dow=$DEBUG_DOW reason=${mergeBlockReason(last, course)} left=${debugCourseIdentity(last)} right=${debugCourseIdentity(course)}"
-                    )
-                }
+
+                if (mergedIndex == -1) break
+                used[mergedIndex] = true
+                changed = true
             }
-            merged.add(copyCourse(course))
+
+            merged.add(base)
         }
 
         if (residualCourses.isNotEmpty()) {
             merged.addAll(residualCourses)
+            changed = true
         }
 
-        return merged.sortedWith(
-            compareBy<CourseItem> { it.dow }
-                .thenBy { it.begin }
-                .thenBy { normalized(it.name) }
-                .thenBy { it.weeks.sorted().joinToString(",") }
-        )
+        return Pair(merged, changed)
     }
+
 
     private fun tryMergeWithWeekSplit(
         left: CourseItem,
