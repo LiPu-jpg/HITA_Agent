@@ -608,6 +608,7 @@ class EASource internal constructor() : EASService {
         Thread {
             try {
                 val merged = linkedMapOf<String, CourseItem>()
+                val selectedCourseNameByCode = fetchSelectedCourseNameByCodeSync(token, term)
 
                 var emptyWeeks = 0
                 for (week in 1..25) {
@@ -634,11 +635,12 @@ class EASource internal constructor() : EASService {
                         if (dow !in 1..7 || ksjc <= 0) continue
 
                         val kbxx = kc.optString("KBXX", "")
-                        val name = extractCourseNameFromKbxx(kbxx)
-                        if (name.isBlank()) continue
-
                         val rawCode = kc.optString("KCDM", "")
                         val code = CourseCodeUtils.normalize(rawCode) ?: rawCode
+                        val rawName = extractCourseNameFromKbxx(kbxx)
+                        if (rawName.isBlank()) continue
+                        val name = resolveTimetableCourseName(rawName, code, selectedCourseNameByCode)
+
                         val classroom = extractClassroomFromKbxx(kbxx) ?: ""
                         val teacher = extractTeacher(kc, name, kbxx)
                         val last = if (jsjc >= ksjc) jsjc - ksjc + 1 else 1
@@ -707,6 +709,82 @@ class EASource internal constructor() : EASService {
             return arr
         }
         return org.json.JSONArray()
+    }
+
+    private fun fetchSelectedCourseNameByCodeSync(
+        token: EASToken,
+        term: TermItem
+    ): Map<String, String> {
+        return runCatching {
+            val mapping = linkedMapOf<String, String>()
+            val pylxRaw = token.getStudentType()
+            val pylxPad = pylxRaw.padStart(2, '0')
+            val pylxCandidates = linkedSetOf(pylxRaw, pylxPad)
+            val roleCandidates = listOf("01", "06")
+            val xnxqCandidates = linkedSetOf(
+                term.getCode(),
+                "${term.yearCode}-${term.termCode}",
+                term.yearCode + term.termCode.padStart(2, '0'),
+                "${term.yearCode}-${term.termCode.padStart(2, '0')}"
+            )
+            val xkfsCandidates = listOf("yixuan", "")
+
+            var yxkc: org.json.JSONArray? = null
+            for (roleHeader in roleCandidates) {
+                for (pylx in pylxCandidates) {
+                    for (xnxq in xnxqCandidates) {
+                        for (xkfs in xkfsCandidates) {
+                            val body =
+                                """{"RoleCode":"$roleHeader","p_pylx":"$pylx","p_xn":"${term.yearCode}","p_xq":"${term.termCode}","p_xnxq":"$xnxq","p_gjz":"","p_kc_gjz":"","p_xkfsdm":"$xkfs"}"""
+                            val resp = jsonPost(
+                                token,
+                                "/app/Xsxk/queryYxkc?_lang=zh_CN",
+                                body,
+                                rolecode = roleHeader
+                            )
+                            val jo = JsonUtils.getJsonObject(resp.body())
+                            val list = extractYxkcList(jo)
+                            if (list != null && list.length() > 0) {
+                                yxkc = list
+                                break
+                            }
+                        }
+                        if (yxkc != null) break
+                    }
+                    if (yxkc != null) break
+                }
+                if (yxkc != null) break
+            }
+
+            yxkc?.let { list ->
+                for (i in 0 until list.length()) {
+                    val subject = list.optJSONObject(i) ?: continue
+                    val rawCode = subject.optString("kcdm").trim()
+                    val normalizedCode = CourseCodeUtils.normalize(rawCode)
+                    val name = subject.optString("kcmc", "").trim()
+                    if (name.isBlank()) continue
+                    if (!normalizedCode.isNullOrBlank()) {
+                        mapping[normalizedCode] = name
+                    }
+                    if (rawCode.isNotBlank()) {
+                        mapping[rawCode] = name
+                    }
+                }
+            }
+
+            mapping
+        }.getOrDefault(emptyMap())
+    }
+
+    private fun resolveTimetableCourseName(
+        rawName: String,
+        code: String,
+        selectedCourseNameByCode: Map<String, String>
+    ): String {
+        if (!rawName.contains("...")) return rawName
+        val normalizedCode = CourseCodeUtils.normalize(code) ?: code
+        if (normalizedCode.isBlank()) return rawName
+        return selectedCourseNameByCode[normalizedCode] ?: selectedCourseNameByCode[code] ?: rawName
     }
 
     private fun extractCourseNameFromKbxx(kbxx: String): String {
