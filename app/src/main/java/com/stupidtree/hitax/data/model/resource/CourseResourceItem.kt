@@ -5,6 +5,7 @@ data class CourseResourceItem(
     var courseCode: String = "",
     var courseName: String = "",
     var repoType: String = "normal",
+    var campus: String = "",
     var teachers: List<String> = emptyList(),
     var aliases: List<String> = emptyList(),
 )

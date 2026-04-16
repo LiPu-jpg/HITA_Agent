@@ -2,6 +2,7 @@ package com.stupidtree.hitax.data.repository
 
 import android.app.Application
 import androidx.annotation.WorkerThread
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
@@ -42,6 +43,9 @@ import java.io.InputStream
 
 class TimetableRepository(val application: Application) {
     private val historyTag = "timetable"
+    private val manualEventFallbackColor by lazy {
+        ContextCompat.getColor(application, R.color.subject8)
+    }
     private val executor = Executors.newSingleThreadExecutor()
     private val eventItemDao = AppDatabase.getDatabase(application).eventItemDao()
     private val timetableDao = AppDatabase.getDatabase(application).timetableDao()
@@ -96,6 +100,10 @@ class TimetableRepository(val application: Application) {
                 for (e in events) {
                     map[e.subjectId]?.let {
                         e.color = it
+                    } ?: run {
+                        if (e.subjectId.isBlank()) {
+                            e.color = manualEventFallbackColor
+                        }
                     }
                 }
                 res.value = events
@@ -117,6 +125,28 @@ class TimetableRepository(val application: Application) {
 
     fun getTimetablesById(id: String): LiveData<Timetable> {
         return timetableDao.getTimetableById(id)
+    }
+
+    @WorkerThread
+    fun getRecentTimetableSync(): Timetable? {
+        return timetableDao.getTimetableClosestToTimestampSync(System.currentTimeMillis())
+    }
+
+    @WorkerThread
+    fun getTimetableByIdSync(id: String): Timetable? {
+        return timetableDao.getTimetableByIdSync(id)
+    }
+
+    @WorkerThread
+    fun getEventsOfTimetableSync(
+        timetableId: String,
+        fromMs: Long? = null,
+        toMs: Long? = null
+    ): List<EventItem> {
+        if (fromMs != null && toMs != null) {
+            return eventItemDao.getEventsOfTimetableDuringSync(timetableId, fromMs, toMs)
+        }
+        return eventItemDao.getEventsOfTimetableSync(timetableId)
     }
 
     fun getTimetableByEasCode(code: String): LiveData<Timetable?> {
@@ -183,28 +213,50 @@ class TimetableRepository(val application: Application) {
 
     fun actionNewTimetable() {
         executor.execute {
-            val defaultTables =
-                timetableDao.getTimetableNamesWithDefaultSync(application.getString(R.string.default_timetable_name) + "%")
-            var max = 0
-            for (tt in defaultTables) {
-                val i = try {
-                    tt.replace(application.getString(R.string.default_timetable_name), "").toInt()
-                } catch (e: NumberFormatException) {
-                    null
-                }
-                if (i != null && i > max) {
-                    max = i
-                }
-            }
-            val newTable = Timetable()
-            val c = TimeTools.getMonday(System.currentTimeMillis())
-            newTable.startTime.time = c.timeInMillis
-            newTable.endTime.time = c.timeInMillis + WEEK_MILLS
-            newTable.name =
-                application.getString(R.string.default_timetable_name) + (max + 1).toString()
+            val newTable = buildNextDefaultTimetableSync()
             timetableDao.saveTimetableSync(newTable)
             StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(newTable.id))
         }
+    }
+
+    fun ensureDefaultCustomTimetableAsync() {
+        executor.execute {
+            ensureDefaultCustomTimetableSync()
+        }
+    }
+
+    @WorkerThread
+    fun ensureDefaultCustomTimetableSync(): Timetable {
+        val existing = timetableDao.getFirstCustomTimetableSync()
+        if (existing != null) return existing
+
+        val newTable = buildNextDefaultTimetableSync()
+        timetableDao.saveTimetableSync(newTable)
+        StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(newTable.id))
+        return newTable
+    }
+
+    @WorkerThread
+    private fun buildNextDefaultTimetableSync(): Timetable {
+        val defaultPrefix = application.getString(R.string.default_timetable_name)
+        val defaultTables = timetableDao.getTimetableNamesWithDefaultSync("$defaultPrefix%")
+        var max = 0
+        for (tt in defaultTables) {
+            val i = try {
+                tt.replace(defaultPrefix, "").toInt()
+            } catch (e: NumberFormatException) {
+                null
+            }
+            if (i != null && i > max) {
+                max = i
+            }
+        }
+        val newTable = Timetable()
+        val c = TimeTools.getMonday(System.currentTimeMillis())
+        newTable.startTime.time = c.timeInMillis
+        newTable.endTime.time = c.timeInMillis + WEEK_MILLS
+        newTable.name = defaultPrefix + (max + 1).toString()
+        return newTable
     }
 
     fun actionSaveTimetable(timetable: Timetable) {
@@ -212,6 +264,12 @@ class TimetableRepository(val application: Application) {
             timetableDao.saveTimetableSync(timetable)
             StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(timetable.id))
         }
+    }
+
+    @WorkerThread
+    fun saveTimetableSync(timetable: Timetable) {
+        timetableDao.saveTimetableSync(timetable)
+        StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(timetable.id))
     }
 
     fun actionChangeTimetableStartDate(timetable: Timetable, startTime: Long) {
@@ -266,6 +324,16 @@ class TimetableRepository(val application: Application) {
         }
     }
 
+    @WorkerThread
+    fun addEventsSync(data: List<EventItem>) {
+        eventItemDao.addEvents(data)
+        val ids = mutableListOf<String>()
+        for (e in data) {
+            ids.add(e.id)
+        }
+        StupidSync.putHistorySync("event", History.ACTION.REQUIRE, ids)
+    }
+
 
     fun exportToICS(timetableName: String, timetableId: String): LiveData<DataState<String>> {
         val res = MutableLiveData<DataState<String>>();
@@ -283,7 +351,17 @@ class TimetableRepository(val application: Application) {
                     val end = DateTime(ei.to)
                     end.isUtc = true
                     val event = VEvent(start, end, ei.name)
-                    event.properties.add(Location(ei.place + " " + if (ei.teacher.isNullOrEmpty()) "" else ei.teacher))
+                    val locationText = when (ei.type) {
+                        EventItem.TYPE.CLASS, EventItem.TYPE.EXAM -> listOf(
+                            ei.place?.trim().orEmpty(),
+                            ei.teacher?.trim().orEmpty()
+                        ).filter { it.isNotEmpty() }.joinToString(" ")
+
+                        else -> ei.place?.trim().orEmpty()
+                    }
+                    if (locationText.isNotEmpty()) {
+                        event.properties.add(Location(locationText))
+                    }
                     event.properties.add(Uid(UidGenerator("hita").generateUid().value))
                     // 添加邀请者
 //                val dev1 = Attendee(URI.create("https://hita.store/search?type=teacher"))
@@ -299,9 +377,10 @@ class TimetableRepository(val application: Application) {
 //                val rule = RRule(recur)
 //                event.properties.add(rule)
                     val valarm = VAlarm(Dur(0, 0, -10, 0))
-                    valarm.properties.add(Summary("课程提醒"))
+                    val isCourseLike = ei.type == EventItem.TYPE.CLASS || ei.type == EventItem.TYPE.EXAM
+                    valarm.properties.add(Summary(if (isCourseLike) "课程提醒" else "事件提醒"))
                     valarm.properties.add(Action.DISPLAY)
-                    valarm.properties.add(Description(ei.name + "马上就要开始啦！"))
+                    valarm.properties.add(Description(ei.name + if (isCourseLike) "马上就要开始啦！" else "马上开始啦！"))
                     event.alarms.add(valarm)
                     calendar.components.add(event)
 

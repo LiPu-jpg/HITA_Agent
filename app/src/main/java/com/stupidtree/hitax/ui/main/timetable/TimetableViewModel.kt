@@ -68,6 +68,7 @@ class TimetableViewModel(application: Application) :
     }
 
     fun startRefresh() {
+        timetableRepository.ensureDefaultCustomTimetableAsync()
         timetableController.value = Trigger.actioning
     }
 

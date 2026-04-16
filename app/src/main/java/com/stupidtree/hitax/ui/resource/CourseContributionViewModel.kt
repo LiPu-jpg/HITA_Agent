@@ -7,20 +7,23 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.switchMap
 import com.stupidtree.component.data.DataState
 import com.stupidtree.hitax.data.model.resource.CourseStructureSummary
+import com.stupidtree.hitax.data.repository.EASRepository
 import com.stupidtree.hitax.data.repository.HoaRepository
 import org.json.JSONArray
 
 class CourseContributionViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = HoaRepository.getInstance()
+    private val easRepository = EASRepository.getInstance(application)
+    private val hoaCampus = easRepository.getHoaCampus()
 
     private val repoNameLiveData = MutableLiveData<String>()
     val structureLiveData: LiveData<DataState<CourseStructureSummary>> = repoNameLiveData.switchMap {
-        repository.getCourseStructure(it)
+        repository.getCourseStructure(it, hoaCampus)
     }
 
     private val submitRequestLiveData = MutableLiveData<SubmitRequest>()
     val submitLiveData: LiveData<DataState<String>> = submitRequestLiveData.switchMap {
-        repository.submitOps(it.repoName, it.courseCode, it.courseName, it.repoType, it.ops)
+        repository.submitOps(it.repoName, it.courseCode, it.courseName, it.repoType, it.ops, hoaCampus)
     }
 
     fun load(repoName: String) {

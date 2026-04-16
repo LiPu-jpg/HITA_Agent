@@ -3,6 +3,7 @@ package com.stupidtree.hitax.data.model.timetable
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Ignore
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.stupidtree.hitax.utils.TimeTools
 import java.io.Serializable
@@ -10,7 +11,10 @@ import java.sql.Timestamp
 import java.util.*
 import kotlin.math.abs
 
-@Entity(tableName = "events")
+@Entity(
+    tableName = "events",
+    indices = [Index(value = ["timetableId", "type", "source"])]
+)
 class EventItem :Serializable,Comparable<EventItem>{
     enum class TYPE {
         CLASS, EXAM, OTHER, TAG
@@ -19,6 +23,7 @@ class EventItem :Serializable,Comparable<EventItem>{
     @PrimaryKey
     var id: String = UUID.randomUUID().toString()
     var type: TYPE = TYPE.CLASS
+    var source: String = SOURCE_EAS_IMPORT
     var name //名称
             : String = "NULL"
     var place //地点
@@ -45,7 +50,7 @@ class EventItem :Serializable,Comparable<EventItem>{
     var color:Int = 0//科目颜色，不进行存储
 
     override fun toString(): String {
-        return "EventItem(id='$id', type=$type, name='$name', place=$place, teacher=$teacher, subjectId='$subjectId', timetableId='$timetableId', from=$from, to=$to, createdAt=$createdAt"
+        return "EventItem(id='$id', type=$type, source='$source', name='$name', place=$place, teacher=$teacher, subjectId='$subjectId', timetableId='$timetableId', from=$from, to=$to, createdAt=$createdAt"
     }
 
 
@@ -120,7 +125,7 @@ class EventItem :Serializable,Comparable<EventItem>{
         other as EventItem
 
         if (id != other.id) return false
-        if (type != other.type) return false
+        if (source != other.source) return false
         if (name != other.name) return false
         if (place != other.place) return false
         if (teacher != other.teacher) return false
@@ -138,6 +143,7 @@ class EventItem :Serializable,Comparable<EventItem>{
     override fun hashCode(): Int {
         var result = id.hashCode()
         result = 31 * result + type.hashCode()
+        result = 31 * result + source.hashCode()
         result = 31 * result + name.hashCode()
         result = 31 * result + (place?.hashCode() ?: 0)
         result = 31 * result + (teacher?.hashCode() ?: 0)
@@ -152,9 +158,15 @@ class EventItem :Serializable,Comparable<EventItem>{
     }
 
     companion object{
+        const val SOURCE_EAS_IMPORT = "EAS_IMPORT"
+        const val SOURCE_MANUAL = "MANUAL"
+        const val SOURCE_AGENT = "AGENT"
+        const val SOURCE_ICS_IMPORT = "ICS_IMPORT"
+
         fun getTagInstance(name:String):EventItem{
             val result = EventItem()
             result.type = TYPE.TAG
+            result.source = SOURCE_MANUAL
             result.name = name
             return result
         }

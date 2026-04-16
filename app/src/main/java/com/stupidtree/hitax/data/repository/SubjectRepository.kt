@@ -79,9 +79,31 @@ class SubjectRepository(application: Application) {
 
     private fun splitTeachers(raw: String?): List<String> {
         if (raw.isNullOrBlank()) return emptyList()
-        return raw.split(Regex("[,，、]"))
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
+        return raw.split(Regex("[,，、/／]"))
+            .map { sanitizeTeacherToken(it) }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
+    private fun sanitizeTeacherToken(token: String): String {
+        var value = token.trim()
+        if (value.isBlank()) return ""
+
+        if (value.startsWith("【") && value.contains("】")) {
+            val close = value.indexOf('】')
+            if (close >= 0 && close < value.length - 1) {
+                value = value.substring(close + 1)
+            }
+        }
+
+        value = value
+            .replace(Regex("^第[一二三四五六七八九十0-9]+批"), "")
+            .trimStart('/', '／', ' ', '\t')
+            .trim()
+
+        if (value == "第") return ""
+        if (value.contains("课程") && value.length > 6) return ""
+        return value
     }
 
     /**

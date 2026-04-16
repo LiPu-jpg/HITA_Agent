@@ -216,8 +216,10 @@ class TimelineListAdapter(
             var type = FOOT
             if (mBeans[position - 1].type === EventItem.TYPE.TAG) return HINT
             if (TimeTools.passed(mBeans[position - 1].to)) type = PASSED
-            else if (mBeans[position - 1].type == EventItem.TYPE.EXAM || mBeans[position - 1].type == EventItem.TYPE.CLASS) type =
-                    CLASS
+            else if (mBeans[position - 1].type == EventItem.TYPE.EXAM
+                    || mBeans[position - 1].type == EventItem.TYPE.CLASS
+                    || mBeans[position - 1].type == EventItem.TYPE.OTHER
+            ) type = CLASS
             type
         }
     }
@@ -411,14 +413,22 @@ class TimelineListAdapter(
                     titleToSet = mContext.getString(R.string.timeline_head_dinner_title)
                     subtitltToSet = mContext.getString(R.string.timeline_head_dinner_subtitle)
                 } else if (nextEvent != null) {
-                    if (nextEvent!!.getFromTimeDistance() <= 15 && (nextEvent!!.type === EventItem.TYPE.CLASS || nextEvent!!.type == EventItem.TYPE.EXAM)) {
+                    if (nextEvent!!.getFromTimeDistance() <= 15
+                        && (nextEvent!!.type === EventItem.TYPE.CLASS
+                                || nextEvent!!.type == EventItem.TYPE.EXAM
+                                || nextEvent!!.type == EventItem.TYPE.OTHER)
+                    ) {
                         switchHeadView(head_goNow, -1)
                         titleToSet = nextEvent!!.name
                         subtitltToSet = java.lang.String.format(
                                 mContext.getString(R.string.timeline_gonow_subtitle),
                                 nextEvent!!.getFromTimeDistance()
                         )
-                        head_goQuickly_classroom.text = nextEvent!!.place
+                        head_goQuickly_classroom.text = if (nextEvent!!.place.isNullOrBlank()) {
+                            mContext.getString(R.string.unknown_location)
+                        } else {
+                            nextEvent!!.place
+                        }
                     } else {
                         titleToSet = mContext.getString(R.string.timeline_head_normal_title)
                         subtitltToSet = mContext.getString(R.string.timeline_head_normal_subtitle)

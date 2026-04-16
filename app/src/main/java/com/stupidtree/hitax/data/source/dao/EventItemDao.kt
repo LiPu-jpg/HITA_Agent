@@ -14,7 +14,7 @@ interface EventItemDao {
     fun saveEvents(data: List<EventItem>)
 
 
-    @Query("DELETE FROM events WHERE timetableId is :timetableId AND (type is 'CLASS' OR type is 'EXAM')")
+    @Query("DELETE FROM events WHERE timetableId is :timetableId AND source is 'EAS_IMPORT' AND (type is 'CLASS' OR type is 'EXAM')")
     fun deleteCourseFromTimetable(timetableId: String)
 
     @Query("SELECT * FROM events WHERE `from` >= :fromT AND `from` <= :toT AND `to` >= :fromT AND `to` <= :toT")
@@ -66,6 +66,9 @@ interface EventItemDao {
 
     @Query("select * from events where timetableId is :timetableId")
     fun getEventsOfTimetableSync(timetableId: String):List<EventItem>
+
+    @Query("select * from events where timetableId is :timetableId and `from` < :toMs and `to` > :fromMs order by `from` asc")
+    fun getEventsOfTimetableDuringSync(timetableId: String, fromMs: Long, toMs: Long): List<EventItem>
 
 
     @Query("SELECT * from events where type is 'CLASS' and timetableId is :timetableId and fromNumber is :fromNumber")

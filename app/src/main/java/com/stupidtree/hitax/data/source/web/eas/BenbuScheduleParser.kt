@@ -6,6 +6,8 @@ import org.jsoup.Jsoup
 
 object BenbuScheduleParser {
     private const val TAG = "BenbuScheduleParser"
+    private const val DEBUG_WEEK = 7
+    private val DEBUG_DOW = setOf(5, 6)
 
     fun parseScheduleHtml(html: String): List<CourseItem> {
         val result = mutableListOf<CourseItem>()
@@ -123,7 +125,10 @@ object BenbuScheduleParser {
         val weekPattern = Regex("""([^,，\[]*)\[([^\]]+)\](?:单|双)?周(?:\((?:单|双)\))?([^,，]*)""")
         val matches = weekPattern.findAll(element).toList()
 
-        if (matches.isEmpty()) return null
+        if (matches.isEmpty()) {
+            maybeLogDebug(dow, emptyList(), "parseCourseElement no week match course=$courseName element=$element")
+            return null
+        }
 
         val match = matches[0]
         val teacherPart = match.groupValues[1].trim()
@@ -132,12 +137,21 @@ object BenbuScheduleParser {
 
         val weeks = parseWeeksString(weeksStr)
         val periodResolved = resolvePeriod(periodInfo, periodHint)
+        val teacherResolved = sanitizeTeacher(courseName, teacherPart)
+        maybeLogDebug(
+            dow,
+            weeks,
+            "parseCourseElement parsed course=$courseName teacherRaw=${teacherPart.ifBlank { "<blank>" }} " +
+                "teacherResolved=${teacherResolved ?: "<null>"} " +
+                "weeks=$weeks period=${periodResolved.first}-${periodResolved.first + periodResolved.second - 1} " +
+                "location=${locationPart.ifBlank { "<blank>" }} raw=$element"
+        )
 
         return CourseItem().apply {
             code = null
             name = courseName
             this.weeks = weeks
-            teacher = teacherPart.ifBlank { null }
+            teacher = teacherResolved
             classroom = locationPart.ifBlank { null }
             this.dow = dow
             this.begin = periodResolved.first
@@ -215,5 +229,39 @@ object BenbuScheduleParser {
         }
 
         return weeks.toMutableList().sorted().toMutableList()
+    }
+
+    private fun sanitizeTeacher(courseName: String, teacherRaw: String?): String? {
+        val source = teacherRaw?.trim().orEmpty()
+        if (source.isBlank()) return null
+
+        var candidate = source
+        if (candidate.startsWith("【") && candidate.contains("】")) {
+            val closeIndex = candidate.indexOf('】')
+            if (closeIndex >= 0 && closeIndex < candidate.length - 1) {
+                candidate = candidate.substring(closeIndex + 1).trimStart('/', '／', ' ', '\t')
+            }
+        }
+
+        if (candidate.startsWith(courseName)) {
+            candidate = candidate.removePrefix(courseName).trimStart('/', '／', ' ', '\t')
+        }
+
+        val beforeSlash = candidate.substringBefore('/').trim()
+        val cleaned = beforeSlash
+            .replace(Regex("^第[一二三四五六七八九十0-9]+批"), "")
+            .trimStart('/', '／', ' ', '\t')
+            .trim()
+
+        return cleaned.ifBlank { null }
+    }
+
+    private fun shouldDebug(dow: Int, weeks: List<Int>): Boolean {
+        return dow in DEBUG_DOW && weeks.contains(DEBUG_WEEK)
+    }
+
+    private fun maybeLogDebug(dow: Int, weeks: List<Int>, message: String) {
+        if (!shouldDebug(dow, weeks)) return
+        Log.d(TAG, "[DBG_W7_D56] dow=$dow weeks=$weeks $message")
     }
 }

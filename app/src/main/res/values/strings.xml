@@ -256,8 +256,10 @@
     <string name="pick_location">选择地点</string>
     <string name="ade_exam_name">输入考试名称…</string>
     <string name="ade_set_time_period">设置日期与时间段</string>
-    <string name="ade_set_time_date">设置日期与时间</string>
     <string name="ade_set_date">设置日期</string>
+    <string name="ade_mode_batch">按节次批量</string>
+    <string name="ade_mode_free">自由时间段</string>
+    <string name="ade_pick_time_range">设置时间段</string>
     <string name="label_activity_attitude">HITSZ态度墙</string>
     <string name="label_activity_tasks">待办事项</string>
     <string name="task_card_title_tasknum">待办</string>

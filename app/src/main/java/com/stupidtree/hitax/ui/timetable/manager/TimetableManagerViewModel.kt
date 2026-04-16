@@ -24,6 +24,10 @@ class TimetableManagerViewModel(application: Application) : AndroidViewModel(app
     }
 
 
+    init {
+        timetableRepository.ensureDefaultCustomTimetableAsync()
+    }
+
     fun startDeleteTimetables(timetables:List<Timetable>){
         timetableRepository.actionDeleteTimetables(timetables)
     }

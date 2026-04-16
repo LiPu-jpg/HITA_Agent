@@ -42,12 +42,18 @@ object HoaResourceSource {
         val parts = repoName.split("/")
         return if (parts.isNotEmpty()) {
             val campus = parts[0].lowercase()
-            when (campus) {
-                "shenzhen", "harbin", "weihai" -> campus
-                else -> "shenzhen" // Default fallback
-            }
+            normalizeHoaCampus(campus) ?: "shenzhen"
         } else {
-            "shenzhen" // Default fallback
+            "shenzhen"
+        }
+    }
+
+    private fun normalizeHoaCampus(raw: String?): String? {
+        return when (raw?.trim()?.lowercase()) {
+            "shenzhen", "sz" -> "shenzhen"
+            "harbin", "benbu", "hb" -> "harbin"
+            "weihai", "wh" -> "weihai"
+            else -> null
         }
     }
 
@@ -64,13 +70,13 @@ object HoaResourceSource {
         }
     }
 
-    fun searchCourses(query: String): LiveData<DataState<List<CourseResourceItem>>> {
+    fun searchCourses(query: String, campus: String? = null): LiveData<DataState<List<CourseResourceItem>>> {
         val result = MutableLiveData<DataState<List<CourseResourceItem>>>()
         Thread {
             try {
                 val requestBody = JSONObject()
                 requestBody.put("keyword", query.trim())
-                requestBody.put("campus", "") // Empty for all campuses
+                requestBody.put("campus", normalizeHoaCampus(campus).orEmpty())
 
                 val response = withHeaders(Jsoup.connect("$baseUrl/v1/courses:search"))
                     .header("Content-Type", "application/json")
@@ -103,7 +109,7 @@ object HoaResourceSource {
                     } else {
                         repo
                     }
-                    
+
                     // DEBUG: Log the raw object
                     android.util.Log.d("HoaResourceSource", "Search result item: ${obj.toString()}")
 
@@ -113,6 +119,7 @@ object HoaResourceSource {
                             courseCode = obj.optString("code"),
                             courseName = obj.optString("name"),
                             repoType = obj.optString("repo_type", "normal"),
+                            campus = obj.optString("campus"),
                             teachers = jsonArrayToList(obj.optJSONArray("teachers")),
                             aliases = jsonArrayToList(obj.optJSONArray("aliases")),
                         )
@@ -126,16 +133,16 @@ object HoaResourceSource {
         return result
     }
 
-    fun getCourseReadme(repoName: String): LiveData<DataState<CourseReadmeData>> {
+    fun getCourseReadme(repoName: String, campus: String? = null): LiveData<DataState<CourseReadmeData>> {
         val result = MutableLiveData<DataState<CourseReadmeData>>()
         Thread {
             try {
-                val campus = extractCampus(repoName)
+                val resolvedCampus = normalizeHoaCampus(campus) ?: extractCampus(repoName)
                 val courseCode = extractCourseCode(repoName)
 
                 val requestBody = JSONObject()
                 val target = JSONObject()
-                target.put("campus", campus)
+                target.put("campus", resolvedCampus)
                 target.put("course_code", courseCode)
                 requestBody.put("target", target)
 
@@ -176,16 +183,16 @@ object HoaResourceSource {
         return result
     }
 
-    fun getCourseStructure(repoName: String): LiveData<DataState<CourseStructureSummary>> {
+    fun getCourseStructure(repoName: String, campus: String? = null): LiveData<DataState<CourseStructureSummary>> {
         val result = MutableLiveData<DataState<CourseStructureSummary>>()
         Thread {
             try {
-                val campus = extractCampus(repoName)
+                val resolvedCampus = normalizeHoaCampus(campus) ?: extractCampus(repoName)
                 val courseCode = extractCourseCode(repoName)
 
                 val requestBody = JSONObject()
                 val target = JSONObject()
-                target.put("campus", campus)
+                target.put("campus", resolvedCampus)
                 target.put("course_code", courseCode)
                 requestBody.put("target", target)
                 requestBody.put("include_toml", false)
@@ -312,16 +319,17 @@ object HoaResourceSource {
         courseName: String,
         repoType: String,
         ops: JSONArray,
+        campus: String? = null,
     ): LiveData<DataState<String>> {
         val result = MutableLiveData<DataState<String>>()
         Thread {
             try {
-                val campus = extractCampus(repoName)
+                val resolvedCampus = normalizeHoaCampus(campus) ?: extractCampus(repoName)
                 val actualCourseCode = if (courseCode.isNotBlank()) courseCode else extractCourseCode(repoName)
 
                 val requestBody = JSONObject()
                 val target = JSONObject()
-                target.put("campus", campus)
+                target.put("campus", resolvedCampus)
                 target.put("course_code", actualCourseCode)
                 if (courseName.isNotBlank()) {
                     target.put("course_name", courseName)

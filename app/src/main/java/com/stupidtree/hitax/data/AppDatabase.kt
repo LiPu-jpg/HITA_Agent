@@ -17,7 +17,7 @@ import com.stupidtree.stupiduser.data.source.dao.UserProfileDao
 
 @Database(
     entities = [EventItem::class, TermSubject::class, Timetable::class],
-    version = 2
+    version = 4
 )
 @androidx.room.TypeConverters(TypeConverters::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -37,7 +37,7 @@ abstract class AppDatabase : RoomDatabase() {
                         INSTANCE = Room.databaseBuilder(
                             context.applicationContext,
                             AppDatabase::class.java, "hita"
-                        ).addMigrations(MIGRATION_1_2).build()
+                        ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
                     }
                 }
             }
@@ -48,6 +48,18 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE subject ADD COLUMN selectCategory TEXT")
                 db.execSQL("ALTER TABLE subject ADD COLUMN nature TEXT")
+            }
+        }
+
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE events ADD COLUMN source TEXT NOT NULL DEFAULT 'EAS_IMPORT'")
+            }
+        }
+
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_events_timetableId_type_source ON events(timetableId, type, source)")
             }
         }
     }

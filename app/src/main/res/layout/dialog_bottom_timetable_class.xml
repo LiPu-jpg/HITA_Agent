@@ -41,6 +41,7 @@
             tools:ignore="HardcodedText" />
 
         <TextView
+            android:id="@+id/name_action"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
@@ -145,6 +146,7 @@
             android:orientation="vertical">
 
             <TextView
+                android:id="@+id/place_label"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="2dp"
@@ -346,6 +348,7 @@
     </LinearLayout>
 
     <LinearLayout
+        android:id="@+id/course_progress_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginLeft="24dp"

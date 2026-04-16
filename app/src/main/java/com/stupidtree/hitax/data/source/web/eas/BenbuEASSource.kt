@@ -26,6 +26,8 @@ class BenbuEASSource : EASService {
 
     companion object {
         private const val TAG = "BenbuEASSource"
+        private const val DEBUG_WEEK = 7
+        private val DEBUG_DOW = setOf(5, 6)
         private val SAFE_PERSONAL_INFO_LABELS = setOf("姓名", "学号", "院系", "学院", "系", "专业", "年级", "班级")
     }
 
@@ -605,6 +607,12 @@ class BenbuEASSource : EASService {
         for (course in sorted) {
             val last = merged.lastOrNull()
             if (last != null && canMergeCourses(last, course)) {
+                maybeLogMergeDebug(
+                    left = last,
+                    right = course,
+                    stage = "MERGE",
+                    reason = "merge adjacent periods"
+                )
                 last.last += course.last
                 if (last.classroom.isNullOrBlank()) {
                     last.classroom = course.classroom
@@ -613,6 +621,15 @@ class BenbuEASSource : EASService {
                     last.code = course.code
                 }
             } else {
+                if (last != null) {
+                    val reason = mergeBlockReason(last, course)
+                    maybeLogMergeDebug(
+                        left = last,
+                        right = course,
+                        stage = "SKIP",
+                        reason = reason
+                    )
+                }
                 merged.add(copyCourse(course))
             }
         }
@@ -649,6 +666,60 @@ class BenbuEASSource : EASService {
         }
 
         return true
+    }
+
+    private fun mergeBlockReason(left: CourseItem, right: CourseItem): String {
+        if (left.dow != right.dow) return "dow mismatch ${left.dow} vs ${right.dow}"
+        val leftName = normalized(left.name)
+        val rightName = normalized(right.name)
+        if (leftName != rightName) return "name mismatch '$leftName' vs '$rightName'"
+        val leftTeacher = normalized(left.teacher)
+        val rightTeacher = normalized(right.teacher)
+        if (leftTeacher != rightTeacher) return "teacher mismatch '$leftTeacher' vs '$rightTeacher'"
+        val leftWeeks = left.weeks.sorted()
+        val rightWeeks = right.weeks.sorted()
+        if (leftWeeks != rightWeeks) return "weeks mismatch $leftWeeks vs $rightWeeks"
+
+        val leftEndPeriod = left.begin + left.last - 1
+        if (leftEndPeriod + 1 != right.begin) return "period not adjacent ${left.begin}-${leftEndPeriod} vs ${right.begin}"
+
+        val schedule = defaultScheduleStructure()
+        if (leftEndPeriod !in 1..schedule.size || right.begin !in 1..schedule.size) {
+            return "period out of schedule range leftEnd=$leftEndPeriod rightBegin=${right.begin}"
+        }
+
+        val leftEndTime = schedule[leftEndPeriod - 1].to
+        val rightStartTime = schedule[right.begin - 1].from
+        val gapMinutes = leftEndTime.getDistanceInMinutes(rightStartTime)
+        if (gapMinutes < 0 || gapMinutes >= 30) return "time gap=$gapMinutes"
+
+        val leftClassroom = normalized(left.classroom)
+        val rightClassroom = normalized(right.classroom)
+        if (leftClassroom.isNotEmpty() && rightClassroom.isNotEmpty() && leftClassroom != rightClassroom) {
+            return "classroom mismatch '$leftClassroom' vs '$rightClassroom'"
+        }
+
+        val leftCode = normalized(left.code)
+        val rightCode = normalized(right.code)
+        if (leftCode.isNotEmpty() && rightCode.isNotEmpty() && leftCode != rightCode) {
+            return "code mismatch '$leftCode' vs '$rightCode'"
+        }
+
+        return "unknown"
+    }
+
+    private fun maybeLogMergeDebug(left: CourseItem, right: CourseItem, stage: String, reason: String) {
+        val weeksUnion = (left.weeks + right.weeks).distinct()
+        val dow = left.dow
+        if (dow !in DEBUG_DOW || !weeksUnion.contains(DEBUG_WEEK)) return
+        val leftEnd = left.begin + left.last - 1
+        val rightEnd = right.begin + right.last - 1
+        Log.d(
+            TAG,
+            "[DBG_W7_D56][$stage] reason=$reason " +
+                "L{name=${left.name},teacher=${left.teacher},weeks=${left.weeks.sorted()},dow=${left.dow},period=${left.begin}-$leftEnd,room=${left.classroom},code=${left.code}} " +
+                "R{name=${right.name},teacher=${right.teacher},weeks=${right.weeks.sorted()},dow=${right.dow},period=${right.begin}-$rightEnd,room=${right.classroom},code=${right.code}}"
+        )
     }
 
     private fun normalized(value: String?): String {

@@ -14,7 +14,80 @@ object CourseResourceLinker {
         owner: LifecycleOwner,
         courseCodeRaw: String?,
         courseNameRaw: String?,
+        campus: String? = null,
     ) {
+        val queryContext = buildQueryContext(courseCodeRaw, courseNameRaw)
+        if (queryContext.queries.isEmpty()) {
+            openFallback(
+                context,
+                queryContext.normalizedCode,
+                queryContext.normalizedName,
+                courseCodeRaw,
+                courseNameRaw,
+            )
+            return
+        }
+
+        searchSequentially(
+            context,
+            owner,
+            queryContext.queries,
+            0,
+            mutableListOf(),
+            queryContext.normalizedCode,
+            queryContext.normalizedName,
+            courseCodeRaw,
+            courseNameRaw,
+            campus,
+        )
+    }
+
+    fun resolveBestMatch(
+        owner: LifecycleOwner,
+        courseCodeRaw: String?,
+        courseNameRaw: String?,
+        campus: String? = null,
+        onResolved: (CourseResourceItem?) -> Unit,
+    ) {
+        resolveCandidates(owner, courseCodeRaw, courseNameRaw, campus) { candidates ->
+            onResolved(selectBestMatch(candidates, CourseCodeUtils.normalize(courseCodeRaw) ?: CourseCodeUtils.normalize(courseNameRaw), CourseNameUtils.normalize(courseNameRaw)))
+        }
+    }
+
+    fun resolveCandidates(
+        owner: LifecycleOwner,
+        courseCodeRaw: String?,
+        courseNameRaw: String?,
+        campus: String? = null,
+        onResolved: (List<CourseResourceItem>) -> Unit,
+    ) {
+        val queryContext = buildQueryContext(courseCodeRaw, courseNameRaw)
+        if (queryContext.queries.isEmpty()) {
+            onResolved(emptyList())
+            return
+        }
+        searchSequentiallyForCandidates(
+            owner = owner,
+            queries = queryContext.queries,
+            index = 0,
+            collected = mutableListOf(),
+            normalizedCode = queryContext.normalizedCode,
+            normalizedName = queryContext.normalizedName,
+            campus = campus,
+            onResolved = onResolved,
+        )
+    }
+
+    private data class QueryContext(
+        val normalizedCode: String?,
+        val normalizedName: String?,
+        val queries: List<String>,
+    )
+
+    private fun buildQueryContext(
+        courseCodeRaw: String?,
+        courseNameRaw: String?,
+    ): QueryContext {
         val normalizedCode = CourseCodeUtils.normalize(courseCodeRaw)
             ?: CourseCodeUtils.normalize(courseNameRaw)
         val normalizedName = CourseNameUtils.normalize(courseNameRaw)
@@ -22,24 +95,9 @@ object CourseResourceLinker {
         val queries = mutableListOf<String>()
         if (!normalizedCode.isNullOrBlank()) queries.add(normalizedCode)
         if (!normalizedName.isNullOrBlank() && normalizedName != normalizedCode) queries.add(normalizedName)
-
-        if (queries.isEmpty()) {
-            openFallback(context, normalizedCode, normalizedName, courseCodeRaw, courseNameRaw)
-            return
-        }
-
-        searchSequentially(
-            context,
-            owner,
-            queries,
-            0,
-            mutableListOf(),
-            normalizedCode,
-            normalizedName,
-            courseCodeRaw,
-            courseNameRaw,
-        )
+        return QueryContext(normalizedCode, normalizedName, queries)
     }
+
 
     private fun searchSequentially(
         context: Context,
@@ -51,6 +109,7 @@ object CourseResourceLinker {
         normalizedName: String?,
         courseCodeRaw: String?,
         courseNameRaw: String?,
+        campus: String?,
     ) {
         val query = queries.getOrNull(index)
         if (query.isNullOrBlank()) {
@@ -64,7 +123,7 @@ object CourseResourceLinker {
             )
             return
         }
-        val liveData = HoaRepository.getInstance().searchCourses(query)
+        val liveData = HoaRepository.getInstance().searchCourses(query, campus)
         val observer = object : Observer<DataState<List<CourseResourceItem>>> {
             override fun onChanged(value: DataState<List<CourseResourceItem>>) {
                 liveData.removeObserver(this)
@@ -82,6 +141,7 @@ object CourseResourceLinker {
                         normalizedName,
                         courseCodeRaw,
                         courseNameRaw,
+                        campus,
                     )
                 } else {
                     openFromCandidates(
@@ -92,6 +152,47 @@ object CourseResourceLinker {
                         courseCodeRaw,
                         courseNameRaw,
                     )
+                }
+            }
+        }
+        liveData.observe(owner, observer)
+    }
+
+    private fun searchSequentiallyForCandidates(
+        owner: LifecycleOwner,
+        queries: List<String>,
+        index: Int,
+        collected: MutableList<CourseResourceItem>,
+        normalizedCode: String?,
+        normalizedName: String?,
+        campus: String?,
+        onResolved: (List<CourseResourceItem>) -> Unit,
+    ) {
+        val query = queries.getOrNull(index)
+        if (query.isNullOrBlank()) {
+            onResolved(rankCandidates(collected, normalizedCode, normalizedName))
+            return
+        }
+        val liveData = HoaRepository.getInstance().searchCourses(query, campus)
+        val observer = object : Observer<DataState<List<CourseResourceItem>>> {
+            override fun onChanged(value: DataState<List<CourseResourceItem>>) {
+                liveData.removeObserver(this)
+                if (value.state == DataState.STATE.SUCCESS) {
+                    collected.addAll(value.data.orEmpty())
+                }
+                if (index + 1 < queries.size) {
+                    searchSequentiallyForCandidates(
+                        owner = owner,
+                        queries = queries,
+                        index = index + 1,
+                        collected = collected,
+                        normalizedCode = normalizedCode,
+                        normalizedName = normalizedName,
+                        campus = campus,
+                        onResolved = onResolved,
+                    )
+                } else {
+                    onResolved(rankCandidates(collected, normalizedCode, normalizedName))
                 }
             }
         }
@@ -132,7 +233,6 @@ object CourseResourceLinker {
             return
         }
 
-        // 只要有多个候选，统一让用户手选，避免误跳转。
         if (deduped.size > 1) {
             showCandidateChooser(
                 context,
@@ -152,6 +252,7 @@ object CourseResourceLinker {
 
         openFallback(context, normalizedCode, normalizedName, courseCodeRaw, courseNameRaw)
     }
+
 
     private fun showCandidateChooser(
         context: Context,
@@ -179,10 +280,7 @@ object CourseResourceLinker {
                     courseNameRaw,
                 )
             }
-            .setNegativeButton("去搜索页") { _, _ ->
-                val query = normalizedCode ?: normalizedName ?: courseCodeRaw ?: courseNameRaw
-                ActivityUtils.startCourseResourceSearchActivity(context, query)
-            }
+            .setNegativeButton("取消", null)
             .show()
     }
 
@@ -209,6 +307,16 @@ object CourseResourceLinker {
         )
     }
 
+    private fun rankCandidates(
+        items: List<CourseResourceItem>,
+        normalizedCode: String?,
+        normalizedName: String?,
+    ): List<CourseResourceItem> {
+        return items
+            .distinctBy { item -> "${item.repoType}|${item.repoName}" }
+            .sortedByDescending { scoreCandidate(it, normalizedCode, normalizedName) }
+    }
+
     private fun scoreCandidate(
         item: CourseResourceItem,
         normalizedCode: String?,
@@ -228,6 +336,7 @@ object CourseResourceLinker {
         }
         return score
     }
+
 
     private fun selectBestMatch(
         items: List<CourseResourceItem>,

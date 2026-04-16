@@ -7,14 +7,17 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.switchMap
 import com.stupidtree.component.data.DataState
 import com.stupidtree.hitax.data.model.resource.CourseReadmeData
+import com.stupidtree.hitax.data.repository.EASRepository
 import com.stupidtree.hitax.data.repository.HoaRepository
 
 class CourseReadmeViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = HoaRepository.getInstance()
+    private val easRepository = EASRepository.getInstance(application)
+    private val hoaCampus = easRepository.getHoaCampus()
     private val repoNameLiveData = MutableLiveData<String>()
 
     val readmeLiveData: LiveData<DataState<CourseReadmeData>> = repoNameLiveData.switchMap {
-        repository.getCourseReadme(it)
+        repository.getCourseReadme(it, hoaCampus)
     }
 
     fun load(repoName: String) {

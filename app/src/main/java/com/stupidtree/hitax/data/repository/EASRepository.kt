@@ -29,6 +29,7 @@ import com.stupidtree.hitax.utils.LiveDataUtils
 import com.stupidtree.hitax.utils.TimeTools.getDateAtWOT
 import com.stupidtree.hitax.utils.TermNameFormatter
 import com.stupidtree.hitax.utils.CourseCodeUtils
+import com.stupidtree.hitax.utils.CourseNameUtils
 import com.stupidtree.sync.StupidSync
 import com.stupidtree.sync.data.model.History
 import java.sql.Timestamp
@@ -48,12 +49,11 @@ class EASRepository internal constructor(application: Application) {
     private var subjectDao = AppDatabase.getDatabase(application).subjectDao()
     private val easTokenLiveData = MutableLiveData(easPreferenceSource.getEasToken())
 
-    private fun getService(campus: EASToken.Campus): EASService {
-        return when (campus) {
-            EASToken.Campus.SHENZHEN -> shenzhenService
-            EASToken.Campus.BENBU -> benbuService
-            EASToken.Campus.WEIHAI -> weihaiService
-        }
+    private val DEBUG_WEEK = 7
+    private val DEBUG_DOW = setOf(5, 6)
+
+    private fun getService(@Suppress("UNUSED_PARAMETER") campus: EASToken.Campus): EASService {
+        return shenzhenService
     }
 
     /**
@@ -85,9 +85,9 @@ class EASRepository internal constructor(application: Application) {
             }
             token.campus = campus
             val enrichSource = getService(campus).getSafePersonalInfo(token)
-            result.addSource(enrichSource) { enrichedState ->
+            result.addSource(enrichSource) enrichObserver@{ enrichedState ->
                 if (enrichedState.state == DataState.STATE.NOTHING) {
-                    return@addSource
+                    return@enrichObserver
                 }
                 val finalToken = if (enrichedState.state == DataState.STATE.SUCCESS) {
                     enrichedState.data ?: token
@@ -333,12 +333,14 @@ class EASRepository internal constructor(application: Application) {
                                     }
                                     val spStart = safeSchedule[startIndex]
                                     val spEnd = safeSchedule[endIndex]
+                                    val rawName = item.name?.toString().orEmpty().trim()
+                                    val normalizedName = CourseNameUtils.normalize(rawName) ?: rawName
 
                                     //添加科目
-                                    var subject = subjectDao.getSubjectByName(timetable.id, item.name)
+                                    var subject = subjectDao.getSubjectByName(timetable.id, normalizedName)
                                     if (subject == null) {//不存在，新建
                                         subject = TermSubject()
-                                        subject.name = item.name.toString()
+                                        subject.name = normalizedName
                                         subject.timetableId = timetable.id
                                         subject.id = UUID.randomUUID().toString()
                                     }
@@ -348,28 +350,32 @@ class EASRepository internal constructor(application: Application) {
                                     }
                                     if (subject.credit <= 0f) {
                                         val mappedCredit = creditMap[code]
-                                            ?: item.name?.let { name -> creditMap[name] }
+                                            ?: creditMap[rawName]
+                                            ?: creditMap[normalizedName]
                                         if (mappedCredit != null && mappedCredit > 0f) {
                                             subject.credit = mappedCredit
                                         }
                                     }
                                     if (subject.field.isNullOrBlank()) {
                                         val mappedField = meta.fieldMap[code]
-                                            ?: item.name?.let { name -> meta.fieldMap[name] }
+                                            ?: meta.fieldMap[rawName]
+                                            ?: meta.fieldMap[normalizedName]
                                         if (!mappedField.isNullOrBlank()) {
                                             subject.field = mappedField
                                         }
                                     }
                                     if (subject.selectCategory.isNullOrBlank()) {
                                         val mappedSelect = meta.selectCategoryMap[code]
-                                            ?: item.name?.let { name -> meta.selectCategoryMap[name] }
+                                            ?: meta.selectCategoryMap[rawName]
+                                            ?: meta.selectCategoryMap[normalizedName]
                                         if (!mappedSelect.isNullOrBlank()) {
                                             subject.selectCategory = mappedSelect
                                         }
                                     }
                                     if (subject.nature.isNullOrBlank()) {
                                         val mappedNature = meta.natureMap[code]
-                                            ?: item.name?.let { name -> meta.natureMap[name] }
+                                            ?: meta.natureMap[rawName]
+                                            ?: meta.natureMap[normalizedName]
                                         if (!mappedNature.isNullOrBlank()) {
                                             subject.nature = mappedNature
                                         }
@@ -392,15 +398,35 @@ class EASRepository internal constructor(application: Application) {
                                         to.set(Calendar.HOUR_OF_DAY, spEnd.to.hour)
                                         to.set(Calendar.MINUTE, spEnd.to.minute)
                                         val e = EventItem()
-                                        e.name = item.name.toString()
+                                        e.source = EventItem.SOURCE_EAS_IMPORT
+                                        e.name = normalizedName
                                         e.from.time = from.timeInMillis
                                         e.fromNumber = item.begin
                                         e.subjectId = subject.id
                                         e.lastNumber = item.last
                                         e.to.time = to.timeInMillis
-                                        val mappedTeacher = item.teacher?.takeIf { t -> t.isNotBlank() }
+                                        val itemTeacher = sanitizeImportedTeacher(rawName, item.teacher)
+                                        val mappedTeacher = itemTeacher
                                             ?: code.takeIf { it.isNotBlank() }?.let { teacherMap[it] }
-                                            ?: item.name?.let { name -> teacherMap[name] }
+                                            ?: teacherMap[rawName]
+                                            ?: teacherMap[normalizedName]
+                                        val teacherSource = when {
+                                            !itemTeacher.isNullOrBlank() -> "item"
+                                            !code.isNullOrBlank() && !teacherMap[code].isNullOrBlank() -> "meta_by_code"
+                                            !teacherMap[rawName].isNullOrBlank() -> "meta_by_name_raw"
+                                            !teacherMap[normalizedName].isNullOrBlank() -> "meta_by_name_normalized"
+                                            else -> "none"
+                                        }
+                                        if (item.dow in DEBUG_DOW && week == DEBUG_WEEK) {
+                                            val periodEnd = item.begin + item.last - 1
+                                            Log.d(
+                                                TAG,
+                                                "[DBG_W7_D56][MAP] week=$week dow=${item.dow} " +
+                                                    "nameRaw=$rawName nameNorm=$normalizedName code=${item.code} period=${item.begin}-$periodEnd " +
+                                                    "itemTeacherRaw=${item.teacher} itemTeacher=$itemTeacher mappedTeacher=$mappedTeacher source=$teacherSource " +
+                                                    "teacherMapByCode=${if (code.isBlank()) null else teacherMap[code]} teacherMapByNameRaw=${teacherMap[rawName]} teacherMapByNameNorm=${teacherMap[normalizedName]}"
+                                            )
+                                        }
                                         e.teacher = mappedTeacher
                                         e.place = item.classroom
                                         e.timetableId = timetable.id
@@ -461,6 +487,23 @@ class EASRepository internal constructor(application: Application) {
         } else {
             importTimetableLiveData.value = DataState(DataState.STATE.NOT_LOGGED_IN)
         }
+    }
+
+    private fun sanitizeImportedTeacher(courseName: String?, teacherRaw: String?): String? {
+        val source = teacherRaw?.trim().orEmpty()
+        if (source.isBlank()) return null
+
+        val name = courseName?.trim().orEmpty()
+        val normalized = source.replace(" ", "")
+        val looksLikeCoursePayload = normalized.startsWith("【") ||
+            (name.isNotBlank() && (source.startsWith(name) || normalized.contains(name.replace(" ", ""))))
+        if (looksLikeCoursePayload) return null
+
+        val cleaned = source
+            .replace(Regex("^第[一二三四五六七八九十0-9]+批"), "")
+            .trimStart('/', '／', ' ', '\t')
+            .trim()
+        return cleaned.ifBlank { null }
     }
 
     private fun buildSafeSchedule(
@@ -598,6 +641,14 @@ class EASRepository internal constructor(application: Application) {
         latch.await(timeoutSeconds, TimeUnit.SECONDS)
         mainHandler.post { live.removeObserver(observer) }
         return result
+    }
+
+    fun isSubjectMetaSupported(campus: EASToken.Campus = easPreferenceSource.getEasToken().campus): Boolean {
+        return campus == EASToken.Campus.SHENZHEN
+    }
+
+    fun getHoaCampus(@Suppress("UNUSED_PARAMETER") campus: EASToken.Campus = easPreferenceSource.getEasToken().campus): String {
+        return "shenzhen"
     }
 
     fun getEasToken(): EASToken {

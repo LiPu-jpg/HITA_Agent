@@ -8,6 +8,7 @@ import android.widget.TextView
 import com.stupidtree.hitax.R
 import com.stupidtree.hitax.data.model.timetable.EventItem
 import com.stupidtree.hitax.data.model.timetable.TimeInDay
+import com.stupidtree.hitax.data.repository.EASRepository
 import com.stupidtree.hitax.databinding.DialogBottomTimetableClassBinding
 import com.stupidtree.hitax.ui.subject.SubjectActivity
 import com.stupidtree.hitax.utils.ActivityUtils
@@ -41,6 +42,8 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
 //    }
 
     var parent: EventParent? = null
+    private val easRepository by lazy { EASRepository.getInstance(requireActivity().application) }
+    private val hoaCampus by lazy { easRepository.getHoaCampus() }
     private var currentSubject: com.stupidtree.hitax.data.model.timetable.TermSubject? = null
 //    override fun onAttach(context: Context) {
 //        super.onAttach(context)
@@ -49,7 +52,21 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
 //        }
 //    }
 
+    private fun isCourseLike(eventItem: EventItem): Boolean {
+        return eventItem.type == EventItem.TYPE.CLASS || eventItem.type == EventItem.TYPE.EXAM
+    }
+
+    private fun applyTypeUi(eventItem: EventItem) {
+        val courseLike = isCourseLike(eventItem)
+        binding?.ttDlgValue3Detail?.visibility = if (courseLike) View.VISIBLE else View.GONE
+        binding?.courseProgressLayout?.visibility = if (courseLike) View.VISIBLE else View.GONE
+        binding?.subject?.visibility = if (courseLike) View.VISIBLE else View.GONE
+        binding?.nameAction?.visibility = if (courseLike) View.VISIBLE else View.GONE
+        binding?.placeLabel?.setText(if (courseLike) R.string.dialog_classroom else R.string.exam_location)
+    }
+
     private fun setInfo(eventItem: EventItem) {
+        applyTypeUi(eventItem)
         val teachers = splitTeachers(eventItem.teacher)
         val container = binding?.teacherList
         container?.removeAllViews()
@@ -249,6 +266,8 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
             currentSubject = subject
         }
         viewModel.progressLiveData.observe(this) {
+            val event = viewModel.eventItemLiveData.value ?: return@observe
+            if (!isCourseLike(event)) return@observe
             binding?.courseProgress?.progress =
                 (((it.first + 1).toFloat() / it.second.toFloat()) * 100).toInt()
             binding?.courseCourseInSubject?.text =
@@ -257,6 +276,8 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
 
 
         binding?.subject?.setOnClickListener {
+            val event = viewModel.eventItemLiveData.value ?: return@setOnClickListener
+            if (!isCourseLike(event)) return@setOnClickListener
             val subject = currentSubject
             if (subject == null) {
                 android.widget.Toast.makeText(requireContext(), R.string.loading, android.widget.Toast.LENGTH_SHORT).show()
@@ -284,6 +305,7 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
                     owner = viewLifecycleOwner,
                     courseCodeRaw = subject.code,
                     courseNameRaw = subject.name,
+                    campus = hoaCampus,
                 )
             }
             true

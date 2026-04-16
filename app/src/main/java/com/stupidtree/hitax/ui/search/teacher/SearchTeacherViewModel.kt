@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.map
 import com.stupidtree.component.data.DataState
+import com.stupidtree.hitax.data.repository.EASRepository
 import com.stupidtree.hitax.data.repository.HoaRepository
 import com.stupidtree.hitax.ui.search.BaseSearchResultViewModel
 import com.stupidtree.hitax.ui.search.SearchTrigger
@@ -12,9 +13,11 @@ class SearchTeacherViewModel(application: Application) : BaseSearchResultViewMod
     application
 ) {
     private val hoaRepository = HoaRepository.getInstance()
+    private val easRepository = EASRepository.getInstance(application)
+    private val hoaCampus = easRepository.getHoaCampus()
     override fun doSearch(trigger: SearchTrigger): LiveData<DataState<List<TeacherSearched>>> {
         val query = trigger.text.trim()
-        return hoaRepository.searchCourses(query).map { state ->
+        return hoaRepository.searchCourses(query, hoaCampus).map { state ->
             if (state.state != DataState.STATE.SUCCESS) {
                 return@map DataState<List<TeacherSearched>>(state.state, state.message)
             }

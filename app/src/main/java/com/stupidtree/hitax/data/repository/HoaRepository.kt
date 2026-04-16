@@ -10,16 +10,16 @@ import com.stupidtree.hitax.data.source.web.HoaResourceSource
 import org.json.JSONArray
 
 class HoaRepository private constructor() {
-    fun searchCourses(query: String): LiveData<DataState<List<CourseResourceItem>>> {
-        return HoaResourceSource.searchCourses(query)
+    fun searchCourses(query: String, campus: String? = null): LiveData<DataState<List<CourseResourceItem>>> {
+        return HoaResourceSource.searchCourses(query, campus)
     }
 
-    fun getCourseReadme(repoName: String): LiveData<DataState<CourseReadmeData>> {
-        return HoaResourceSource.getCourseReadme(repoName)
+    fun getCourseReadme(repoName: String, campus: String? = null): LiveData<DataState<CourseReadmeData>> {
+        return HoaResourceSource.getCourseReadme(repoName, campus)
     }
 
-    fun getCourseStructure(repoName: String): LiveData<DataState<CourseStructureSummary>> {
-        return HoaResourceSource.getCourseStructure(repoName)
+    fun getCourseStructure(repoName: String, campus: String? = null): LiveData<DataState<CourseStructureSummary>> {
+        return HoaResourceSource.getCourseStructure(repoName, campus)
     }
 
     fun validateReadme(
@@ -37,8 +37,9 @@ class HoaRepository private constructor() {
         courseName: String,
         repoType: String,
         ops: JSONArray,
+        campus: String? = null,
     ): LiveData<DataState<String>> {
-        return HoaResourceSource.submitOps(repoName, courseCode, courseName, repoType, ops)
+        return HoaResourceSource.submitOps(repoName, courseCode, courseName, repoType, ops, campus)
     }
 
     companion object {
