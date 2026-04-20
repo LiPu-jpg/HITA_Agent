@@ -14,4 +14,8 @@
         android:id="@+id/navigation_navigation"
         android:icon="@drawable/ic_nav_navigation"
         android:title="@string/title_navigation" />
+    <item
+        android:id="@+id/navigation_agent"
+        android:icon="@drawable/ic_baseline_toys_24"
+        android:title="@string/title_agent" />
 </menu>

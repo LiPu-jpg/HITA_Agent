@@ -490,6 +490,30 @@
                 tools:ignore="NestedWeights,RtlSymmetry" />
 
         </LinearLayout>
+        <LinearLayout
+            android:id="@+id/agent_trace_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="12dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/agent_trace_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="?attr/textColorSecondary"
+                android:textSize="12sp" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/agent_trace_list"
+                android:layout_width="match_parent"
+                android:layout_height="132dp"
+                android:layout_marginTop="6dp"
+                android:overScrollMode="never" />
+
+        </LinearLayout>
 
 
     </LinearLayout>

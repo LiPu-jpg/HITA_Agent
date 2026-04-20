@@ -87,6 +87,24 @@
                     </LinearLayout>
 
                     <LinearLayout
+                        android:id="@+id/agent_layout"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:orientation="horizontal"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:text="@string/title_agent"
+                            android:textColor="?attr/textColorPrimary"
+                            android:textSize="24sp"
+                            android:textStyle="bold" />
+
+                    </LinearLayout>
+
+                    <LinearLayout
                         android:id="@+id/today_layout"
                         android:layout_width="wrap_content"
                         android:layout_height="match_parent"
@@ -167,6 +185,19 @@
                             android:tint="?attr/textColorSecondary"
                             android:tintMode="src_in"
                             app:srcCompat="@drawable/ic_theme" />
+
+                        <ImageView
+                            android:id="@+id/agent_chat"
+                            android:layout_width="56dp"
+                            android:layout_height="56dp"
+                            android:layout_gravity="center"
+                            android:layout_marginStart="-6dp"
+                            android:foreground="?attr/selectableItemBackgroundBorderless"
+                            android:padding="16dp"
+                            android:theme="@style/button_ripple_control"
+                            android:tintMode="src_in"
+                            app:srcCompat="@drawable/ic_baseline_toys_24"
+                            app:tint="?attr/textColorSecondary" />
 
                         <ImageView
                             android:id="@+id/add_event"

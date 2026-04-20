@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.switchMap
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.stupidtree.component.data.DataState
 import com.stupidtree.hitax.R
 import com.stupidtree.hitax.agent.core.AgentProvider
@@ -57,6 +58,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
     }
     private var timetableAgentSession: AgentSession<TimetableAgentInput, TimetableAgentOutput>? = null
     private var submittingByAgent = false
+    private lateinit var agentTraceAdapter: SubjectAgentTraceListAdapter
 
     fun setInitTimetable(timetable: Timetable?): PopupAddEvent {
         initTimetable = timetable
@@ -88,6 +90,8 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
         binding?.modeFree?.setOnClickListener {
             viewModel.setAddMode(AddEventViewModel.AddMode.FREE_RANGE)
         }
+
+        initAgentTraceList()
 
         viewModel.doneLiveData.observe(this) {
             if (it) binding?.adeBtDone?.show() else binding?.adeBtDone?.hide()
@@ -403,6 +407,27 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
         viewModel.init(addSubjectMode, initTimetable, initSubject, initCourseTime)
     }
 
+    private fun initAgentTraceList() {
+        agentTraceAdapter = SubjectAgentTraceListAdapter()
+        binding?.agentTraceList?.layoutManager = LinearLayoutManager(requireContext())
+        binding?.agentTraceList?.adapter = agentTraceAdapter
+        binding?.agentTraceContainer?.visibility = View.GONE
+    }
+
+    private fun updateAgentTraceUiByMode(mode: AddEventViewModel.AddMode) {
+        if (mode == AddEventViewModel.AddMode.FREE_RANGE) {
+            if (submittingByAgent || agentTraceAdapter.itemCount > 0) {
+                binding?.agentTraceContainer?.visibility = View.VISIBLE
+            }
+        } else {
+            binding?.agentTraceContainer?.visibility = View.GONE
+        }
+    }
+
+    private fun showAgentTraceStatus(text: String) {
+        binding?.agentTraceStatus?.text = text
+    }
+
     private fun applyModeUi(mode: AddEventViewModel.AddMode) {
         val isBatch = mode == AddEventViewModel.AddMode.BATCH_PERIOD
         binding?.pickDate?.visibility = if (isBatch) View.GONE else View.VISIBLE
@@ -416,6 +441,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
         binding?.modeBatchText?.setTextColor(if (isBatch) getColorPrimary() else getTextColorSecondary())
         binding?.modeFree?.setCardBackgroundColor(if (isBatch) getTextColorSecondary() else getColorPrimary())
         binding?.modeFreeText?.setTextColor(if (isBatch) getTextColorSecondary() else getColorPrimary())
+        updateAgentTraceUiByMode(mode)
     }
 
     private fun refreshTeacherVisibility(state: DataState<String>?) {
@@ -475,6 +501,9 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
         timetableAgentSession = session
         submittingByAgent = true
         binding?.adeBtDone?.isEnabled = false
+        agentTraceAdapter.clear()
+        updateAgentTraceUiByMode(AddEventViewModel.AddMode.FREE_RANGE)
+        showAgentTraceStatus(getString(R.string.loading))
 
         session.run(
             input = TimetableAgentInput(
@@ -488,7 +517,15 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                     place = place,
                 ),
             ),
-            onTrace = { },
+            onTrace = { trace ->
+                activity?.runOnUiThread {
+                    binding?.agentTraceContainer?.visibility = View.VISIBLE
+                    agentTraceAdapter.append(trace)
+                    if (agentTraceAdapter.itemCount > 0) {
+                        binding?.agentTraceList?.scrollToPosition(agentTraceAdapter.itemCount - 1)
+                    }
+                }
+            },
             onResult = { result ->
                 activity?.runOnUiThread {
                     submittingByAgent = false
@@ -496,6 +533,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                     if (result.ok) {
                         dismiss()
                     } else {
+                        showAgentTraceStatus(result.error ?: getString(R.string.operation_failed))
                         Toast.makeText(
                             requireContext(),
                             result.error ?: getString(R.string.operation_failed),

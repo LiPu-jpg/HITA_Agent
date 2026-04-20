@@ -62,6 +62,8 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
         binding?.courseProgressLayout?.visibility = if (courseLike) View.VISIBLE else View.GONE
         binding?.subject?.visibility = if (courseLike) View.VISIBLE else View.GONE
         binding?.nameAction?.visibility = if (courseLike) View.VISIBLE else View.GONE
+        binding?.nameLayout?.isClickable = courseLike
+        binding?.nameLayout?.isFocusable = courseLike
         binding?.placeLabel?.setText(if (courseLike) R.string.dialog_classroom else R.string.exam_location)
     }
 
@@ -291,13 +293,15 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
             }).initColor(subject.color).show(childFragmentManager, "pickColor")
         }
         binding?.nameLayout?.setOnClickListener {
+            val event = viewModel.eventItemLiveData.value ?: return@setOnClickListener
+            if (!isCourseLike(event)) return@setOnClickListener
             if (requireContext() !is SubjectActivity) {
-                viewModel.eventItemLiveData.value?.let { event ->
-                    ActivityUtils.startSubjectActivity(requireContext(), event.subjectId)
-                }
+                ActivityUtils.startSubjectActivity(requireContext(), event.subjectId)
             }
         }
         binding?.nameLayout?.setOnLongClickListener {
+            val event = viewModel.eventItemLiveData.value ?: return@setOnLongClickListener true
+            if (!isCourseLike(event)) return@setOnLongClickListener true
             val subject = viewModel.subjectLiveData.value
             if (subject != null) {
                 CourseResourceLinker.openReadme(

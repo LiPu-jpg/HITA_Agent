@@ -1057,4 +1057,13 @@
     <string name="belonging_timetable">所属课表</string>
     <string name="events_incoming">将要进行</string>
     <string name="lecture_title">讲座信息</string>
+    <string name="agent_chat_title">智能课表助手</string>
+    <string name="agent_chat_ready">就绪 — 输入消息开始对话</string>
+    <string name="agent_chat_hint">输入消息…</string>
+    <string name="agent_chat_processing">处理中…</string>
+    <string name="agent_chat_done">完成</string>
+    <string name="agent_chat_failed">失败</string>
+    <string name="title_agent">助手</string>
+    <string name="agent_chat_no_timetable">未选择课表</string>
+    <string name="agent_chat_attach">附件</string>
 </resources>

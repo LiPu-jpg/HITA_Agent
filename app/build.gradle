@@ -29,6 +29,7 @@ android {
         }
 
         buildConfigField "String", "HOA_BASE_URL", '"http://47.115.160.70:8081"'
+        buildConfigField "String", "AGENT_BACKEND_BASE_URL", '"http://10.0.2.2:8080"'
         buildConfigField "String", "HOA_API_KEY", '""'
         buildConfigField "String", "UPDATE_URL", '"https://github.com/LiPu-jpg/HITA_L/releases/latest"'
         buildConfigField "String", "UPDATE_VERSION_NAME", "\"${appVersionNameValue}\""

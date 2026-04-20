@@ -25,20 +25,20 @@ object TypeConverters {
 
     @JvmStatic
     @TypeConverter
-    fun eventTypeToInt(eventType: EventItem.TYPE): Int {
-        return eventType.ordinal
+    fun eventTypeToString(eventType: EventItem.TYPE): String {
+        return eventType.name
     }
 
     @JvmStatic
     @TypeConverter
-    fun stringToEventType(string: String): EventItem.TYPE {
-        return EventItem.TYPE.valueOf(string)
+    fun stringToEventType(name: String): EventItem.TYPE {
+        return EventItem.TYPE.values().find { it.name == name } ?: EventItem.TYPE.OTHER
     }
 
     @JvmStatic
     @TypeConverter
-    fun subjectTypeToInt(subjectType: TermSubject.TYPE): Int {
-        return subjectType.ordinal
+    fun subjectTypeToString(subjectType: TermSubject.TYPE): String {
+        return subjectType.name
     }
 
     @JvmStatic
@@ -51,12 +51,6 @@ object TypeConverters {
     @TypeConverter
     fun stringToGender(str:String): UserLocal.GENDER {
         return UserLocal.GENDER.valueOf(str)
-    }
-
-    @JvmStatic
-    @TypeConverter
-    fun stringToSubjectType(string: String): TermSubject.TYPE? {
-        return TermSubject.TYPE.valueOf(string)
     }
 
 

@@ -29,6 +29,8 @@ import com.stupidtree.hitax.ui.about.ActivityAbout
 import com.stupidtree.hitax.ui.about.UserAgreementDialog
 import com.stupidtree.hitax.ui.eas.login.PopUpLoginEAS
 import com.stupidtree.hitax.ui.event.add.PopupAddEvent
+import com.stupidtree.hitax.ui.main.agent.AgentChatDialog
+import com.stupidtree.hitax.ui.main.agent.AgentChatFragment
 import com.stupidtree.hitax.ui.main.navigation.NavigationFragment
 import com.stupidtree.hitax.ui.main.timeline.FragmentTimeLine
 import com.stupidtree.hitax.ui.main.timetable.TimetableFragment
@@ -181,12 +183,13 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
     override fun initViews() {
         setUpDrawer()
         //  binding.title.text = binding.navView.menu.getItem(0).title
-        binding.pager.adapter = object : BaseTabAdapter(supportFragmentManager, 3) {
+        binding.pager.adapter = object : BaseTabAdapter(supportFragmentManager, 4) {
             override fun initItem(position: Int): Fragment {
                 return when (position) {
                     0 -> FragmentTimeLine()
                     1 -> TimetableFragment()
-                    else -> NavigationFragment()
+                    2 -> NavigationFragment()
+                    else -> AgentChatFragment()
                 }
             }
 
@@ -194,7 +197,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
                 //super.destroyItem(container, position, `object`)
             }
         }
-        binding.pager.offscreenPageLimit = 3
+        binding.pager.offscreenPageLimit = 4
         binding.pager.addOnPageChangeListener(object : OnPageChangeListener {
             override fun onPageScrolled(
                 position: Int,
@@ -204,24 +207,16 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
             }
 
             override fun onPageSelected(position: Int) {
-                binding.navView.itemActiveIndex = position//.getItem(position).isChecked = true
+                binding.navView.itemActiveIndex = position
+                binding.agentLayout.visibility = GONE
+                binding.timetableLayout.visibility = GONE
+                binding.navigationLayout.visibility = GONE
+                binding.todayLayout.visibility = GONE
                 when (position) {
-                    0 -> {
-                        binding.timetableLayout.visibility = GONE
-                        binding.navigationLayout.visibility = GONE
-                        binding.todayLayout.visibility = VISIBLE
-                    }
-                    1 -> {
-                        binding.timetableLayout.visibility = VISIBLE
-                        binding.todayLayout.visibility = GONE
-                        binding.navigationLayout.visibility = GONE
-                    }
-                    2 -> {
-                        binding.timetableLayout.visibility = GONE
-                        binding.todayLayout.visibility = GONE
-                        binding.navigationLayout.visibility = VISIBLE
-                    }
-
+                    0 -> binding.todayLayout.visibility = VISIBLE
+                    1 -> binding.timetableLayout.visibility = VISIBLE
+                    2 -> binding.navigationLayout.visibility = VISIBLE
+                    3 -> binding.agentLayout.visibility = VISIBLE
                 }
 //                val item = binding.navView.menu.getItem(position)
 //                item.isChecked = true
@@ -252,6 +247,10 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
 
         binding.timetableSetting.setOnClickListener {
             FragmentTimetablePanel().show(supportFragmentManager, "panel")
+        }
+
+        binding.agentChat.setOnClickListener {
+            binding.pager.currentItem = 3
         }
 
         binding.addEvent.setOnClickListener {

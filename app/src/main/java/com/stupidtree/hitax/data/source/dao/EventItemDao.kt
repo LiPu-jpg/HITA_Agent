@@ -70,6 +70,9 @@ interface EventItemDao {
     @Query("select * from events where timetableId is :timetableId and `from` < :toMs and `to` > :fromMs order by `from` asc")
     fun getEventsOfTimetableDuringSync(timetableId: String, fromMs: Long, toMs: Long): List<EventItem>
 
+    @Query("select * from events where `from` < :toMs and `to` > :fromMs order by `from` asc")
+    fun getEventsOfAllTimetablesDuringSync(fromMs: Long, toMs: Long): List<EventItem>
+
 
     @Query("SELECT * from events where type is 'CLASS' and timetableId is :timetableId and fromNumber is :fromNumber")
     fun getClassAtFromNumberSync(

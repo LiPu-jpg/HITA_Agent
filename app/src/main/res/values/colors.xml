@@ -52,4 +52,7 @@
     <color name="widget_location_chip_dark">#22304FFE</color>
     <color name="widget_icon_subtle_dark">#80FFFFFF</color>
     <color name="widget_placeholder_tint_dark">#40FFFFFF</color>
+
+    <color name="baseWhite">#FFFFFF</color>
+    <color name="grayA5">#A5A5A5</color>
 </resources>

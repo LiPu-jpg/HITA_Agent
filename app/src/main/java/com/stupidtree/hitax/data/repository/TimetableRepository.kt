@@ -149,6 +149,14 @@ class TimetableRepository(val application: Application) {
         return eventItemDao.getEventsOfTimetableSync(timetableId)
     }
 
+    @WorkerThread
+    fun getEventsOfAllTimetablesSync(fromMs: Long?, toMs: Long?): List<EventItem> {
+        if (fromMs != null && toMs != null) {
+            return eventItemDao.getEventsOfAllTimetablesDuringSync(fromMs, toMs)
+        }
+        return emptyList()
+    }
+
     fun getTimetableByEasCode(code: String): LiveData<Timetable?> {
         return timetableDao.getTimetableByEASCode(code)
     }
