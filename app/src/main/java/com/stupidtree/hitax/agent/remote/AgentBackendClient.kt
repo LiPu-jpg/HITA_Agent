@@ -57,7 +57,9 @@ data class ParseResponse(val ok: Boolean, val markdown: String = "", val filenam
 
 data class CourseReadRequest(val course_code: String, val campus: String = "shenzhen")
 
-data class CourseReadResponse(val ok: Boolean, val result: Any? = null, val error: SkillError? = null)
+data class CourseReadResponse(val ok: Boolean, val course: Any? = null, val result: Any? = null, val error: SkillError? = null)
+
+data class CourseDetailRequest(val course_code: String, val campus: String = "shenzhen")
 
 data class CrawlRequest(val url: String, val content_filter: Boolean = true, val output_format: String = "markdown")
 
@@ -74,6 +76,8 @@ data class FileDownloadRequest(val key: String, val bucket: String? = null)
 data class FileListRequest(val prefix: String = "", val bucket: String? = null, val limit: Int = 100)
 
 data class RagQueryRequest(val query: String, val repo: String? = null, val top_k: Int = 5)
+
+data class VisitRequest(val device_id: String)
 
 internal fun buildAgentBackendHttpError(code: Int, rawBody: String?): SkillError {
     val body = rawBody?.trim().orEmpty()
@@ -115,6 +119,9 @@ interface AgentBackendApi {
     @POST("api/courses/search")
     fun searchCourses(@Body request: CourseSearchRequest): Call<CourseSearchResponse>
 
+    @POST("api/courses/read")
+    fun readCourse(@Body request: CourseReadRequest): Call<CourseReadResponse>
+
     @POST("api/teachers/search")
     fun searchTeachers(@Body request: TeacherSearchRequest): Call<Map<String, Any>>
 
@@ -135,6 +142,9 @@ interface AgentBackendApi {
 
     @POST("api/rag/query")
     fun ragQuery(@Body request: RagQueryRequest): Call<Map<String, Any>>
+
+    @POST("api/visit")
+    fun visit(@Body request: VisitRequest): Call<Map<String, Any>>
 }
 
 object AgentBackendClient {
@@ -282,6 +292,19 @@ object AgentBackendClient {
         }
     }
 
+    fun readCourseSync(courseCode: String): CourseReadResponse {
+        return try {
+            val response = api.readCourse(CourseReadRequest(course_code = courseCode)).execute()
+            if (response.isSuccessful) {
+                response.body() ?: CourseReadResponse(ok = false, error = SkillError("EMPTY", "Empty response body", false))
+            } else {
+                CourseReadResponse(ok = false, error = buildAgentBackendHttpError(response.code(), response.errorBody()?.string()))
+            }
+        } catch (e: Exception) {
+            CourseReadResponse(ok = false, error = SkillError("EXCEPTION", e.message ?: "Course read failed", true))
+        }
+    }
+
     fun braveAnswerSync(query: String): BraveAnswerResult {
         return try {
             val response = api.braveAnswer(BraveAnswerRequest(query = query)).execute()
@@ -337,6 +360,13 @@ object AgentBackendClient {
             }
         } catch (e: Exception) {
             null
+        }
+    }
+
+    fun reportVisit(deviceId: String) {
+        try {
+            api.visit(VisitRequest(device_id = deviceId)).execute()
+        } catch (e: Exception) {
         }
     }
 }

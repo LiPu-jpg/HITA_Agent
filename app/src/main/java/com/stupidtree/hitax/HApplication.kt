@@ -12,7 +12,10 @@ import com.stupidtree.hitax.data.model.timetable.TermSubject
 import com.stupidtree.hitax.data.model.timetable.Timetable
 import com.stupidtree.stupiduser.data.repository.LocalUserRepository
 import com.stupidtree.sync.StupidSync
+import com.stupidtree.hitax.agent.remote.AgentBackendClient
 import com.stupidtree.hitax.data.work.CourseReminderScheduler
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
 import javax.net.ssl.HttpsURLConnection
@@ -142,6 +145,18 @@ class HApplication : Application() {
         
         // 初始化课程提醒（根据用户设置自动调度或取消）
         CourseReminderScheduler.autoSchedule(this)
+
+        reportAppVisit()
+    }
+
+    private fun reportAppVisit() {
+        val prefs = getSharedPreferences("stats", android.content.Context.MODE_PRIVATE)
+        val deviceId = prefs.getString("device_id", null) ?: java.util.UUID.randomUUID().toString().also {
+            prefs.edit().putString("device_id", it).apply()
+        }
+        GlobalScope.launch {
+            AgentBackendClient.reportVisit(deviceId)
+        }
     }
 
     private fun handleSSLHandshake() {

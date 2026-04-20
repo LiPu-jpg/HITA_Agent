@@ -56,6 +56,8 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
     var currentSessionId: String? = null
         private set
 
+    private var placeholderMessage: AgentChatMessage? = null
+
     fun addMessage(message: AgentChatMessage) {
         synchronized(this) {
             messageList = messageList + message
@@ -69,6 +71,56 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
                     role = message.role.name,
                     text = message.text,
                     timestampMs = message.timestampMs,
+                )
+            )
+            sessionDao.updateTitle(sid, deriveTitle(), System.currentTimeMillis())
+        }
+    }
+
+    fun updateOrCreatePlaceholder(text: String) {
+        synchronized(this) {
+            val existing = placeholderMessage
+            if (existing != null) {
+                val idx = messageList.indexOf(existing)
+                if (idx >= 0) {
+                    val updated = existing.copy(text = text)
+                    messageList = messageList.toMutableList().apply { set(idx, updated) }
+                    placeholderMessage = updated
+                    _messages.postValue(messageList)
+                    return
+                }
+            }
+            val newPlaceholder = AgentChatMessage(
+                role = AgentChatMessage.Role.ASSISTANT,
+                text = text,
+                isPlaceholder = true,
+            )
+            placeholderMessage = newPlaceholder
+            messageList = messageList + newPlaceholder
+            _messages.postValue(messageList)
+        }
+    }
+
+    fun replacePlaceholder(finalMessage: AgentChatMessage) {
+        synchronized(this) {
+            val existing = placeholderMessage ?: return
+            val idx = messageList.indexOf(existing)
+            if (idx >= 0) {
+                messageList = messageList.toMutableList().apply { set(idx, finalMessage) }
+            } else {
+                messageList = messageList + finalMessage
+            }
+            placeholderMessage = null
+            _messages.postValue(messageList)
+        }
+        val sid = currentSessionId ?: return
+        ioExecutor.execute {
+            messageDao.save(
+                ChatMessageEntity(
+                    sessionId = sid,
+                    role = finalMessage.role.name,
+                    text = finalMessage.text,
+                    timestampMs = finalMessage.timestampMs,
                 )
             )
             sessionDao.updateTitle(sid, deriveTitle(), System.currentTimeMillis())
@@ -176,7 +228,6 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
 
         viewModelScope.launch {
             setLoading(true)
-            setStatus("正在思考…")
 
             LlmChatService.chat(
                 history = synchronized(this) { chatHistory.toList() },
@@ -184,13 +235,28 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
                 application = getApplication(),
                 agentProvider = agentProvider,
                 onTrace = { trace ->
-                    addMessage(
-                        AgentChatMessage(
-                            role = AgentChatMessage.Role.TRACE,
-                            text = "[${trace.stage}] ${trace.message}"
-                                    + if (trace.payload.isNotBlank()) "\n${trace.payload}" else "",
-                        )
-                    )
+                    val statusText = when (trace.stage) {
+                        "react_start" -> "正在分析您的问题…"
+                        "react_step" -> {
+                            val action = trace.message.substringAfter("→ ", "").trim()
+                            when {
+                                action.contains("get_timetable") -> "正在查询课表…"
+                                action.contains("search_course") -> "正在搜索课程信息…"
+                                action.contains("get_course_detail") -> "正在获取课程详情…"
+                                action.contains("search_teacher") -> "正在搜索教师信息…"
+                                action.contains("web_search") -> "正在搜索网页…"
+                                action.contains("brave_answer") -> "正在搜索答案…"
+                                action.contains("rag_search") -> "正在搜索知识库…"
+                                action.contains("crawl_page") -> "正在爬取网页…"
+                                action.contains("crawl_site") -> "正在爬取网站…"
+                                action.contains("submit_review") -> "正在提交评价…"
+                                action.contains("add_activity") -> "正在添加活动…"
+                                else -> "正在思考…"
+                            }
+                        }
+                        else -> "正在处理…"
+                    }
+                    updateOrCreatePlaceholder(statusText)
                 },
                 onResult = { result ->
                     when (result) {
@@ -198,11 +264,18 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
                             synchronized(this) {
                                 chatHistory.add(ChatMessage(role = "assistant", content = result.text))
                             }
-                            addMessage(AgentChatMessage(role = AgentChatMessage.Role.ASSISTANT, text = result.text))
+                            replacePlaceholder(AgentChatMessage(
+                                role = AgentChatMessage.Role.ASSISTANT,
+                                text = result.text,
+                                thinking = result.thinking,
+                            ))
                             setStatus("完成")
                         }
                         is LlmChatResult.Error -> {
-                            addMessage(AgentChatMessage(role = AgentChatMessage.Role.ASSISTANT, text = "操作失败: ${result.error}"))
+                            replacePlaceholder(AgentChatMessage(
+                                role = AgentChatMessage.Role.ASSISTANT,
+                                text = "操作失败: ${result.error}",
+                            ))
                             setStatus("失败")
                         }
                     }

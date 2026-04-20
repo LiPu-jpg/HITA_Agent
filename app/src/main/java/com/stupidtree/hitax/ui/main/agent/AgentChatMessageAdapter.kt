@@ -3,6 +3,7 @@ package com.stupidtree.hitax.ui.main.agent
 import android.content.Context
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.recyclerview.widget.RecyclerView
@@ -50,31 +51,62 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
         when (item.role) {
             AgentChatMessage.Role.USER -> {
                 holder.binding.messageText.text = item.text
+                holder.binding.thinkingHeader.visibility = View.GONE
+                holder.binding.thinkingText.visibility = View.GONE
                 layoutParams.gravity = Gravity.END
                 holder.binding.messageCard.setCardBackgroundColor(holder.itemView.context.getColor(R.color.colorPrimary))
                 holder.binding.messageText.setTextColor(holder.itemView.context.getColor(android.R.color.white))
             }
 
             AgentChatMessage.Role.ASSISTANT -> {
-                getMarkwon(holder.itemView.context).setMarkdown(holder.binding.messageText, item.text)
+                if (item.isPlaceholder) {
+                    holder.binding.messageText.text = item.text
+                    holder.binding.messageText.setTextColor(holder.itemView.context.getColor(R.color.grayA5))
+                    holder.binding.thinkingHeader.visibility = View.GONE
+                    holder.binding.thinkingText.visibility = View.GONE
+                } else {
+                    getMarkwon(holder.itemView.context).setMarkdown(holder.binding.messageText, item.text)
+                    holder.binding.messageText.setTextColor(holder.itemView.context.getColor(R.color.black))
+
+                    if (item.thinking != null) {
+                        holder.binding.thinkingHeader.visibility = View.VISIBLE
+                        holder.binding.thinkingHeader.text = if (item.isThinkingExpanded) "▼ 思考过程" else "▶ 思考过程"
+                        holder.binding.thinkingHeader.setOnClickListener {
+                            toggleThinking(position)
+                        }
+
+                        if (item.isThinkingExpanded) {
+                            holder.binding.thinkingText.visibility = View.VISIBLE
+                            holder.binding.thinkingText.text = item.thinking
+                        } else {
+                            holder.binding.thinkingText.visibility = View.GONE
+                        }
+                    } else {
+                        holder.binding.thinkingHeader.visibility = View.GONE
+                        holder.binding.thinkingText.visibility = View.GONE
+                    }
+                }
                 layoutParams.gravity = Gravity.START
                 holder.binding.messageCard.setCardBackgroundColor(holder.itemView.context.getColor(R.color.baseWhite))
-                holder.binding.messageText.setTextColor(holder.itemView.context.getColor(R.color.black))
             }
 
             AgentChatMessage.Role.TRACE -> {
-                holder.binding.messageText.text = item.text
-                layoutParams.gravity = Gravity.START
-                holder.binding.messageCard.setCardBackgroundColor(holder.itemView.context.getColor(R.color.grayA5))
-                holder.binding.messageText.setTextColor(holder.itemView.context.getColor(R.color.black))
             }
         }
         holder.binding.messageCard.layoutParams = layoutParams
     }
 
+    private fun toggleThinking(position: Int) {
+        val item = items[position]
+        if (item.role == AgentChatMessage.Role.ASSISTANT && item.thinking != null) {
+            items[position] = item.copy(isThinkingExpanded = !item.isThinkingExpanded)
+            notifyItemChanged(position)
+        }
+    }
+
     fun submitList(newItems: List<AgentChatMessage>) {
         items.clear()
-        items.addAll(newItems)
+        items.addAll(newItems.filter { it.role != AgentChatMessage.Role.TRACE })
         notifyDataSetChanged()
     }
 }

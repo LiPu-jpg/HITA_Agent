@@ -173,7 +173,7 @@ object LlmChatService {
             try {
                 val userMessage = history.lastOrNull { it.role == "user" }?.content ?: ""
 
-                onTrace(AgentTraceEvent(stage = "react_start", message = "思考中…", payload = ""))
+                onTrace(AgentTraceEvent(stage = "react_start", message = "分析中…", payload = ""))
 
                 val now = Calendar.getInstance()
                 val dateStr = SimpleDateFormat("yyyy-MM-dd HH:mm:ss EEEE", Locale.CHINA).format(Date())
@@ -195,13 +195,19 @@ object LlmChatService {
                     append("   绝对不要输出毫秒时间戳！\n")
                     append("3. search_course(query) - 搜索课程信息\n")
                     append("   动作输入示例：{\"query\": \"计算机网络\"}\n")
-                    append("4. search_teacher(name) - 搜索教师信息\n")
+                    append("   返回：课程列表（含 course_code、名称等）\n")
+                    append("   【重要】如果返回多个课程（如\"机器学习\"和\"机器学习导论\"），必须向用户确认用哪个，或分别查询详情\n")
+                    append("4. get_course_detail(course_code) - 获取课程详细信息（含评价）\n")
+                    append("   动作输入示例：{\"course_code\": \"COMP3003\"}\n")
+                    append("   用途：查询课程的具体内容、教师评价、章节信息等\n")
+                    append("   流程：先 search_course 找到 course_code → 再用 get_course_detail 查详情\n")
+                    append("5. search_teacher(name) - 搜索教师信息\n")
                     append("   动作输入示例：{\"name\": \"秦阳\"}\n")
-                    append("5. web_search(query) - 网页搜索\n")
+                    append("6. web_search(query) - 网页搜索\n")
                     append("   动作输入示例：{\"query\": \"OpenAI 最新消息\"}\n")
-                    append("6. brave_answer(query) - Brave AI 答案搜索\n")
+                    append("7. brave_answer(query) - Brave AI 答案搜索\n")
                     append("   动作输入示例：{\"query\": \"什么是 Transformer\"}\n")
-                    append("7. rag_search(query) - 语义搜索知识库（RAG）\n")
+                    append("8. rag_search(query) - 语义搜索知识库（RAG）\n")
                     append("   动作输入示例：{\"query\": \"期末复习重点\"}\n")
                     append("   用途：查询学校相关的知识、历史资料、规章制度、课程经验、校园生活等\n")
                     append("   【强制规则】以下主题必须使用 rag_search，禁止使用 web_search 或 brave_answer：\n")
@@ -211,13 +217,13 @@ object LlmChatService {
                     append("   - 导师信息、实验室介绍、研究方向\n")
                     append("   - 选课建议、培养方案、学分要求\n")
                     append("   - 只有 rag_search 返回空结果时，才允许 fallback 到 web_search\n")
-                    append("8. crawl_page(url) - 爬取单个网页\n")
+                    append("9. crawl_page(url) - 爬取单个网页\n")
                     append("   动作输入示例：{\"url\": \"https://example.com\"}\n")
-                    append("9. crawl_site(url, max_pages) - 爬取整个网站\n")
-                    append("   动作输入示例：{\"url\": \"https://example.com\", \"max_pages\": 10}\n")
-                    append("10. crawl_status(task_id) - 查询站点爬取进度\n")
+                    append("10. crawl_site(url, max_pages) - 爬取整个网站\n")
+                    append("    动作输入示例：{\"url\": \"https://example.com\", \"max_pages\": 10}\n")
+                    append("11. crawl_status(task_id) - 查询站点爬取进度\n")
                     append("    动作输入示例：{\"task_id\": \"xxx\"}\n")
-                    append("11. submit_review - 提交课程评价/内容\n")
+                    append("12. submit_review - 提交课程评价/内容\n")
                     append("    支持4种评价类型（通过 review_type 指定）：\n")
                     append("    a) 教师评价（默认）：{\"course_code\": \"COMP3003\", \"content\": \"老师讲得真好\", \"author_name\": \"张三\", \"lecturer_name\": \"李四\"}\n")
                     append("    b) 章节内容：{\"course_code\": \"COMP3003\", \"review_type\": \"section\", \"title\": \"第一章笔记\", \"content\": \"...\", \"author_name\": \"张三\"}\n")
@@ -255,7 +261,9 @@ object LlmChatService {
                     append("  4) 实时新闻/外部信息 → web_search / brave_answer\n")
                     append("  5) 添加活动/评价 → add_activity / submit_review\n")
                     append("- 重要：对于学校相关问题，必须先尝试 rag_search。如果 rag_search 无结果，再考虑 web_search。\n")
-                    append("- 禁止直接对学校相关问题使用 web_search 或 brave_answer 而不先尝试 rag_search。\n\n")
+                    append("- 禁止直接对学校相关问题使用 web_search 或 brave_answer 而不先尝试 rag_search。\n")
+                    append("- 查询课程评价时：先用 search_course 找到 course_code，再用 get_course_detail 查详情。\n")
+                    append("- 如果 search_course 返回多个结果（如\"机器学习\"和\"机器学习导论\"），必须分别查询或向用户确认。\n\n")
                     if (history.size > 1) {
                         append("【对话历史】\n")
                         history.dropLast(1).forEach { msg ->
@@ -273,7 +281,7 @@ object LlmChatService {
                 // Use localReAct() below instead.
                 // val result = AgentBackendClient.aiReactSync(contextMessage)
                 // if (result == null) { onResult(...); return@withContext }
-                val answer = localReAct(
+                val (answer, thinking) = localReAct(
                     contextMessage = contextMessage,
                     userMessage = userMessage,
                     history = history,
@@ -281,60 +289,9 @@ object LlmChatService {
                     timetableId = timetableId,
                     agentProvider = agentProvider,
                     onTrace = onTrace,
-                ) ?: run {
-                    onResult(LlmChatResult.Error(error = "本地 AI 推理失败"))
-                    return@withContext
-                }
+                ) ?: return@withContext onResult(LlmChatResult.Error(error = "本地 AI 推理失败"))
 
-                val timetablePattern = Regex("我需要查课表，日期是(.+?)(?:[。，]|$)")
-                val timetableMatch = timetablePattern.find(answer)
-                if (timetableMatch != null) {
-                    val dateStr = timetableMatch.groupValues[1].trim()
-                    val dayOffset = parseDayOffset(dateStr) ?: 0
-                    val cal = Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, dayOffset) }
-                    val dateLabel = SimpleDateFormat("yyyy-MM-dd EEEE", Locale.CHINA).format(cal.time)
-
-                    onTrace(AgentTraceEvent(stage = "tool_call", message = "查询课表: $dateLabel", payload = ""))
-                    val timetableInfo = fetchLocalTimetableForDate(application, timetableId, agentProvider, onTrace, dayOffset)
-
-                    val followUpMessage = buildString {
-                        append("用户问题：$userMessage\n")
-                        append("课表查询结果（$dateLabel）：\n")
-                        append(if (timetableInfo.isNotBlank()) timetableInfo else "该日期没有课程安排。\n")
-                        append("\n请基于以上信息回答用户问题。")
-                    }
-
-                    val followUpAnswer = localLlmGenerate(followUpMessage)
-                    if (followUpAnswer != null) {
-                        onResult(LlmChatResult.Success(text = followUpAnswer))
-                        return@withContext
-                    }
-                }
-
-                val addActivityPattern = Regex("我需要添加活动，名称是(.+?)，时间是(.+?)到(.+?)，地点是(.+?)(?:[。，]|$)")
-                val addActivityMatch = addActivityPattern.find(answer)
-                if (addActivityMatch != null) {
-                    val name = addActivityMatch.groupValues[1].trim()
-                    val fromStr = addActivityMatch.groupValues[2].trim()
-                    val toStr = addActivityMatch.groupValues[3].trim()
-                    val place = addActivityMatch.groupValues[4].trim()
-
-                    val fromMs = parseTimestampOrIso(fromStr)
-                    val toMs = parseTimestampOrIso(toStr)
-
-                    if (fromMs != null && toMs != null) {
-                        onTrace(AgentTraceEvent(stage = "tool_call", message = "添加活动: $name", payload = ""))
-                        val input = TimetableAgentInput(
-                            application = application,
-                            action = TimetableAgentInput.Action.ADD_TIMETABLE_ARRANGEMENT,
-                            timetableId = timetableId,
-                            arrangement = ArrangementInput(name = name, fromMs = fromMs, toMs = toMs, place = place),
-                        )
-                        val addResult = runToolSync(input, agentProvider, onTrace)
-                        onResult(LlmChatResult.Success(text = "已添加活动「$name」\n时间：${SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA).format(Date(fromMs))} ~ ${SimpleDateFormat("HH:mm", Locale.CHINA).format(Date(toMs))}\n地点：${place.ifBlank { "未指定" }}"))
-                        return@withContext
-                    }
-                }
+                Log.d(TAG, "[DEBUG] localReAct returned answer length=${answer.length}, thinking length=${thinking.length}")
 
                 val addMatch = addActivityRegex.find(answer)
                 if (addMatch != null) {
@@ -342,8 +299,7 @@ object LlmChatService {
                     val fromMs = parseTimestampOrIso(addMatch.groupValues[2])
                     val toMs = parseTimestampOrIso(addMatch.groupValues[3])
                     val place = addMatch.groupValues[4]
-                    if (fromMs != null && toMs != null) {
-                        onTrace(AgentTraceEvent(stage = "tool_call", message = "添加活动: $name", payload = ""))
+                    if (name != null && fromMs != null && toMs != null) {
                         val input = TimetableAgentInput(
                             application = application,
                             action = TimetableAgentInput.Action.ADD_TIMETABLE_ARRANGEMENT,
@@ -352,13 +308,13 @@ object LlmChatService {
                         )
                         val addResult = runToolSync(input, agentProvider, onTrace)
                         val cleanedAnswer = answer.replace(addMatch.value, "").trim()
-                        onResult(LlmChatResult.Success(text = "$cleanedAnswer\n\n$addResult"))
+                        onResult(LlmChatResult.Success(text = "$cleanedAnswer\n\n$addResult", thinking = thinking))
                         return@withContext
                     }
                 }
 
                 Log.d(TAG, "[DEBUG] Calling onResult with Success, answer length=${answer.length}")
-                onResult(LlmChatResult.Success(text = answer))
+                onResult(LlmChatResult.Success(text = answer, thinking = thinking))
                 Log.d(TAG, "[DEBUG] onResult called successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "Chat failed", e)
@@ -375,15 +331,16 @@ object LlmChatService {
         timetableId: String?,
         agentProvider: AgentProvider<TimetableAgentInput, TimetableAgentOutput>,
         onTrace: (AgentTraceEvent) -> Unit,
-    ): String? {
+    ): Pair<String, String>? {
         val messages = mutableListOf(
             ChatMessage(role = "system", content = contextMessage),
             ChatMessage(role = "user", content = userMessage),
         )
+        val thinkingSteps = mutableListOf<String>()
 
-        repeat(10) { step ->
+        repeat(15) { step ->
             Log.d(TAG, "[DEBUG] localReAct step ${step + 1}/10 starting, messages count=${messages.size}")
-            onTrace(AgentTraceEvent(stage = "react_step", message = "步骤 ${step + 1}/10: 正在思考…", payload = ""))
+            onTrace(AgentTraceEvent(stage = "react_step", message = "步骤 ${step + 1}/15: 正在思考…", payload = ""))
 
             val request = ChatCompletionRequest(
                 model = LlmClient.MODEL,
@@ -447,6 +404,8 @@ object LlmChatService {
             Log.d(TAG, "[DEBUG] Parsed thought length=${parsed.thought.length} action=${parsed.action} actionInput length=${parsed.actionInput.length}")
             Log.d(TAG, "[DEBUG] Parsed thought:\n${parsed.thought}")
 
+            thinkingSteps.add("步骤 ${step + 1}: ${parsed.thought.take(100)}${if (parsed.action.isNotBlank()) " → ${parsed.action}" else ""}")
+
             onTrace(AgentTraceEvent(
                 stage = "react_step",
                 message = "思考: ${parsed.thought.take(80)}${if (parsed.action.isNotBlank()) " → ${parsed.action}" else ""}",
@@ -455,7 +414,8 @@ object LlmChatService {
 
             if (parsed.action == "答案" || parsed.action.isBlank()) {
                 Log.d(TAG, "[DEBUG] Returning final answer length=${parsed.thought.length}")
-                return parsed.thought
+                val thinking = thinkingSteps.joinToString("\n")
+                return Pair(parsed.thought, thinking)
             }
 
             Log.d(TAG, "[DEBUG] Executing tool action=${parsed.action} input=${parsed.actionInput}")
@@ -477,7 +437,8 @@ object LlmChatService {
             Log.d(TAG, "[DEBUG] Appended observation to messages, now ${messages.size} messages")
         }
 
-        return "达到最大步骤限制（10步），请简化您的问题"
+        val thinking = thinkingSteps.joinToString("\n")
+        return Pair("达到最大步骤限制（15步），请简化您的问题", thinking)
     }
 
     private data class ParsedStep(val thought: String, val action: String, val actionInput: String)
@@ -659,6 +620,24 @@ object LlmChatService {
                     ?: actionInput.replace("""{"query": """, "").replace("""}""", "").trim()
                 val result = AgentBackendClient.searchCoursesSync(keyword)
                 if (result.ok) "搜索到课程: ${result.results}" else "搜索失败: ${result.error?.message}"
+            }
+            "get_course_detail" -> {
+                val courseCode = Regex(""""course_code"\s*:\s*"([^"]+)"""").find(actionInput)?.groupValues?.get(1)
+                    ?: actionInput.trim()
+                val result = AgentBackendClient.readCourseSync(courseCode)
+                if (result.ok) {
+                    val courseMap = result.course as? Map<*, *> ?: return "课程详情（$courseCode）：暂无详细信息"
+                    val courseOutput = courseMap["output"] as? Map<*, *> ?: return "课程详情（$courseCode）：暂无详细信息"
+                    val data = courseOutput["data"] as? Map<*, *> ?: return "课程详情（$courseCode）：暂无详细信息"
+                    val courseResult = data["result"] as? Map<*, *> ?: return "课程详情（$courseCode）：暂无详细信息"
+                    val readmeMd = courseResult["readme_md"] as? String ?: return "课程详情（$courseCode）：暂无详细信息"
+                    if (readmeMd.isBlank()) {
+                        return "课程详情（$courseCode）：暂无详细信息"
+                    }
+                    "课程详情（$courseCode）：\n$readmeMd"
+                } else {
+                    "查询课程详情失败: ${result.error?.message}"
+                }
             }
             "search_teacher" -> {
                 val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(actionInput)?.groupValues?.get(1)
@@ -941,6 +920,6 @@ private suspend fun localLlmGenerate(prompt: String): String? {
 }
 
 sealed class LlmChatResult {
-    data class Success(val text: String) : LlmChatResult()
+    data class Success(val text: String, val thinking: String? = null) : LlmChatResult()
     data class Error(val error: String) : LlmChatResult()
 }
