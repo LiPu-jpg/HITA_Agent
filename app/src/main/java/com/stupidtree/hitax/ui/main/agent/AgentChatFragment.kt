@@ -119,10 +119,6 @@ class AgentChatFragment :
         }
     }
 
-    private fun openFilePicker() {
-        filePickerLauncher.launch(arrayOf("*/*"))
-    }
-
     private fun getFileName(uri: Uri): String {
         val cursor = requireContext().contentResolver.query(uri, null, null, null, null)
         cursor?.use {
@@ -166,9 +162,10 @@ class AgentChatFragment :
         }
     }
 
-    // 文件大小限制
+    // 文件大小和数量限制
     private val MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
     private val MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB (图片/视频)
+    private val MAX_ATTACHMENTS_PER_MESSAGE = 3 // 每次对话最多附件数
 
     private fun sendWithAttachment(text: String, uri: Uri) {
         viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.TRACE, text = "正在处理附件…"))
@@ -276,6 +273,20 @@ class AgentChatFragment :
             bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
             else -> "${bytes / (1024 * 1024 * 1024)} GB"
         }
+    }
+
+    private fun openFilePicker() {
+        // 检查是否已有待发送的附件
+        if (viewModel.pendingAttachment.value != null) {
+            AlertDialog.Builder(requireContext())
+                .setTitle("附件提示")
+                .setMessage("您已经添加了一个附件，请先发送当前消息后再添加新附件。\n\n每条消息最多支持 ${MAX_ATTACHMENTS_PER_MESSAGE} 个附件。")
+                .setPositiveButton("知道了", null)
+                .show()
+            return
+        }
+
+        filePickerLauncher.launch(arrayOf("*/*"))
     }
 
     private fun isTextFile(fileName: String): Boolean {
