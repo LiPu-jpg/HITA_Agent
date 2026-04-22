@@ -11,7 +11,6 @@ import com.stupidtree.hitax.R
 import com.stupidtree.hitax.databinding.ItemAgentChatMessageBinding
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
-import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.linkify.LinkifyPlugin
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.ext.tasklist.TaskListPlugin
@@ -54,10 +53,9 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
     private fun getMarkwon(context: Context): Markwon {
         return markwon ?: Markwon.builder(context)
             .usePlugin(LinkifyPlugin.create())
-            .usePlugin(HtmlPlugin())
             .usePlugin(TablePlugin.create(context))
-            .usePlugin(TaskListPlugin.create())
-            .usePlugin(StrikethroughPlugin())
+            .usePlugin(TaskListPlugin.create(context))
+            .usePlugin(StrikethroughPlugin.create())
             .build()
             .also { markwon = it }
     }
