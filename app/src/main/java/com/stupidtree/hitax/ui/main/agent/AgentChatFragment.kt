@@ -179,8 +179,61 @@ class AgentChatFragment :
 
                 val fileContent = try {
                     when {
-                        fileName.endsWith(".txt") -> tempFile.readText(Charsets.UTF_8)
-                        else -> null
+                        fileName.endsWith(".txt", ignoreCase = true) -> {
+                            "【文本文件】\n${tempFile.readText(Charsets.UTF_8)}"
+                        }
+                        fileName.endsWith(".md", ignoreCase = true) -> {
+                            "【Markdown文件】\n${tempFile.readText(Charsets.UTF_8)}"
+                        }
+                        fileName.endsWith(".json", ignoreCase = true) -> {
+                            val jsonText = tempFile.readText(Charsets.UTF_8)
+                            try {
+                                "【JSON文件】\n格式化内容：\n${org.json.JSONObject(jsonText).toString(2)}"
+                            } catch (e: Exception) {
+                                "【JSON文件】\n$jsonText"
+                            }
+                        }
+                        fileName.endsWith(".xml", ignoreCase = true) -> {
+                            "【XML文件】\n${tempFile.readText(Charsets.UTF_8)}"
+                        }
+                        fileName.endsWith(".html", ignoreCase = true) || fileName.endsWith(".htm", ignoreCase = true) -> {
+                            val html = tempFile.readText(Charsets.UTF_8)
+                            try {
+                                val doc = org.jsoup.Jsoup.parse(html)
+                                val title = doc.title()?.takeIf { it.isNotEmpty() } ?: "无标题"
+                                val bodyText = doc.body().text()
+                                "【HTML网页】\n标题：$title\n\n内容：\n$bodyText"
+                            } catch (e: Exception) {
+                                "【HTML网页】\n$html"
+                            }
+                        }
+                        fileName.endsWith(".csv", ignoreCase = true) -> {
+                            "【CSV表格】\n${tempFile.readText(Charsets.UTF_8)}"
+                        }
+                        fileName.matches(Regex(".*\\.(jpg|jpeg|png|gif|bmp|webp)$", RegexOption.IGNORE_CASE)) -> {
+                            "[图片文件: $fileName（提示：可以描述这张图片的内容）]"
+                        }
+                        fileName.matches(Regex(".*\\.(mp4|mov|avi|mkv|webm)$", RegexOption.IGNORE_CASE)) -> {
+                            "[视频文件: $fileName（提示：可以描述这个视频的内容）]"
+                        }
+                        fileName.matches(Regex(".*\\.(mp3|wav|ogg|m4a|flac)$", RegexOption.IGNORE_CASE)) -> {
+                            "[音频文件: $fileName（提示：可以描述这个音频的内容）]"
+                        }
+                        fileName.endsWith(".pdf", ignoreCase = true) -> {
+                            "[PDF文件: $fileName（提示：请描述PDF文档的主要内容）]"
+                        }
+                        fileName.endsWith(".doc", ignoreCase = true) || fileName.endsWith(".docx", ignoreCase = true) -> {
+                            "[Word文档: $fileName（提示：请描述文档的主要内容）]"
+                        }
+                        fileName.endsWith(".xls", ignoreCase = true) || fileName.endsWith(".xlsx", ignoreCase = true) -> {
+                            "[Excel表格: $fileName（提示：请描述表格的主要数据）]"
+                        }
+                        fileName.endsWith(".ppt", ignoreCase = true) || fileName.endsWith(".pptx", ignoreCase = true) -> {
+                            "[PowerPoint演示文稿: $fileName（提示：请描述演示文稿的主要内容）]"
+                        }
+                        else -> {
+                            null
+                        }
                     }
                 } catch (e: Exception) {
                     null
@@ -191,10 +244,10 @@ class AgentChatFragment :
                 activity?.runOnUiThread {
                     viewModel.setLoading(false)
                     if (fileContent != null) {
-                        val fullText = "$text\n\n[附件内容: $fileName]\n$fileContent"
+                        val fullText = "$text\n\n[附件: $fileName]\n$fileContent"
                         doSend(fullText)
                     } else {
-                        doSend("$text\n\n[附件: $fileName（文件上传功能暂不可用，仅发送文件名）]")
+                        doSend("$text\n\n[附件: $fileName]\n（提示：该文件类型暂不支持解析，请尝试复制文件内容到对话框）")
                     }
                 }
             } catch (e: Exception) {
