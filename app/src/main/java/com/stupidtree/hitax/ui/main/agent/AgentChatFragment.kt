@@ -150,47 +150,41 @@ class AgentChatFragment :
     }
 
     private fun sendWithAttachment(text: String, uri: Uri) {
-        viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.TRACE, text = "正在上传附件…"))
+        viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.TRACE, text = "正在处理附件…"))
         viewModel.setLoading(true)
 
         Thread {
             try {
-                // Copy URI content to temp file
                 val fileName = getFileName(uri)
-                val mimeType = requireContext().contentResolver.getType(uri) ?: "application/octet-stream"
                 val tempFile = File(requireContext().cacheDir, fileName)
                 requireContext().contentResolver.openInputStream(uri)?.use { input ->
                     tempFile.outputStream().use { output -> input.copyTo(output) }
                 }
 
-                // Upload
-                val uploadResp = AgentBackendClient.uploadFileSync(tempFile, mimeType)
-                tempFile.delete()
-                if (uploadResp == null || !uploadResp.ok || uploadResp.id.isBlank()) {
-                    activity?.runOnUiThread {
-                        viewModel.setLoading(false)
-                        viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.ASSISTANT, text = "附件上传失败，已直接发送文字。"))
-                        doSend(text)
+                val fileContent = try {
+                    when {
+                        fileName.endsWith(".txt") -> tempFile.readText(Charsets.UTF_8)
+                        else -> null
                     }
-                    return@Thread
+                } catch (e: Exception) {
+                    null
+                } finally {
+                    tempFile.delete()
                 }
 
-                // Parse
-                val parseResp = AgentBackendClient.parseFileSync(uploadResp.id)
-                val fileContent = parseResp?.takeIf { it.ok }?.markdown?.takeIf { it.isNotBlank() }
-
                 activity?.runOnUiThread {
+                    viewModel.setLoading(false)
                     if (fileContent != null) {
                         val fullText = "$text\n\n[附件内容: $fileName]\n$fileContent"
                         doSend(fullText)
                     } else {
-                        doSend("$text\n\n[附件: $fileName（解析失败，仅文件名）]")
+                        doSend("$text\n\n[附件: $fileName（文件上传功能暂不可用，仅发送文件名）]")
                     }
                 }
             } catch (e: Exception) {
                 activity?.runOnUiThread {
                     viewModel.setLoading(false)
-                    viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.ASSISTANT, text = "附件处理失败: ${e.message}"))
+                    viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.ASSISTANT, text = "附件处理失败：${e.message}"))
                     doSend(text)
                 }
             }

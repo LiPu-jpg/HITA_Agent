@@ -4,9 +4,14 @@ import android.app.Application
 import android.util.Log
 import com.stupidtree.hitax.agent.core.AgentProvider
 import com.stupidtree.hitax.agent.core.AgentTraceEvent
+import com.stupidtree.hitax.BuildConfig
 import com.stupidtree.hitax.agent.remote.AgentBackendClient
 import com.stupidtree.hitax.agent.remote.PrServerClient
 import com.stupidtree.hitax.agent.timetable.ArrangementInput
+import org.json.JSONArray
+import org.json.JSONObject
+import org.jsoup.Connection
+import org.jsoup.Jsoup
 import com.stupidtree.hitax.agent.timetable.TimetableAgentInput
 import com.stupidtree.hitax.agent.timetable.TimetableAgentOutput
 import kotlinx.coroutines.Dispatchers
@@ -20,6 +25,23 @@ import java.util.Locale
 object LlmChatService {
 
     private const val TAG = "LlmChatService"
+    
+    private val prServerBaseUrl = BuildConfig.HOA_BASE_URL.removeSuffix("/")
+    private val prServerApiKey = BuildConfig.HOA_API_KEY
+    private const val PR_SERVER_TIMEOUT = 15000
+
+    private fun prServerRequest(url: String): Connection {
+        val req = Jsoup.connect(url)
+            .ignoreContentType(true)
+            .ignoreHttpErrors(true)
+            .timeout(PR_SERVER_TIMEOUT)
+            .header("Accept", "application/json")
+            .header("User-Agent", "HITA_Agent/${BuildConfig.VERSION_NAME}")
+        if (prServerApiKey.isNotBlank()) {
+            req.header("X-Api-Key", prServerApiKey)
+        }
+        return req
+    }
 
     private val addActivityRegex = Regex(
         """\{"local_action"\s*:\s*"add_activity"\s*,\s*"name"\s*:\s*"([^"]+)"\s*,\s*"from"\s*:\s*"?([^",]+)"?\s*,\s*"to"\s*:\s*"?([^",]+)"?\s*(?:,\s*"place"\s*:\s*"([^"]*)")?\s*\}"""
@@ -191,8 +213,8 @@ object LlmChatService {
                     append("2. add_activity(name, day_offset, start_time, end_time, place) - 添加活动到本地日历\n")
                     append("   动作输入示例：{\"name\": \"组会\", \"day_offset\": 1, \"start_time\": \"15:00\", \"end_time\": \"17:00\", \"place\": \"A305\"}\n")
                     append("   day_offset: 相对天数偏移，0=今天, 1=明天, 2=后天, -1=昨天, -7=上周今天, 7=下周今天，以此类推\n")
-                    append("   start_time/end_time: 24小时制时间（如\"15:00\"、\"09:30\"）\n")
-                    append("   绝对不要输出毫秒时间戳！\n")
+                    append("   start_time/end_time: 24小时制时间字符串（如\"15:00\"、\"09:30\"），必须是字符串格式\n")
+                    append("   【重要】add_activity 必须使用 start_time/end_time 字符串格式，绝对不要使用毫秒时间戳数字\n")
                     append("3. search_course(query) - 搜索课程信息\n")
                     append("   动作输入示例：{\"query\": \"计算机网络\"}\n")
                     append("   返回：课程列表（含 course_code、名称等）\n")
@@ -223,17 +245,14 @@ object LlmChatService {
                     append("    动作输入示例：{\"url\": \"https://example.com\", \"max_pages\": 10}\n")
                     append("11. crawl_status(task_id) - 查询站点爬取进度\n")
                     append("    动作输入示例：{\"task_id\": \"xxx\"}\n")
-                    append("12. submit_review - 提交课程评价/内容\n")
+                    append("12. submit_review - 提交课程评价/内容/PR\n")
+                    append("    【重要】当用户想要：写评价、写课程总结、写学习笔记、写PR、提交反馈、记录课程感受时，必须使用此工具\n")
                     append("    支持4种评价类型（通过 review_type 指定）：\n")
                     append("    a) 教师评价（默认）：{\"course_code\": \"COMP3003\", \"content\": \"老师讲得真好\", \"author_name\": \"张三\", \"lecturer_name\": \"李四\"}\n")
-                    append("    b) 章节内容：{\"course_code\": \"COMP3003\", \"review_type\": \"section\", \"title\": \"第一章笔记\", \"content\": \"...\", \"author_name\": \"张三\"}\n")
+                    append("    b) 章节内容/学习笔记：{\"course_code\": \"COMP3003\", \"review_type\": \"section\", \"title\": \"第一章笔记\", \"content\": \"...\", \"author_name\": \"张三\"}\n")
                     append("    c) 多项目课程评价：{\"course_code\": \"COMP3003\", \"review_type\": \"course\", \"course_name\": \"数据结构\", \"title\": \"课程评价\", \"content\": \"...\", \"author_name\": \"张三\"}\n")
                     append("    d) 多项目教师评价：{\"course_code\": \"COMP3003\", \"review_type\": \"course_teacher\", \"course_name\": \"数据结构\", \"teacher_name\": \"李四\", \"content\": \"...\", \"author_name\": \"张三\"}\n")
-                    append("12. upload_file(file) - 上传文件到云存储\n")
-                    append("13. list_files(prefix) - 列出云存储文件\n")
-                    append("14. download_file(key) - 下载云存储文件\n")
-                    append("15. delete_file(key) - 删除云存储文件\n")
-                    append("16. list_temp_files() - 列出临时文件\n\n")
+                    append("    【注意】用户说\"写PR\"、\"写评价\"、\"记录课程\"、\"提交课程总结\"时，都是指这个工具，不是 add_activity\n\n")
                     append("【响应格式】\n")
                     append("你必须使用以下格式之一响应：\n\n")
                     append("格式1（需要工具时）：\n")
@@ -247,7 +266,6 @@ object LlmChatService {
                     append("- 每次回复必须包含\"思考：\"标签\n")
                     append("- 如果需要工具，必须包含\"动作：\"和\"动作输入：\"\n")
                     append("- 动作输入必须是严格JSON格式，字段名和示例一致\n")
-                    append("- add_activity 的 from/to 必须是毫秒级时间戳（纯数字）\n")
                     append("- 如果直接回答，必须包含\"答案：\"\n")
                     append("- 不要输出其他任何格式\n")
                     append("- 绝对不要编造课程信息\n")
@@ -259,11 +277,13 @@ object LlmChatService {
                     append("  2) 课程详情/教师信息 → search_course / search_teacher\n")
                     append("  3) 学校知识/经验/规章制度/校园生活 → rag_search（强制优先，禁止跳过）\n")
                     append("  4) 实时新闻/外部信息 → web_search / brave_answer\n")
-                    append("  5) 添加活动/评价 → add_activity / submit_review\n")
+                    append("  5) 添加日历活动 → add_activity\n")
+                    append("  6) 提交课程评价/写PR/记录课程感受 → submit_review（不要与 add_activity 混淆）\n")
                     append("- 重要：对于学校相关问题，必须先尝试 rag_search。如果 rag_search 无结果，再考虑 web_search。\n")
                     append("- 禁止直接对学校相关问题使用 web_search 或 brave_answer 而不先尝试 rag_search。\n")
                     append("- 查询课程评价时：先用 search_course 找到 course_code，再用 get_course_detail 查详情。\n")
-                    append("- 如果 search_course 返回多个结果（如\"机器学习\"和\"机器学习导论\"），必须分别查询或向用户确认。\n\n")
+                    append("- 如果 search_course 返回多个结果（如\"机器学习\"和\"机器学习导论\"），必须分别查询或向用户确认。\n")
+                    append("- 【关键区分】add_activity 用于添加日历提醒（如\"提醒我明天上课\"）；submit_review 用于提交课程评价/写PR/记录学习感受（如\"写个课程评价\"、\"记录一下今天的课\"）。两者绝对不能混淆！\n\n")
                     if (history.size > 1) {
                         append("【对话历史】\n")
                         history.dropLast(1).forEach { msg ->
@@ -535,17 +555,21 @@ object LlmChatService {
     }
 
     private fun parseLocalReActStep(text: String): ParsedStep {
+        val cleanedText = text
+            .replace(Regex("""<think>.*?</think>""", RegexOption.DOT_MATCHES_ALL), "")
+            .trim()
+
         val thoughtRegex = Regex("(?is)思考[：:]\\s*(.+?)(?=\\n动作[：:]|\\n答案[：:]|$)")
         val actionRegex = Regex("(?i)动作[：:]\\s*(\\S+)")
         val actionInputRegex = Regex("(?is)动作输入[：:]\\s*(.+?)(?=\\n思考[：:]|\\n观察[：:]|$)")
         val answerRegex = Regex("(?is)答案[：:]\\s*(.+)")
 
-        val thought = thoughtRegex.find(text)?.groupValues?.get(1)?.trim() ?: ""
-        val action = actionRegex.find(text)?.groupValues?.get(1)?.trim() ?: ""
-        val actionInput = actionInputRegex.find(text)?.groupValues?.get(1)?.trim() ?: ""
+        val thought = thoughtRegex.find(cleanedText)?.groupValues?.get(1)?.trim() ?: ""
+        val action = actionRegex.find(cleanedText)?.groupValues?.get(1)?.trim() ?: ""
+        val actionInput = actionInputRegex.find(cleanedText)?.groupValues?.get(1)?.trim() ?: ""
 
         if (action.isBlank() && thought.isNotBlank()) {
-            val answerMatch = answerRegex.find(text)
+            val answerMatch = answerRegex.find(cleanedText)
             if (answerMatch != null) {
                 return ParsedStep(thought = answerMatch.groupValues[1].trim(), action = "答案", actionInput = "")
             }
@@ -553,7 +577,7 @@ object LlmChatService {
 
         if (thought.isBlank() && action.isBlank()) {
             Log.d(TAG, "[DEBUG] No ReAct tags found, treating as direct answer")
-            return ParsedStep(thought = text.trim(), action = "答案", actionInput = "")
+            return ParsedStep(thought = cleanedText.trim(), action = "答案", actionInput = "")
         }
 
         return ParsedStep(thought = thought, action = action, actionInput = actionInput)
@@ -618,45 +642,123 @@ object LlmChatService {
             "search_course" -> {
                 val keyword = Regex(""""query"\s*:\s*"([^"]+)"""").find(actionInput)?.groupValues?.get(1)
                     ?: actionInput.replace("""{"query": """, "").replace("""}""", "").trim()
-                val result = AgentBackendClient.searchCoursesSync(keyword)
-                if (result.ok) "搜索到课程: ${result.results}" else "搜索失败: ${result.error?.message}"
+                try {
+                    val requestBody = JSONObject().apply {
+                        put("keyword", keyword.trim())
+                        put("campus", "shenzhen")
+                    }
+                    val response = prServerRequest("$prServerBaseUrl/v1/courses:search")
+                        .header("Content-Type", "application/json")
+                        .requestBody(requestBody.toString())
+                        .method(Connection.Method.POST)
+                        .execute()
+
+                    if (response.statusCode() >= 400) {
+                        "搜索失败: HTTP ${response.statusCode()}"
+                    } else {
+                        val resObj = JSONObject(response.body())
+                        if (!resObj.optBoolean("ok", false)) {
+                            val error = resObj.optJSONObject("error")
+                            "搜索失败: ${error?.optString("message", "未知错误")}"
+                        } else {
+                            val data = resObj.optJSONObject("data")
+                            val resultsArr = data?.optJSONArray("results") ?: org.json.JSONArray()
+                            if (resultsArr.length() > 0) {
+                                buildString {
+                                    append("找到 ${resultsArr.length()} 门相关课程:\n")
+                                    for (i in 0 until resultsArr.length()) {
+                                        if (i >= 10) break
+                                        val obj = resultsArr.optJSONObject(i) ?: continue
+                                        val code = obj.optString("code", "未知代码")
+                                        val name = obj.optString("name", "未知名称")
+                                        val campus = obj.optString("campus", "")
+                                        append("• $code - $name")
+                                        if (campus.isNotBlank()) append(" ($campus)")
+                                        append("\n")
+                                    }
+                                    if (resultsArr.length() > 10) {
+                                        append("... 还有 ${resultsArr.length() - 10} 门课程\n")
+                                    }
+                                    append("\n请使用 get_course_detail 查询具体课程详情")
+                                }
+                            } else {
+                                "未找到相关课程"
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "search_course direct pr-server call failed", e)
+                    "搜索失败: ${e.message}"
+                }
             }
             "get_course_detail" -> {
                 val courseCode = Regex(""""course_code"\s*:\s*"([^"]+)"""").find(actionInput)?.groupValues?.get(1)
                     ?: actionInput.trim()
-                val result = AgentBackendClient.readCourseSync(courseCode)
-                if (result.ok) {
-                    val courseMap = result.course as? Map<*, *> ?: return "课程详情（$courseCode）：暂无详细信息"
-                    val courseOutput = courseMap["output"] as? Map<*, *> ?: return "课程详情（$courseCode）：暂无详细信息"
-                    val data = courseOutput["data"] as? Map<*, *> ?: return "课程详情（$courseCode）：暂无详细信息"
-                    val courseResult = data["result"] as? Map<*, *> ?: return "课程详情（$courseCode）：暂无详细信息"
-                    val readmeMd = courseResult["readme_md"] as? String ?: return "课程详情（$courseCode）：暂无详细信息"
-                    if (readmeMd.isBlank()) {
+                try {
+                    val requestBody = JSONObject().apply {
+                        val target = JSONObject().apply {
+                            put("campus", "shenzhen")
+                            put("course_code", courseCode)
+                        }
+                        put("target", target)
+                    }
+                    val response = prServerRequest("$prServerBaseUrl/v1/course:read")
+                        .header("Content-Type", "application/json")
+                        .requestBody(requestBody.toString())
+                        .method(Connection.Method.POST)
+                        .execute()
+
+                    if (response.statusCode() >= 400) {
                         return "课程详情（$courseCode）：暂无详细信息"
                     }
-                    "课程详情（$courseCode）：\n$readmeMd"
-                } else {
-                    "查询课程详情失败: ${result.error?.message}"
+
+                    val resObj = JSONObject(response.body())
+                    if (!resObj.optBoolean("ok", false)) {
+                        val error = resObj.optJSONObject("error")
+                        return "课程详情（$courseCode）：${error?.optString("message", "暂无详细信息") ?: "暂无详细信息"}"
+                    }
+
+                    val data = resObj.optJSONObject("data")
+                    val resultData = data?.optJSONObject("result")
+                    val readmeMd = resultData?.optString("readme_md", "") ?: ""
+
+                    if (readmeMd.isNotBlank()) {
+                        return "课程详情（$courseCode）：\n$readmeMd"
+                    }
+
+                    return "课程详情（$courseCode）：暂无详细信息"
+                } catch (e: Exception) {
+                    Log.e(TAG, "get_course_detail direct pr-server call failed", e)
+                    return "课程详情（$courseCode）：查询失败 (${e.message})"
                 }
             }
             "search_teacher" -> {
                 val name = Regex(""""name"\s*:\s*"([^"]+)"""").find(actionInput)?.groupValues?.get(1)
                     ?: actionInput.trim()
-                val result = AgentBackendClient.searchTeacherSync(name)
-                result?.toString() ?: "未找到教师信息"
+                AgentBackendClient.searchTeacherSync(name) ?: "未找到教师信息"
             }
             "web_search" -> {
                 val query = Regex(""""query"\s*:\s*"([^"]+)"""").find(actionInput)?.groupValues?.get(1)
                     ?: actionInput.trim()
                 val result = AgentBackendClient.braveSearchSync(query)
-                if (result.ok) {
+                if (!result.ok) {
+                    "搜索失败: ${result.error?.message}"
+                } else if (result.results.isEmpty()) {
+                    "网页搜索未找到相关结果"
+                } else {
                     buildString {
                         append("搜索结果 (${result.results.size} 条):\n")
                         result.results.take(5).forEach { r ->
-                            append("• ${r["title"]}: ${r["url"]}\n")
+                            val title = r["title"]?.toString() ?: "无标题"
+                            val url = r["url"]?.toString() ?: ""
+                            val desc = r["description"]?.toString()?.take(100) ?: ""
+                            append("• $title")
+                            if (url.isNotBlank()) append(" ($url)")
+                            if (desc.isNotBlank()) append("\n  $desc")
+                            append("\n")
                         }
                     }
-                } else "搜索失败: ${result.error?.message}"
+                }
             }
             "brave_answer" -> {
                 val query = Regex(""""query"\s*:\s*"([^"]+)"""").find(actionInput)?.groupValues?.get(1)
@@ -781,9 +883,6 @@ object LlmChatService {
                 } else {
                     "评价提交失败：${result.error?.message ?: "未知错误"}"
                 }
-            }
-            "upload_file", "list_files", "download_file", "delete_file", "list_temp_files" -> {
-                "文件操作需通过 UI 交互完成，暂不支持纯文本调用"
             }
             else -> "未知工具: $action"
         }

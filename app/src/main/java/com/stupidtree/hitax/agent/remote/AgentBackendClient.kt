@@ -1,5 +1,6 @@
 package com.stupidtree.hitax.agent.remote
 
+import android.util.Log
 import com.stupidtree.hitax.BuildConfig
 import okhttp3.OkHttpClient
 import retrofit2.Call
@@ -7,13 +8,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.GET
-import retrofit2.http.Multipart
 import retrofit2.http.POST
-import retrofit2.http.Part
-import okhttp3.MultipartBody
-import okhttp3.RequestBody
-import okhttp3.MediaType
-import java.io.File
 import java.util.concurrent.TimeUnit
 
 data class SkillError(
@@ -49,12 +44,6 @@ data class CourseSearchResponse(val ok: Boolean, val results: Any? = null, val e
 
 data class BraveSearchResult(val ok: Boolean, val results: List<Map<String, Any>> = emptyList(), val error: SkillError? = null)
 
-data class UploadResponse(val ok: Boolean, val id: String = "", val name: String = "", val size: Long = 0, val mime_type: String = "")
-
-data class ParseRequest(val id: String, val filename: String = "", val max_chars: Int = 10000)
-
-data class ParseResponse(val ok: Boolean, val markdown: String = "", val filename: String = "", val truncated: Boolean = false, val char_count: Int = 0)
-
 data class CourseReadRequest(val course_code: String, val campus: String = "shenzhen")
 
 data class CourseReadResponse(val ok: Boolean, val course: Any? = null, val result: Any? = null, val error: SkillError? = null)
@@ -68,12 +57,6 @@ data class CrawlSiteRequest(val url: String, val max_pages: Int = 10, val conten
 data class CrawlStatusRequest(val task_id: String)
 
 data class CrawlResponse(val ok: Boolean, val result: Any? = null, val error: SkillError? = null)
-
-data class TempListRequest(val user_id: String? = null, val session_id: String? = null)
-
-data class FileDownloadRequest(val key: String, val bucket: String? = null)
-
-data class FileListRequest(val prefix: String = "", val bucket: String? = null, val limit: Int = 100)
 
 data class RagQueryRequest(val query: String, val repo: String? = null, val top_k: Int = 5)
 
@@ -96,25 +79,16 @@ internal fun buildAgentBackendHttpError(code: Int, rawBody: String?): SkillError
     )
 }
 
+private fun unwrapSkillOutput(body: Map<String, Any>): Map<String, Any>? {
+    val output = body["output"] as? Map<*, *> ?: return body
+    val nestedOutput = output["output"] as? Map<*, *>
+    @Suppress("UNCHECKED_CAST")
+    return (nestedOutput ?: output) as? Map<String, Any>
+}
+
 interface AgentBackendApi {
     @GET("health")
     fun health(): Call<Map<String, String>>
-
-    @Multipart
-    @POST("api/temp/upload")
-    fun uploadFile(@Part file: MultipartBody.Part): Call<UploadResponse>
-
-    @POST("api/temp/parse")
-    fun parseFile(@Body request: ParseRequest): Call<ParseResponse>
-
-    @POST("api/temp/list")
-    fun listTempFiles(@Body request: TempListRequest): Call<Map<String, Any>>
-
-    @POST("api/files/download")
-    fun downloadFileFromCos(@Body request: FileDownloadRequest): Call<Map<String, Any>>
-
-    @POST("api/files/list")
-    fun listCosFiles(@Body request: FileListRequest): Call<Map<String, Any>>
 
     @POST("api/courses/search")
     fun searchCourses(@Body request: CourseSearchRequest): Call<CourseSearchResponse>
@@ -178,39 +152,89 @@ object AgentBackendClient {
                 )
             )
         }
-        return response.body() ?: CourseSearchResponse(
-            ok = false,
-            error = SkillError("EMPTY", "Empty response body", false),
-        )
+        val body = response.body()
+            ?: return CourseSearchResponse(ok = false, error = SkillError("EMPTY", "Empty response body", false))
+
+        if (!body.ok) return body
+
+        val results = body.results
+        val actualResults = when {
+            results is Map<*, *> -> {
+                val unwrapped = unwrapSkillOutput(results as Map<String, Any>)
+                val data = unwrapped?.get("data") as? Map<*, *>
+                data?.get("results") ?: unwrapped?.get("results") ?: results
+            }
+            results != null -> results
+            else -> null
+        }
+
+        if (actualResults != null) {
+            return CourseSearchResponse(ok = true, results = actualResults)
+        }
+
+        return body
     }
 
-    fun searchTeacherSync(name: String): Map<String, Any>? {
+    fun searchTeacherSync(name: String): String? {
         return try {
             val response = api.searchTeachers(TeacherSearchRequest(name)).execute()
-            if (response.isSuccessful) response.body() else null
-        } catch (e: Exception) {
-            null
-        }
-    }
+            if (!response.isSuccessful) {
+                Log.w("AgentBackend", "searchTeacher HTTP ${response.code()}: ${response.errorBody()?.string()?.take(200)}")
+                return "教师搜索失败: HTTP ${response.code()}"
+            }
+            val body = response.body()
+            Log.d("AgentBackend", "searchTeacher body=$body")
+            if (body == null) return "教师搜索失败: 空响应"
+            
+            val ok = body["ok"] as? Boolean ?: false
+            if (!ok) {
+                val error = body["error"] as? Map<*, *>
+                return "教师搜索失败: ${error?.get("message") ?: "未知错误"}"
+            }
+            
+            val unwrapped = unwrapSkillOutput(body)
+            Log.d("AgentBackend", "searchTeacher unwrapped=$unwrapped")
+            if (unwrapped == null) return "教师搜索失败: 无法解析响应"
 
-    fun uploadFileSync(file: File, mimeType: String): UploadResponse? {
-        return try {
-            val mediaType = MediaType.parse(mimeType)
-            val requestBody = RequestBody.create(mediaType, file)
-            val part = MultipartBody.Part.createFormData("file", file.name, requestBody)
-            val response = api.uploadFile(part).execute()
-            if (response.isSuccessful) response.body() else null
-        } catch (e: Exception) {
-            null
-        }
-    }
+            val success = unwrapped["success"] as? Boolean ?: false
+            if (!success) {
+                val errorMsg = unwrapped["error"]?.toString() ?: "教师不存在或无主页"
+                return "教师搜索失败: $errorMsg"
+            }
 
-    fun parseFileSync(fileId: String): ParseResponse? {
-        return try {
-            val response = api.parseFile(ParseRequest(id = fileId)).execute()
-            if (response.isSuccessful) response.body() else null
+            val teacher = unwrapped["teacher"] as? Map<*, *>
+            var teacherName = teacher?.get("name") as? String 
+                ?: unwrapped["name"] as? String 
+                ?: ""
+            
+            if (teacherName.isBlank()) {
+                teacherName = name
+            }
+            val homepage = unwrapped["homepage"] as? String ?: ""
+            
+            val rawContent = unwrapped["raw_content"] as? Map<*, *>
+            val markdown = rawContent?.get("fit_markdown") as? String
+                ?: rawContent?.get("content") as? String
+                ?: unwrapped["markdown"] as? String
+                ?: ""
+
+            Log.d("AgentBackend", "searchTeacher name=$teacherName markdownLen=${markdown.length}")
+
+            if (markdown.isBlank()) {
+                return "教师信息（$teacherName）：暂无详细信息"
+            }
+
+            buildString {
+                append("教师信息：$teacherName\n")
+                if (homepage.isNotBlank()) {
+                    append("主页：$homepage\n")
+                }
+                append("\n")
+                append(markdown.take(3000))
+            }
         } catch (e: Exception) {
-            null
+            Log.e("AgentBackend", "searchTeacher exception: ${e.message}", e)
+            "教师搜索失败: ${e.message}"
         }
     }
 
@@ -280,10 +304,9 @@ object AgentBackendClient {
                     ),
                 )
             }
-            BraveSearchResult(
-                ok = true,
-                results = (body["results"] as? List<Map<String, Any>>) ?: emptyList(),
-            )
+            val unwrapped = unwrapSkillOutput(body)
+            val results = unwrapped?.get("results") as? List<Map<String, Any>> ?: emptyList()
+            BraveSearchResult(ok = true, results = results)
         } catch (e: Exception) {
             BraveSearchResult(
                 ok = false,
@@ -295,11 +318,30 @@ object AgentBackendClient {
     fun readCourseSync(courseCode: String): CourseReadResponse {
         return try {
             val response = api.readCourse(CourseReadRequest(course_code = courseCode)).execute()
-            if (response.isSuccessful) {
-                response.body() ?: CourseReadResponse(ok = false, error = SkillError("EMPTY", "Empty response body", false))
-            } else {
-                CourseReadResponse(ok = false, error = buildAgentBackendHttpError(response.code(), response.errorBody()?.string()))
+            if (!response.isSuccessful) {
+                return CourseReadResponse(ok = false, error = buildAgentBackendHttpError(response.code(), response.errorBody()?.string()))
             }
+            val body = response.body()
+                ?: return CourseReadResponse(ok = false, error = SkillError("EMPTY", "Empty response body", false))
+
+            if (!body.ok) return body
+
+            val course = body.course
+            val actualCourse = when {
+                course is Map<*, *> -> {
+                    val unwrapped = unwrapSkillOutput(course as Map<String, Any>)
+                    val data = unwrapped?.get("data") as? Map<*, *>
+                    data?.get("result") ?: unwrapped?.get("result") ?: course
+                }
+                course != null -> course
+                else -> null
+            }
+
+            if (actualCourse != null) {
+                return CourseReadResponse(ok = true, course = actualCourse)
+            }
+
+            return body
         } catch (e: Exception) {
             CourseReadResponse(ok = false, error = SkillError("EXCEPTION", e.message ?: "Course read failed", true))
         }
@@ -325,11 +367,13 @@ object AgentBackendClient {
                     ),
                 )
             }
+            val unwrapped = unwrapSkillOutput(body)
+            val result = unwrapped ?: body
             BraveAnswerResult(
                 ok = true,
-                answer = body["answer"] as? String ?: "",
-                model = body["model"] as? String ?: "",
-                usage = (body["usage"] as? Map<String, Any>) ?: emptyMap(),
+                answer = result["answer"] as? String ?: "",
+                model = result["model"] as? String ?: "",
+                usage = (result["usage"] as? Map<String, Any>) ?: emptyMap(),
             )
         } catch (e: Exception) {
             BraveAnswerResult(
@@ -342,13 +386,22 @@ object AgentBackendClient {
     fun ragQuerySync(query: String): String? {
         return try {
             val response = api.ragQuery(RagQueryRequest(query = query, top_k = 5)).execute()
-            if (!response.isSuccessful) return null
-            val body = response.body() ?: return null
+            if (!response.isSuccessful) {
+                Log.w("AgentBackend", "RAG query HTTP ${response.code()}: ${response.errorBody()?.string()?.take(200)}")
+                return "RAG 查询失败: HTTP ${response.code()}"
+            }
+            val body = response.body() ?: return "RAG 查询失败: 空响应"
             val ok = body["ok"] as? Boolean ?: false
-            if (!ok) return null
-            val result = body["result"] as? Map<*, *> ?: return null
-            val hits = result["hits"] as? List<Map<String, Any>> ?: return null
-            if (hits.isEmpty()) return "未找到相关内容。"
+            if (!ok) {
+                val error = body["error"] as? Map<*, *>
+                return "RAG 查询失败: ${error?.get("message") ?: "未知错误"}"
+            }
+            val unwrapped = unwrapSkillOutput(body)
+            val result = unwrapped ?: body
+            val hits = result["hits"] as? List<Map<String, Any>>
+            if (hits == null || hits.isEmpty()) {
+                return "未找到相关内容。"
+            }
             buildString {
                 append("找到 ${hits.size} 条相关内容:\n")
                 hits.take(5).forEach { h ->
@@ -359,7 +412,8 @@ object AgentBackendClient {
                 }
             }
         } catch (e: Exception) {
-            null
+            Log.e("AgentBackend", "RAG query exception: ${e.message}", e)
+            "RAG 查询失败: ${e.message}"
         }
     }
 
