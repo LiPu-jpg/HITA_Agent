@@ -166,6 +166,10 @@ class AgentChatFragment :
         }
     }
 
+    // 文件大小限制
+    private val MAX_FILE_SIZE = 20 * 1024 * 1024 // 20MB
+    private val MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB (图片/视频)
+
     private fun sendWithAttachment(text: String, uri: Uri) {
         viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.TRACE, text = "正在处理附件…"))
         viewModel.setLoading(true)
@@ -173,6 +177,28 @@ class AgentChatFragment :
         Thread {
             try {
                 val fileName = getFileName(uri)
+
+                // 检查文件大小
+                val fileSize = requireContext().contentResolver.openInputStream(uri)?.use { it.available() } ?: 0
+
+                val maxSize = when {
+                    fileName.matches(Regex(".*\\.(jpg|jpeg|png|gif|bmp|webp)$", RegexOption.IGNORE_CASE)) -> MAX_IMAGE_SIZE
+                    fileName.matches(Regex(".*\\.(mp4|mov|avi|mkv|webm)$", RegexOption.IGNORE_CASE)) -> MAX_IMAGE_SIZE
+                    else -> MAX_FILE_SIZE
+                }
+
+                if (fileSize > maxSize) {
+                    activity?.runOnUiThread {
+                        viewModel.setLoading(false)
+                        viewModel.addMessage(AgentChatMessage(
+                            role = AgentChatMessage.Role.ASSISTANT,
+                            text = "文件过大！\n当前文件：${fileName} (${formatFileSize(fileSize)})\n限制：${formatFileSize(maxSize)}\n\n建议：\n- 图片/视频请压缩到10MB以下\n- 文档请控制在20MB以下"
+                        ))
+                        doSend(text)
+                    }
+                    return@Thread
+                }
+
                 val tempFile = File(requireContext().cacheDir, fileName)
                 requireContext().contentResolver.openInputStream(uri)?.use { input ->
                     tempFile.outputStream().use { output -> input.copyTo(output) }
@@ -215,8 +241,17 @@ class AgentChatFragment :
                             doSend(fullText)
                         }
                         is LocalParseResult.Error -> {
-                            // 本地解析失败，降级到智谱
-                            doSendWithAttachment(text, fileName, base64Content, mimeType)
+                            // 本地解析失败，降级到智谱（仅图片/视频）
+                            if (mimeType.startsWith("image/") || mimeType.startsWith("video/")) {
+                                doSendWithAttachment(text, fileName, base64Content, mimeType)
+                            } else {
+                                viewModel.setLoading(false)
+                                viewModel.addMessage(AgentChatMessage(
+                                    role = AgentChatMessage.Role.ASSISTANT,
+                                    text = "附件解析失败：${result.error}\n\n建议：请复制文件内容粘贴到对话框中"
+                                ))
+                                doSend(text)
+                            }
                         }
                         null -> {
                             // 需要使用智谱多模态（图片/视频）
@@ -232,6 +267,15 @@ class AgentChatFragment :
                 }
             }
         }.start()
+    }
+
+    private fun formatFileSize(bytes: Int): String {
+        return when {
+            bytes < 1024 -> "$bytes B"
+            bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+            bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
+            else -> "${bytes / (1024 * 1024 * 1024)} GB"
+        }
     }
 
     private fun isTextFile(fileName: String): Boolean {
