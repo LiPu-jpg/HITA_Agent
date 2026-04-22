@@ -1025,6 +1025,7 @@ sealed class LlmChatResult {
 
 /**
  * 处理带附件的消息，使用智谱多模态API理解附件内容
+ * 仅用于图片和视频理解，文档类文件优先本地处理
  * 然后将理解结果添加到对话历史，继续使用 miniMAX 进行对话
  */
 suspend fun LlmChatService.chatWithAttachment(
@@ -1041,11 +1042,14 @@ suspend fun LlmChatService.chatWithAttachment(
         try {
             onTrace(AgentTraceEvent(stage = "react_start", message = "正在理解附件内容…", payload = ""))
 
-            // 1. 使用智谱API理解附件
+            // 1. 使用智谱API理解附件（仅支持图片和视频）
             val contentType = when {
                 attachmentMimeType.startsWith("image/") -> "image_url"
                 attachmentMimeType.startsWith("video/") -> "video_url"
-                else -> "file_url"
+                else -> {
+                    android.util.Log.e("LlmChatService", "Unsupported attachment type: $attachmentMimeType")
+                    return@withContext onResult(LlmChatResult.Error("不支持的附件类型，请使用图片或视频"))
+                }
             }
 
             val userMessage = history.lastOrNull { it.role == "user" }?.content ?: ""
@@ -1075,9 +1079,10 @@ suspend fun LlmChatService.chatWithAttachment(
                     )
                 }
                 else -> {
+                    // 不应该到这里
                     ZhipuContent(
-                        type = "file_url",
-                        file_url = ZhipuFileUrl("data:$attachmentMimeType;base64,$attachmentBase64")
+                        type = "text",
+                        text = "[错误：不支持的文件类型]"
                     )
                 }
             }
@@ -1089,7 +1094,11 @@ suspend fun LlmChatService.chatWithAttachment(
                         attachmentContent,
                         ZhipuContent(
                             type = "text",
-                            text = "请详细描述这个文件的内容。如果是文档，请总结主要信息；如果是图片，请描述画面内容；如果是视频，请描述主要内容。"
+                            text = if (contentType == "image_url") {
+                                "请详细描述这张图片的内容，包括主要物体、场景、文字、颜色等细节。"
+                            } else {
+                                "请详细描述这个视频的主要内容，包括场景、人物、动作、关键信息等。"
+                            }
                         )
                     )
                 )
