@@ -36,6 +36,14 @@ tasks.register('clean', Delete) {
     delete rootProject.buildDir
 }
 
+// Configure Java toolchain to use JDK 17 for compatibility
+allprojects {
+    tasks.withType(JavaCompile).configureEach {
+        sourceCompatibility = "1.8"
+        targetCompatibility = "1.8"
+    }
+}
+
 // Fix for KAPT with JDK 16+
 allprojects {
     tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
