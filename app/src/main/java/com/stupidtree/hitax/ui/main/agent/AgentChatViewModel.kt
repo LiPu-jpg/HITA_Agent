@@ -6,10 +6,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
+import com.stupidtree.hitax.agent.core.AgentProvider
 import com.stupidtree.hitax.agent.core.AgentTraceEvent
 import com.stupidtree.hitax.agent.llm.ChatMessage
 import com.stupidtree.hitax.agent.llm.LlmChatResult
 import com.stupidtree.hitax.agent.llm.LlmChatService
+import com.stupidtree.hitax.agent.llm.chatWithAttachment
 import com.stupidtree.hitax.agent.timetable.TimetableAgentInput
 import com.stupidtree.hitax.agent.timetable.TimetableAgentOutput
 import com.stupidtree.hitax.data.AppDatabase
@@ -294,30 +296,25 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
     ) {
         ensureSession()
 
-        // 构建多模态消息
-        val multimodalContent = buildString {
-            append("$text\n\n")
-            append("[文件: $fileName]")
-            append("\n\n[data:image/$fileName;base64,$base64Content]")
-        }
+        val userMessage = "$text\n\n[文件: $fileName]"
 
         synchronized(this) {
-            chatHistory.add(ChatMessage(role = "user", content = multimodalContent))
+            chatHistory.add(ChatMessage(role = "user", content = userMessage))
         }
 
         viewModelScope.launch {
             setLoading(true)
 
-            // TODO: 实现多模态API调用
-            // 暂时使用普通聊天
-            LlmChatService.chat(
+            LlmChatService.chatWithAttachment(
                 history = synchronized(this) { chatHistory.toList() },
+                attachmentBase64 = base64Content,
+                attachmentMimeType = mimeType,
                 timetableId = null,
                 application = getApplication(),
                 agentProvider = agentProvider,
-                onTrace = { trace ->
+                onTrace = { trace: AgentTraceEvent ->
                     val statusText = when (trace.stage) {
-                        "react_start" -> "正在分析您的问题…"
+                        "react_start" -> "正在分析附件…"
                         "react_step" -> {
                             val action = trace.message.substringAfter("→ ", "").trim()
                             when {
@@ -335,11 +332,15 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                     updateOrCreatePlaceholder(statusText)
                 },
-                onResult = { result ->
+                onResult = { result: LlmChatResult ->
                     when (result) {
                         is LlmChatResult.Success -> {
                             synchronized(this) {
-                                chatHistory.add(ChatMessage(role = "assistant", content = result.text))
+                                // chatWithAttachment 已经在内部更新了历史，这里不需要再次添加
+                                // 但需要确保最新的回复在历史中
+                                if (!chatHistory.any { it.role == "assistant" && it.content == result.text }) {
+                                    chatHistory.add(ChatMessage(role = "assistant", content = result.text))
+                                }
                             }
                             replacePlaceholder(AgentChatMessage(
                                 role = AgentChatMessage.Role.ASSISTANT,

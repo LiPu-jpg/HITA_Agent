@@ -1022,3 +1022,131 @@ sealed class LlmChatResult {
     data class Success(val text: String, val thinking: String? = null) : LlmChatResult()
     data class Error(val error: String) : LlmChatResult()
 }
+
+/**
+ * 处理带附件的消息，使用智谱多模态API理解附件内容
+ * 然后将理解结果添加到对话历史，继续使用 miniMAX 进行对话
+ */
+suspend fun LlmChatService.chatWithAttachment(
+    history: List<ChatMessage>,
+    attachmentBase64: String,
+    attachmentMimeType: String,
+    timetableId: String?,
+    application: Application,
+    agentProvider: AgentProvider<TimetableAgentInput, TimetableAgentOutput>,
+    onTrace: (AgentTraceEvent) -> Unit,
+    onResult: (LlmChatResult) -> Unit,
+) {
+    withContext(Dispatchers.IO) {
+        try {
+            onTrace(AgentTraceEvent(stage = "react_start", message = "正在理解附件内容…", payload = ""))
+
+            // 1. 使用智谱API理解附件
+            val contentType = when {
+                attachmentMimeType.startsWith("image/") -> "image_url"
+                attachmentMimeType.startsWith("video/") -> "video_url"
+                else -> "file_url"
+            }
+
+            val userMessage = history.lastOrNull { it.role == "user" }?.content ?: ""
+            // 提取纯文本问题（移除附件标记）
+            val textQuestion = userMessage.lines().filterNot {
+                it.startsWith("[") || it.startsWith("[附件") || it.startsWith("[文件")
+            }.joinToString("\n").trim()
+
+            val attachmentContent: ZhipuContent = when (contentType) {
+                "image_url" -> {
+                    val imageType = when {
+                        attachmentMimeType.contains("jpeg") || attachmentMimeType.contains("jpg") -> "image/jpeg"
+                        attachmentMimeType.contains("png") -> "image/png"
+                        attachmentMimeType.contains("gif") -> "image/gif"
+                        attachmentMimeType.contains("webp") -> "image/webp"
+                        else -> "image/jpeg"
+                    }
+                    ZhipuContent(
+                        type = "image_url",
+                        image_url = ZhipuImageUrl("data:$imageType;base64,$attachmentBase64")
+                    )
+                }
+                "video_url" -> {
+                    ZhipuContent(
+                        type = "video_url",
+                        video_url = ZhipuVideoUrl("data:$attachmentMimeType;base64,$attachmentBase64")
+                    )
+                }
+                else -> {
+                    ZhipuContent(
+                        type = "file_url",
+                        file_url = ZhipuFileUrl("data:$attachmentMimeType;base64,$attachmentBase64")
+                    )
+                }
+            }
+
+            val zhipuMessages = listOf(
+                ZhipuMessage(
+                    role = "user",
+                    content = listOf(
+                        attachmentContent,
+                        ZhipuContent(
+                            type = "text",
+                            text = "请详细描述这个文件的内容。如果是文档，请总结主要信息；如果是图片，请描述画面内容；如果是视频，请描述主要内容。"
+                        )
+                    )
+                )
+            )
+
+            val zhipuRequest = ZhipuChatRequest(
+                model = "glm-4.6v-flash",
+                messages = zhipuMessages,
+                stream = false
+            )
+
+            val attachmentDescription = try {
+                val response = ZhipuClient.service.chatCompletion(
+                    ZhipuClient.authHeader(),
+                    zhipuRequest
+                ).execute()
+
+                if (!response.isSuccessful) {
+                    val errorBody = response.errorBody()?.string()
+                    android.util.Log.e("LlmChatService", "Zhipu API error: ${response.code()} - $errorBody")
+                    return@withContext onResult(LlmChatResult.Error("附件理解失败：HTTP ${response.code()}"))
+                }
+
+                val body = response.body()
+                if (body == null) {
+                    android.util.Log.e("LlmChatService", "Zhipu response body is null")
+                    return@withContext onResult(LlmChatResult.Error("附件理解失败：响应为空"))
+                }
+
+                body.choices.firstOrNull()?.message?.content ?: "无法理解附件内容"
+            } catch (e: Exception) {
+                android.util.Log.e("LlmChatService", "Zhipu API error: ${e.message}", e)
+                return@withContext onResult(LlmChatResult.Error("附件理解失败：${e.message}"))
+            }
+
+            // 2. 将附件理解结果添加到对话历史
+            val enhancedUserMessage = "$textQuestion\n\n[附件内容理解]\n$attachmentDescription"
+
+            val newHistory = history.toMutableList()
+            // 替换最后一条用户消息
+            if (newHistory.isNotEmpty() && newHistory.last().role == "user") {
+                newHistory[newHistory.size - 1] = ChatMessage(role = "user", content = enhancedUserMessage)
+            }
+
+            // 3. 使用 miniMAX 继续对话
+            LlmChatService.chat(
+                history = newHistory,
+                timetableId = timetableId,
+                application = application,
+                agentProvider = agentProvider,
+                onTrace = onTrace,
+                onResult = onResult
+            )
+
+        } catch (e: Exception) {
+            android.util.Log.e("LlmChatService", "chatWithAttachment error: ${e.message}", e)
+            onResult(LlmChatResult.Error("处理失败：${e.message}"))
+        }
+    }
+}
