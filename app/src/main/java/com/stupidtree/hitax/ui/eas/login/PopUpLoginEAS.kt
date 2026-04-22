@@ -153,28 +153,41 @@ class PopUpLoginEAS :
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == REQUEST_CODE_WEBVIEW_LOGIN) {
-            Log.d(TAG, "popup onActivityResult resultCode=$resultCode silentTried=$silentWebLoginTried")
+            Log.i(TAG, "=== 📨 onActivityResult START ===")
+            Log.i(TAG, "resultCode=$resultCode (OK=${resultCode == Activity.RESULT_OK})")
+            Log.i(TAG, "silentTried=$silentWebLoginTried pendingCampus=$pendingWebViewCampus")
+
             if (resultCode != Activity.RESULT_OK) {
                 val campus = pendingWebViewCampus
                 pendingWebViewCampus = null
                 if (autoLaunchWebLogin && silentWebLoginTried && campus == EASToken.Campus.BENBU) {
+                    Log.i(TAG, "retry non-silent login")
                     silentWebLoginTried = false
                     launchCampusWebLogin(campus, silentMode = false)
                 } else {
+                    Log.e(TAG, "❌ WebView login FAILED")
                     binding?.buttonLogin?.isEnabled = true
                     onResponseListener?.onFailed(this)
                 }
                 return
             }
+
             val cookiesJson = data?.getStringExtra("cookies")
             val campus = pendingWebViewCampus
-            Log.d(TAG, "popup received cookiesJsonLength=${cookiesJson?.length ?: 0} pendingCampus=$campus selectedCampus=${getSelectedCampus()}")
+            Log.i(TAG, "✅ WebView returned RESULT_OK")
+            Log.i(TAG, "cookiesJson length=${cookiesJson?.length ?: 0}")
+            Log.i(TAG, "cookiesJson preview=${cookiesJson?.take(200)}")
+            Log.i(TAG, "pendingCampus=$campus selectedCampus=${getSelectedCampus()}")
+
             pendingWebViewCampus = null
             silentWebLoginTried = false
+
             if (cookiesJson != null && (campus == EASToken.Campus.BENBU || campus == EASToken.Campus.WEIHAI)) {
+                Log.i(TAG, "🚀 Starting EAS login with cookies...")
                 binding?.buttonLogin?.startAnimation()
                 viewModel.startLogin(cookiesJson, "", campus)
             } else {
+                Log.e(TAG, "❌ Invalid state: cookiesJson=${cookiesJson != null} campus valid=${campus == EASToken.Campus.BENBU || campus == EASToken.Campus.WEIHAI}")
                 binding?.buttonLogin?.isEnabled = true
                 onResponseListener?.onFailed(this)
             }

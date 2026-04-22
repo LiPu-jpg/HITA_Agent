@@ -39,13 +39,23 @@ class WeihaiEASSource : EASService {
 
         executor.execute {
             try {
+                Log.w(TAG, "=== 🔐 Weihai login START ===")
+                Log.w(TAG, "username length=${username.length}")
+
                 val cookiesMap = parseCookiesFromJson(username)
+                Log.w(TAG, "parsed cookies: ${cookiesMap.keys} count=${cookiesMap.size}")
+                Log.w(TAG, "key cookies: HIT=${cookiesMap["HIT"]?.take(8)} JSESSIONID=${cookiesMap["JSESSIONID"]?.take(8)} ticket=${cookiesMap.keys.find { it.contains("vpn_ticket", ignoreCase = true) }?.take(20)}")
+
                 if (cookiesMap.isEmpty()) {
+                    Log.e(TAG, "❌ cookies EMPTY")
                     result.postValue(DataState(DataState.STATE.FETCH_FAILED, "cookies 为空"))
                     return@execute
                 }
 
-                val response = Jsoup.connect("$hostName/kjscx/queryJxlListBySjid?sf_request_type=ajax")
+                val url = "$hostName/kjscx/queryJxlListBySjid?sf_request_type=ajax"
+                Log.w(TAG, "validating cookies with: $url")
+
+                val response = Jsoup.connect(url)
                     .cookies(cookiesMap)
                     .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
                     .header("Accept", "application/json, text/javascript, */*; q=0.01")
@@ -58,6 +68,8 @@ class WeihaiEASSource : EASService {
                     .method(Connection.Method.POST)
                     .execute()
 
+                Log.w(TAG, "response statusCode=${response.statusCode()} body=${response.body().take(100)}")
+
                 if (response.statusCode() == 200) {
                     val token = EASToken().apply {
                         cookies.putAll(cookiesMap)
@@ -65,11 +77,15 @@ class WeihaiEASSource : EASService {
                         this.username = extractLoginIdentity(cookiesMap)
                         this.password = password.ifBlank { username }
                     }
+                    Log.w(TAG, "✅ Weihai login SUCCESS! username=${token.username}")
                     result.postValue(DataState(token, DataState.STATE.SUCCESS))
                 } else {
-                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "登录验证失败"))
+                    Log.e(TAG, "❌ Weihai login FAILED statusCode=${response.statusCode()}")
+                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "登录验证失败 HTTP ${response.statusCode()}"))
                 }
             } catch (e: Exception) {
+                Log.e(TAG, "❌ Weihai login EXCEPTION: ${e.javaClass.simpleName} ${e.message}")
+                e.printStackTrace()
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "登录失败"))
             }
         }

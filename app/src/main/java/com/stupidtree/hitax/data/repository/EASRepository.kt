@@ -52,8 +52,12 @@ class EASRepository internal constructor(application: Application) {
     private val DEBUG_WEEK = 7
     private val DEBUG_DOW = setOf(5, 6)
 
-    private fun getService(@Suppress("UNUSED_PARAMETER") campus: EASToken.Campus): EASService {
-        return shenzhenService
+    private fun getService(campus: EASToken.Campus): EASService {
+        return when (campus) {
+            EASToken.Campus.SHENZHEN -> shenzhenService
+            EASToken.Campus.BENBU -> benbuService
+            EASToken.Campus.WEIHAI -> weihaiService
+        }
     }
 
     /**
