@@ -4,8 +4,8 @@ plugins {
     id 'kotlin-kapt'
 }
 
-def appVersionCodeValue = 2026042201
-def appVersionNameValue = "2.0.1"
+def appVersionCodeValue = 2026042301
+def appVersionNameValue = "2.0.2"
 
 
 android {
