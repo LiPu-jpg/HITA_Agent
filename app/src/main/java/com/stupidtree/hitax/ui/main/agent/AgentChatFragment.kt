@@ -55,6 +55,7 @@ class AgentChatFragment :
         binding?.sendButton?.setOnClickListener { sendMessage() }
         binding?.attachButton?.setOnClickListener { openFilePicker() }
         binding?.newSessionButton?.setOnClickListener { viewModel.createNewSession() }
+        binding?.deleteSessionButton?.setOnClickListener { showDeleteSessionDialog() }
 
         binding?.inputField?.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEND) {
@@ -146,6 +147,21 @@ class AgentChatFragment :
             sendWithAttachment(text, attachmentUri)
         } else {
             doSend(text)
+        }
+    }
+
+    private fun showDeleteSessionDialog() {
+        val current = sessionList.getOrNull(binding?.sessionSpinner?.selectedItemPosition ?: 0)
+        if (current != null) {
+            AlertDialog.Builder(requireContext())
+                .setTitle("删除会话")
+                .setMessage("删除「${current.title}」的聊天记录？")
+                .setPositiveButton("删除") { _, _ ->
+                    viewModel.deleteSession(current)
+                    Toast.makeText(requireContext(), "已删除", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("取消", null)
+                .show()
         }
     }
 

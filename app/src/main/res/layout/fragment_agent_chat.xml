@@ -33,6 +33,16 @@
             app:tint="?attr/textColorSecondary"
             android:contentDescription="新对话" />
 
+        <ImageView
+            android:id="@+id/deleteSessionButton"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:foreground="?attr/selectableItemBackgroundBorderless"
+            android:padding="6dp"
+            android:src="@android:drawable/ic_menu_delete"
+            app:tint="?attr/textColorSecondary"
+            android:contentDescription="删除对话" />
+
     </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView

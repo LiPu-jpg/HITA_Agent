@@ -21,6 +21,34 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
+            <LinearLayout
+                android:id="@+id/thinkingIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:paddingStart="10dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ProgressBar
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:indeterminateTint="?attr/textColorSecondary"
+                    android:indeterminateTintMode="src_atop" />
+
+                <TextView
+                    android:id="@+id/thinkingStatusText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:textSize="13sp"
+                    android:textColor="?attr/textColorSecondary" />
+
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/thinkingHeader"
                 android:layout_width="wrap_content"
