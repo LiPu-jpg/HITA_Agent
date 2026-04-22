@@ -2,6 +2,7 @@ package com.stupidtree.hitax.ui.main.agent
 
 import android.app.AlertDialog
 import android.net.Uri
+import android.util.Base64
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
@@ -177,77 +178,28 @@ class AgentChatFragment :
                     tempFile.outputStream().use { output -> input.copyTo(output) }
                 }
 
-                val fileContent = try {
-                    when {
-                        fileName.endsWith(".txt", ignoreCase = true) -> {
-                            "【文本文件】\n${tempFile.readText(Charsets.UTF_8)}"
-                        }
-                        fileName.endsWith(".md", ignoreCase = true) -> {
-                            "【Markdown文件】\n${tempFile.readText(Charsets.UTF_8)}"
-                        }
-                        fileName.endsWith(".json", ignoreCase = true) -> {
-                            val jsonText = tempFile.readText(Charsets.UTF_8)
-                            try {
-                                "【JSON文件】\n格式化内容：\n${org.json.JSONObject(jsonText).toString(2)}"
-                            } catch (e: Exception) {
-                                "【JSON文件】\n$jsonText"
-                            }
-                        }
-                        fileName.endsWith(".xml", ignoreCase = true) -> {
-                            "【XML文件】\n${tempFile.readText(Charsets.UTF_8)}"
-                        }
-                        fileName.endsWith(".html", ignoreCase = true) || fileName.endsWith(".htm", ignoreCase = true) -> {
-                            val html = tempFile.readText(Charsets.UTF_8)
-                            try {
-                                val doc = org.jsoup.Jsoup.parse(html)
-                                val title = doc.title()?.takeIf { it.isNotEmpty() } ?: "无标题"
-                                val bodyText = doc.body().text()
-                                "【HTML网页】\n标题：$title\n\n内容：\n$bodyText"
-                            } catch (e: Exception) {
-                                "【HTML网页】\n$html"
-                            }
-                        }
-                        fileName.endsWith(".csv", ignoreCase = true) -> {
-                            "【CSV表格】\n${tempFile.readText(Charsets.UTF_8)}"
-                        }
-                        fileName.endsWith(".pdf", ignoreCase = true) -> {
-                            parsePdfFile(tempFile)
-                        }
-                        fileName.endsWith(".docx", ignoreCase = true) -> {
-                            parseDocxFile(tempFile)
-                        }
-                        fileName.endsWith(".xlsx", ignoreCase = true) -> {
-                            parseExcelFile(tempFile)
-                        }
-                        fileName.endsWith(".pptx", ignoreCase = true) -> {
-                            parsePptxFile(tempFile)
-                        }
-                        fileName.matches(Regex(".*\\.(jpg|jpeg|png|gif|bmp|webp)$", RegexOption.IGNORE_CASE)) -> {
-                            "[图片文件: $fileName（提示：可以描述这张图片的内容）]"
-                        }
-                        fileName.matches(Regex(".*\\.(mp4|mov|avi|mkv|webm)$", RegexOption.IGNORE_CASE)) -> {
-                            "[视频文件: $fileName（提示：可以描述这个视频的内容）]"
-                        }
-                        fileName.matches(Regex(".*\\.(mp3|wav|ogg|m4a|flac)$", RegexOption.IGNORE_CASE)) -> {
-                            "[音频文件: $fileName（提示：可以描述这个音频的内容）]"
-                        }
-                        else -> {
-                            null
-                        }
-                    }
-                } catch (e: Exception) {
-                    "【文件解析失败】\n错误：${e.message}"
-                } finally {
-                    tempFile.delete()
+                val fileBytes = tempFile.readBytes()
+                val base64Content = Base64.encodeToString(fileBytes, Base64.NO_WRAP)
+                val mimeType = getMimeType(fileName)
+
+                // 对于小文本文件，直接提取内容
+                val fileContent = if (fileBytes.size < 100 * 1024 && isTextFile(fileName)) {
+                    "【文本文件内容】\n${tempFile.readText(Charsets.UTF_8)}"
+                } else {
+                    null
                 }
+
+                tempFile.delete()
 
                 activity?.runOnUiThread {
                     viewModel.setLoading(false)
                     if (fileContent != null) {
+                        // 小文本文件直接发送内容
                         val fullText = "$text\n\n[附件: $fileName]\n$fileContent"
                         doSend(fullText)
                     } else {
-                        doSend("$text\n\n[附件: $fileName]\n（提示：该文件类型暂不支持解析，请尝试复制文件内容到对话框）")
+                        // 大文件或二进制文件使用多模态API
+                        doSendWithAttachment(text, fileName, base64Content, mimeType)
                     }
                 }
             } catch (e: Exception) {
@@ -260,172 +212,47 @@ class AgentChatFragment :
         }.start()
     }
 
-    private fun parsePdfFile(file: File): String {
-        return try {
-            val parser = com.tom_roush.pdfbox.pdmodel.PDDocument.load(file)
-            val text = java.lang.StringBuilder()
-            text.append("【PDF文档】\n页数：${parser.numberOfPages}\n\n内容：\n")
+    private fun isTextFile(fileName: String): Boolean {
+        val textExtensions = listOf(".txt", ".md", ".json", ".xml", ".csv", ".html", ".htm")
+        return textExtensions.any { fileName.endsWith(it, ignoreCase = true) }
+    }
 
-            val stripper = com.tom_roush.pdfbox.text.PDFTextStripper()
-            val pdfText = stripper.getText(parser)
-
-            // 限制文本长度，避免太长
-            val maxLength = 10000
-            if (pdfText.length > maxLength) {
-                text.append(pdfText.take(maxLength))
-                text.append("\n\n...(内容过长，仅显示前${maxLength}字符)")
-            } else {
-                text.append(pdfText)
-            }
-
-            parser.close()
-            text.toString()
-        } catch (e: Exception) {
-            "【PDF解析失败】\n错误：${e.message}"
+    private fun getMimeType(fileName: String): String {
+        return when {
+            fileName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
+            fileName.endsWith(".doc", ignoreCase = true) -> "application/msword"
+            fileName.endsWith(".docx", ignoreCase = true) -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            fileName.endsWith(".xls", ignoreCase = true) -> "application/vnd.ms-excel"
+            fileName.endsWith(".xlsx", ignoreCase = true) -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            fileName.endsWith(".ppt", ignoreCase = true) -> "application/vnd.ms-powerpoint"
+            fileName.endsWith(".pptx", ignoreCase = true) -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+            fileName.matches(Regex(".*\\.(jpg|jpeg)$", RegexOption.IGNORE_CASE)) -> "image/jpeg"
+            fileName.matches(Regex(".*\\.(png)$", RegexOption.IGNORE_CASE)) -> "image/png"
+            fileName.matches(Regex(".*\\.(gif)$", RegexOption.IGNORE_CASE)) -> "image/gif"
+            fileName.matches(Regex(".*\\.(webp)$", RegexOption.IGNORE_CASE)) -> "image/webp"
+            fileName.matches(Regex(".*\\.(mp4)$", RegexOption.IGNORE_CASE)) -> "video/mp4"
+            fileName.matches(Regex(".*\\.(mov)$", RegexOption.IGNORE_CASE)) -> "video/quicktime"
+            fileName.matches(Regex(".*\\.(mp3)$", RegexOption.IGNORE_CASE)) -> "audio/mpeg"
+            else -> "application/octet-stream"
         }
     }
 
-    private fun parseDocxFile(file: File): String {
-        return try {
-            val fis = java.io.FileInputStream(file)
-            val doc = org.apache.poi.xwpf.usermodel.XWPFDocument(fis)
-            val text = StringBuilder()
-            text.append("【Word文档】\n")
+    private fun doSendWithAttachment(userText: String, fileName: String, base64Content: String, mimeType: String) {
+        // 发送用户消息，包含文件信息
+        val messageWithFile = "$userText\n\n[附件: $fileName]"
+        viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.USER, text = messageWithFile))
 
-            // 提取段落文本
-            val paragraphs = doc.paragraphs
-            var charCount = 0
-            val maxLength = 10000
+        agentSession?.dispose()
+        agentSession = null
 
-            for (para in paragraphs) {
-                val paraText = para.text
-                if (paraText.isNotEmpty()) {
-                    if (charCount + paraText.length > maxLength) {
-                        text.append(paraText.take(maxLength - charCount))
-                        break
-                    }
-                    text.append(paraText).append("\n")
-                    charCount += paraText.length
-                }
-            }
-
-            if (charCount >= maxLength) {
-                text.append("\n...(内容过长，仅显示前${maxLength}字符)")
-            }
-
-            doc.close()
-            fis.close()
-            text.toString()
-        } catch (e: Exception) {
-            "【Word文档解析失败】\n错误：${e.message}"
-        }
-    }
-
-    private fun parseExcelFile(file: File): String {
-        return try {
-            val fis = java.io.FileInputStream(file)
-            val workbook = org.apache.poi.xssf.usermodel.XSSFWorkbook(fis)
-            val text = StringBuilder()
-            text.append("【Excel表格】\n工作表数量：${workbook.numberOfSheets}\n\n")
-
-            val sheet = workbook.getSheetAt(0)
-            text.append("工作表1：${sheet.sheetName}\n")
-
-            var rowCount = 0
-            val maxRows = 100
-            val maxCols = 20
-
-            for (row in sheet) {
-                if (rowCount >= maxRows) {
-                    text.append("\n...(行数过多，仅显示前${maxRows}行)")
-                    break
-                }
-
-                val rowData = StringBuilder()
-                var colCount = 0
-
-                for (cell in row) {
-                    if (colCount >= maxCols) {
-                        rowData.append(" ...(列数过多)")
-                        break
-                    }
-
-                    val cellValue = when (cell.cellType) {
-                        org.apache.poi.ss.usermodel.CellType.STRING -> cell.stringCellValue
-                        org.apache.poi.ss.usermodel.CellType.NUMERIC -> cell.numericCellValue.toString()
-                        org.apache.poi.ss.usermodel.CellType.BOOLEAN -> cell.booleanCellValue.toString()
-                        org.apache.poi.ss.usermodel.CellType.FORMULA -> cell.cellFormula
-                        else -> ""
-                    }
-
-                    if (cellValue.isNotEmpty()) {
-                        rowData.append("[$cellValue] ")
-                    }
-                    colCount++
-                }
-
-                if (rowData.isNotEmpty()) {
-                    text.append("第${rowCount + 1}行：$rowData\n")
-                }
-                rowCount++
-            }
-
-            workbook.close()
-            fis.close()
-            text.toString()
-        } catch (e: Exception) {
-            "【Excel解析失败】\n错误：${e.message}"
-        }
-    }
-
-    private fun parsePptxFile(file: File): String {
-        return try {
-            val fis = java.io.FileInputStream(file)
-            val slideShow = org.apache.poi.xslf.usermodel.XMLSlideShow(fis)
-            val text = StringBuilder()
-            text.append("【PowerPoint演示文稿】\n幻灯片数量：${slideShow.slides.size}\n\n")
-
-            var slideCount = 0
-            val maxLength = 8000
-            var charCount = 0
-
-            for (slide in slideShow.slides) {
-                slideCount++
-                text.append("幻灯片${slideCount}：\n")
-
-                val slideText = StringBuilder()
-                for (shape in slide.shapes) {
-                    if (shape is org.apache.poi.xslf.usermodel.XSLFTextShape) {
-                        val shapeText = shape.text
-                        if (shapeText.isNotEmpty()) {
-                            if (charCount + shapeText.length > maxLength) {
-                                slideText.append(shapeText.take(maxLength - charCount))
-                                charCount = maxLength
-                                break
-                            }
-                            slideText.append(shapeText).append("\n")
-                            charCount += shapeText.length
-                        }
-                    }
-                }
-
-                if (slideText.isNotEmpty()) {
-                    text.append(slideText.toString())
-                    text.append("\n")
-                }
-
-                if (charCount >= maxLength) {
-                    text.append("\n...(内容过长，仅显示前${maxLength}字符)")
-                    break
-                }
-            }
-
-            slideShow.close()
-            fis.close()
-            text.toString()
-        } catch (e: Exception) {
-            "【PowerPoint解析失败】\n错误：${e.message}"
-        }
+        // 使用多模态API发送
+        viewModel.sendToLlmWithAttachment(
+            text = userText,
+            fileName = fileName,
+            base64Content = base64Content,
+            mimeType = mimeType,
+            agentProvider = agentProvider
+        )
     }
 
     private fun doSend(text: String) {

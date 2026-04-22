@@ -284,4 +284,79 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
             )
         }
     }
+
+    fun sendToLlmWithAttachment(
+        text: String,
+        fileName: String,
+        base64Content: String,
+        mimeType: String,
+        agentProvider: com.stupidtree.hitax.agent.core.AgentProvider<TimetableAgentInput, TimetableAgentOutput>,
+    ) {
+        ensureSession()
+
+        // 构建多模态消息
+        val multimodalContent = buildString {
+            append("$text\n\n")
+            append("[文件: $fileName]")
+            append("\n\n[data:image/$fileName;base64,$base64Content]")
+        }
+
+        synchronized(this) {
+            chatHistory.add(ChatMessage(role = "user", content = multimodalContent))
+        }
+
+        viewModelScope.launch {
+            setLoading(true)
+
+            // TODO: 实现多模态API调用
+            // 暂时使用普通聊天
+            LlmChatService.chat(
+                history = synchronized(this) { chatHistory.toList() },
+                timetableId = null,
+                application = getApplication(),
+                agentProvider = agentProvider,
+                onTrace = { trace ->
+                    val statusText = when (trace.stage) {
+                        "react_start" -> "正在分析您的问题…"
+                        "react_step" -> {
+                            val action = trace.message.substringAfter("→ ", "").trim()
+                            when {
+                                action.contains("get_timetable") -> "正在查询课表…"
+                                action.contains("search_course") -> "正在搜索课程信息…"
+                                action.contains("get_course_detail") -> "正在获取课程详情…"
+                                action.contains("search_teacher") -> "正在搜索教师信息…"
+                                action.contains("web_search") -> "正在搜索网页…"
+                                action.contains("brave_answer") -> "正在搜索答案…"
+                                action.contains("rag_search") -> "正在搜索知识库…"
+                                else -> "正在思考…"
+                            }
+                        }
+                        else -> "正在处理…"
+                    }
+                    updateOrCreatePlaceholder(statusText)
+                },
+                onResult = { result ->
+                    when (result) {
+                        is LlmChatResult.Success -> {
+                            synchronized(this) {
+                                chatHistory.add(ChatMessage(role = "assistant", content = result.text))
+                            }
+                            replacePlaceholder(AgentChatMessage(
+                                role = AgentChatMessage.Role.ASSISTANT,
+                                text = result.text,
+                                thinking = result.thinking
+                            ))
+                        }
+                        is LlmChatResult.Error -> {
+                            replacePlaceholder(AgentChatMessage(
+                                role = AgentChatMessage.Role.ASSISTANT,
+                                text = "抱歉，处理过程中出现错误：${result.error}"
+                            ))
+                        }
+                    }
+                    setLoading(false)
+                },
+            )
+        }
+    }
 }
