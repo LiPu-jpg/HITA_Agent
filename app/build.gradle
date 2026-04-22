@@ -149,6 +149,11 @@ dependencies {
 
     implementation 'org.mnode.ical4j:ical4j:1.0.2'
 
+    //文档解析库
+    implementation 'com.tom-roush:pdfbox-android:2.0.27.0' //PDF解析
+    implementation 'org.apache.poi:poi-ooxml:5.2.5' //Word/Excel/PowerPoint解析
+    implementation 'org.apache.poi:poi:5.2.5'
+
     //爆炸效果
     implementation 'tyrantgit:explosionfield:1.0.1'
 
