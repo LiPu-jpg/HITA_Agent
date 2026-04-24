@@ -9,6 +9,7 @@ import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.recyclerview.widget.LinearLayoutManager
+import com.stupidtree.hitax.BuildConfig
 import com.stupidtree.hitax.agent.core.AgentProvider
 import com.stupidtree.hitax.agent.core.AgentSession
 import com.stupidtree.hitax.agent.remote.AgentBackendClient
@@ -19,6 +20,8 @@ import com.stupidtree.hitax.data.model.chat.ChatSession
 import com.stupidtree.hitax.databinding.FragmentAgentChatBinding
 import com.stupidtree.style.base.BaseFragment
 import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 
 class AgentChatFragment :
     BaseFragment<AgentChatViewModel, FragmentAgentChatBinding>() {
@@ -51,6 +54,33 @@ class AgentChatFragment :
         binding?.messageList?.apply {
             layoutManager = LinearLayoutManager(requireContext()).apply { stackFromEnd = true }
             adapter = messageAdapter
+
+            // 只在键盘弹出/收起时自动滚动，不影响用户手动滚动
+            var previousKeyboardHeight = 0
+            addOnLayoutChangeListener { _, _, top, bottom, right, _, oldTop, oldRight, oldBottom ->
+                val viewHeight = bottom - top
+                val oldViewHeight = oldBottom - oldTop
+                val heightDiff = viewHeight - oldViewHeight
+
+                // 只有在视图高度变化超过100px时，才认为是键盘弹出/收起
+                // 避免用户手动滚动时触发自动滚动
+                if (kotlin.math.abs(heightDiff) > 100) {
+                    val keyboardVisible = heightDiff < 0  // 高度减少 = 键盘弹出
+
+                    if (keyboardVisible && previousKeyboardHeight == 0) {
+                        // 键盘刚刚弹出，滚动到底部
+                        post {
+                            if (adapter?.itemCount ?: 0 > 0) {
+                                scrollToPosition((adapter?.itemCount ?: 1) - 1)
+                            }
+                        }
+                        previousKeyboardHeight = -heightDiff
+                    } else if (!keyboardVisible && previousKeyboardHeight > 0) {
+                        // 键盘刚刚收起
+                        previousKeyboardHeight = 0
+                    }
+                }
+            }
         }
 
         binding?.sendButton?.setOnClickListener { sendMessage() }
@@ -120,11 +150,33 @@ class AgentChatFragment :
     }
 
     private fun getFileName(uri: Uri): String {
+        // 优先从 URI path 中提取真实文件名（避免显示名称被应用修改）
+        val path = uri.path
+        if (path != null && path.contains("/")) {
+            val nameFromPath = path.substringAfterLast("/")
+            // 如果路径中的文件名包含常见后缀，优先使用
+            if (nameFromPath.contains(".") && !nameFromPath.endsWith(".mht")) {
+                return nameFromPath
+            }
+        }
+
+        // 其次尝试从 ContentResolver 查询显示名称
         val cursor = requireContext().contentResolver.query(uri, null, null, null, null)
         cursor?.use {
             if (it.moveToFirst()) {
                 val nameIndex = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                if (nameIndex >= 0) return it.getString(nameIndex)
+                if (nameIndex >= 0) {
+                    val displayName = it.getString(nameIndex)
+                    // 如果显示名称是 .mht 但包含 ".pdf"，尝试提取真实名称
+                    if (displayName.endsWith(".mht", ignoreCase = true) && displayName.contains(".pdf", ignoreCase = true)) {
+                        val pdfIndex = displayName.indexOf(".pdf", ignoreCase = true)
+                        if (pdfIndex > 0) {
+                            val realName = displayName.substring(0, pdfIndex + 4)
+                            return realName
+                        }
+                    }
+                    return displayName
+                }
             }
         }
         return uri.lastPathSegment ?: "file"
@@ -168,99 +220,310 @@ class AgentChatFragment :
     private val MAX_ATTACHMENTS_PER_MESSAGE = 3 // 每次对话最多附件数
 
     private fun sendWithAttachment(text: String, uri: Uri) {
-        viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.TRACE, text = "正在处理附件…"))
+        // 先清空输入框，阻塞发送
+        binding?.inputField?.text?.clear()
         viewModel.setLoading(true)
 
         Thread {
             try {
+
                 val fileName = getFileName(uri)
 
                 // 检查文件大小
-                val fileSize = requireContext().contentResolver.openInputStream(uri)?.use { it.available() } ?: 0
-
-                val maxSize = when {
-                    fileName.matches(Regex(".*\\.(jpg|jpeg|png|gif|bmp|webp)$", RegexOption.IGNORE_CASE)) -> MAX_IMAGE_SIZE
-                    fileName.matches(Regex(".*\\.(mp4|mov|avi|mkv|webm)$", RegexOption.IGNORE_CASE)) -> MAX_IMAGE_SIZE
-                    else -> MAX_FILE_SIZE
-                }
-
-                if (fileSize > maxSize) {
+                val inputStream = requireContext().contentResolver.openInputStream(uri)
+                if (inputStream == null) {
+                    android.util.Log.e("[ATTACH]", "❌ 无法打开输入流")
                     activity?.runOnUiThread {
                         viewModel.setLoading(false)
+                        binding?.inputField?.text?.append(text)
                         viewModel.addMessage(AgentChatMessage(
                             role = AgentChatMessage.Role.ASSISTANT,
-                            text = "文件过大！\n当前文件：${fileName} (${formatFileSize(fileSize)})\n限制：${formatFileSize(maxSize)}\n\n建议：\n- 图片/视频请压缩到10MB以下\n- 文档请控制在20MB以下"
+                            text = "无法打开文件，请重试"
                         ))
-                        doSend(text)
                     }
                     return@Thread
                 }
 
-                val tempFile = File(requireContext().cacheDir, fileName)
-                requireContext().contentResolver.openInputStream(uri)?.use { input ->
-                    tempFile.outputStream().use { output -> input.copyTo(output) }
+                val fileSize = inputStream.use { it.available() }
+
+                val maxSize = when {
+                    fileName.endsWith(".jpg", ignoreCase = true) ||
+                    fileName.endsWith(".jpeg", ignoreCase = true) ||
+                    fileName.endsWith(".png", ignoreCase = true) ||
+                    fileName.endsWith(".gif", ignoreCase = true) ||
+                    fileName.endsWith(".bmp", ignoreCase = true) ||
+                    fileName.endsWith(".webp", ignoreCase = true) -> {
+                        MAX_IMAGE_SIZE
+                    }
+                    fileName.endsWith(".mp4", ignoreCase = true) ||
+                    fileName.endsWith(".mov", ignoreCase = true) ||
+                    fileName.endsWith(".avi", ignoreCase = true) ||
+                    fileName.endsWith(".mkv", ignoreCase = true) ||
+                    fileName.endsWith(".webm", ignoreCase = true) -> {
+                        MAX_IMAGE_SIZE
+                    }
+                    else -> {
+                        MAX_FILE_SIZE
+                    }
                 }
 
-                val fileBytes = tempFile.readBytes()
-                val base64Content = Base64.encodeToString(fileBytes, Base64.NO_WRAP)
+                if (fileSize > maxSize) {
+                    android.util.Log.e("[ATTACH]", "❌ 文件过大: ${formatFileSize(fileSize)} > ${formatFileSize(maxSize)}")
+                    activity?.runOnUiThread {
+                        viewModel.setLoading(false)
+                        binding?.inputField?.text?.append(text)  // 恢复用户输入
+                        viewModel.addMessage(AgentChatMessage(
+                            role = AgentChatMessage.Role.ASSISTANT,
+                            text = "文件过大！\n当前文件：${fileName} (${formatFileSize(fileSize)})\n限制：${formatFileSize(maxSize)}\n\n建议：\n- 图片/视频请压缩到10MB以下\n- 文档请控制在20MB以下"
+                        ))
+                    }
+                    return@Thread
+                }
+
+                // 判断文件类型，不符合条件直接返回
                 val mimeType = getMimeType(fileName)
 
+                val needLocalParse = when {
+                    fileSize < 100 * 1024 && isTextFile(fileName) -> {
+                        true
+                    }
+                    fileName.endsWith(".docx", ignoreCase = true) -> {
+                        true
+                    }
+                    fileName.endsWith(".xlsx", ignoreCase = true) -> {
+                        true
+                    }
+                    fileName.endsWith(".pptx", ignoreCase = true) -> {
+                        true
+                    }
+                    fileName.endsWith(".pdf", ignoreCase = true) -> {
+                        true
+                    }
+                    else -> {
+                        false
+                    }
+                }
+
+                val needCloudAI = mimeType.startsWith("image/") || mimeType.startsWith("video/")
+
+                if (!needLocalParse && !needCloudAI) {
+                    android.util.Log.e("[ATTACH]", "❌ 不支持的文件类型: $fileName")
+                    activity?.runOnUiThread {
+                        viewModel.setLoading(false)
+                        binding?.inputField?.text?.append(text)  // 恢复用户输入
+                        viewModel.addMessage(AgentChatMessage(
+                            role = AgentChatMessage.Role.ASSISTANT,
+                            text = "不支持的文件类型：${fileName}\n\n支持的格式：\n- 文档：Word、Excel、PowerPoint（本地解析）\n- 文档：PDF（云端AI解析）\n- 图片：JPG、PNG、GIF、WebP\n- 视频：MP4、MOV"
+                        ))
+                    }
+                    return@Thread
+                }
+
+
+                val cacheDir = requireContext().cacheDir
+
+                val tempFile = File(cacheDir, fileName)
+
+                val copyStart = System.currentTimeMillis()
+                var bytesCopied = 0L
+                requireContext().contentResolver.openInputStream(uri)?.use { input ->
+                    tempFile.outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } > 0) {
+                            output.write(buffer, 0, bytesRead)
+                            bytesCopied += bytesRead
+                        }
+                    }
+                }
+                val copyEnd = System.currentTimeMillis()
+
                 // 智能分流策略
+
+                val parseStart = System.currentTimeMillis()
                 val result = when {
                     // 1. 小文本文件 - 本地直接读取
-                    fileBytes.size < 100 * 1024 && isTextFile(fileName) -> {
-                        LocalParseResult.Success("【文本文件】\n${tempFile.readText(Charsets.UTF_8)}")
+                    fileSize < 100 * 1024 && isTextFile(fileName) -> {
+                        val fileText = tempFile.readText(Charsets.UTF_8)
+                        android.util.Log.d("[ATTACH]", "✅ 文本读取完成，长度: ${fileText.length}")
+                        LocalParseResult.Success("【文本文件】\n$fileText")
                     }
 
                     // 2. PDF/Office文档 - 本地解析
-                    fileName.endsWith(".pdf", ignoreCase = true) -> parsePdfFile(tempFile)
-                    fileName.endsWith(".docx", ignoreCase = true) -> parseDocxFile(tempFile)
-                    fileName.endsWith(".xlsx", ignoreCase = true) -> parseExcelFile(tempFile)
-                    fileName.endsWith(".pptx", ignoreCase = true) -> parsePptxFile(tempFile)
-
-                    // 3. 图片/视频 - 需要智谱多模态理解
-                    mimeType.startsWith("image/") || mimeType.startsWith("video/") -> {
-                        null  // 标记需要使用智谱
+                    fileName.endsWith(".pdf", ignoreCase = true) -> {
+                        android.util.Log.d("[ATTACH]", "📄 解析方式: PDF文档")
+                        parsePdfFile(tempFile)
+                    }
+                    fileName.endsWith(".docx", ignoreCase = true) -> {
+                        parseDocxFile(tempFile)
+                    }
+                    fileName.endsWith(".xlsx", ignoreCase = true) -> {
+                        parseExcelFile(tempFile)
+                    }
+                    fileName.endsWith(".pptx", ignoreCase = true) -> {
+                        parsePptxFile(tempFile)
                     }
 
-                    // 4. 其他文件类型
-                    else -> null
+                    // 3. 图片/视频 - 使用智谱多模态
+                    mimeType.startsWith("image/") || mimeType.startsWith("video/") -> {
+                        null
+                    }
+
+                    // 4. 其他不支持的类型
+                    else -> {
+                        android.util.Log.e("[ATTACH]", "❌ 不支持的文件类型")
+                        LocalParseResult.Error("不支持的文件类型")
+                    }
+                }
+                val parseEnd = System.currentTimeMillis()
+                android.util.Log.d("[ATTACH]", "⏱️ 解析耗时: ${parseEnd - parseStart}ms")
+
+                // 只在需要云端AI时才读取文件并编码
+                val base64Content = if (result == null && needCloudAI) {
+                    try {
+                        android.util.Log.d("[IMAGE-DEBUG]", "========== 开始图片/视频处理 ==========")
+                        android.util.Log.d("[IMAGE-DEBUG]", "📁 文件路径: ${tempFile.absolutePath}")
+                        android.util.Log.d("[IMAGE-DEBUG]", "📏 文件大小: ${tempFile.length()} bytes (${tempFile.length() / 1024}KB)")
+
+                        // 读取文件字节
+                        android.util.Log.d("[IMAGE-DEBUG]", "📖 开始读取文件到内存...")
+                        val fileBytes = tempFile.readBytes()
+                        android.util.Log.d("[IMAGE-DEBUG]", "✅ 文件读取完成: ${fileBytes.size} bytes")
+                        android.util.Log.d("[IMAGE-DEBUG]", "🔢 前32字节(hex): ${fileBytes.take(32).joinToString(" ") { "%02X".format(it) }}")
+                        android.util.Log.d("[IMAGE-DEBUG]", "🔢 前32字节(char): ${fileBytes.take(32).joinToString("") { if(it in 32..126) it.toChar().toString() else "." }}")
+
+                        // Base64编码
+                        android.util.Log.d("[IMAGE-DEBUG]", "🔄 开始Base64编码...")
+                        val startTime = System.currentTimeMillis()
+                        val base64Encoded = Base64.encodeToString(fileBytes, Base64.NO_WRAP)
+                        val endTime = System.currentTimeMillis()
+                        android.util.Log.d("[IMAGE-DEBUG]", "✅ Base64编码完成")
+                        android.util.Log.d("[IMAGE-DEBUG]", "⏱️ 编码耗时: ${endTime - startTime}ms")
+                        android.util.Log.d("[IMAGE-DEBUG]", "📊 Base64长度: ${base64Encoded.length} 字符")
+                        android.util.Log.d("[IMAGE-DEBUG]", "📊 Base64前128字符: ${base64Encoded.take(128)}...")
+                        android.util.Log.d("[IMAGE-DEBUG]", "📊 Base64后32字符: ...${base64Encoded.takeLast(32)}")
+
+                        // 文件头检测（验证图片格式）
+                        android.util.Log.d("[IMAGE-DEBUG]", "🔍 文件头检测:")
+                        when {
+                            fileBytes.size >= 4 && fileBytes[0].toInt() == 0xFF && fileBytes[1].toInt() == 0xD8 && fileBytes[2].toInt() == 0xFF -> {
+                                android.util.Log.d("[IMAGE-DEBUG]", "   ✅ 检测到JPEG格式")
+                            }
+                            fileBytes.size >= 8 && String(fileBytes.take(8).toByteArray()) == "\u0089PNG\r\n\u001A\n" -> {
+                                android.util.Log.d("[IMAGE-DEBUG]", "   ✅ 检测到PNG格式")
+                            }
+                            fileBytes.size >= 4 && String(fileBytes.take(4).toByteArray()) == "RIFF" -> {
+                                android.util.Log.d("[IMAGE-DEBUG]", "   ✅ 检测到WEBP格式")
+                            }
+                            fileBytes.size >= 4 && fileBytes[0].toInt() == 0x47 && fileBytes[1].toInt() == 0x49 && fileBytes[2].toInt() == 0x46 -> {
+                                android.util.Log.d("[IMAGE-DEBUG]", "   ✅ 检测到GIF格式")
+                            }
+                            fileBytes.size >= 12 && String(fileBytes.take(4).toByteArray()) == "\u0000\u0000\u0000\u0014" && String(fileBytes.take(4).toByteArray()) == "ftypmp42" -> {
+                                android.util.Log.d("[IMAGE-DEBUG]", "   ✅ 检测到MP4格式")
+                            }
+                            else -> {
+                                android.util.Log.w("[IMAGE-DEBUG]", "   ⚠️ 未知文件格式")
+                                android.util.Log.d("[IMAGE-DEBUG]", "   文件头(hex): ${fileBytes.take(16).joinToString(" ") { "%02X".format(it) }}")
+                            }
+                        }
+
+                        android.util.Log.d("[IMAGE-DEBUG]", "========== 图片/视频处理完成 ==========")
+                        base64Encoded
+                    } catch (e: OutOfMemoryError) {
+                        android.util.Log.e("[IMAGE-DEBUG]", "❌ Base64编码内存不足", e)
+                        android.util.Log.e("[IMAGE-DEBUG]", "可用内存: ${android.app.ActivityManager.MemoryInfo()}")
+                        activity?.runOnUiThread {
+                            viewModel.setLoading(false)
+                            binding?.inputField?.text?.append(text)  // 恢复用户输入
+                            viewModel.addMessage(AgentChatMessage(
+                                role = AgentChatMessage.Role.ASSISTANT,
+                                text = "文件过大，无法处理。\n\n建议：\n1. 图片请压缩后重新上传（建议小于5MB）\n2. 视频请剪辑后重新上传（建议小于10MB）\n3. 或使用截图功能"
+                            ))
+                        }
+                        return@Thread
+                    }
+                } else {
+                    null
                 }
 
                 tempFile.delete()
 
+
                 activity?.runOnUiThread {
                     when (result) {
                         is LocalParseResult.Success -> {
-                            // 本地解析成功，直接发送内容
-                            viewModel.setLoading(false)
-                            val fullText = "$text\n\n[附件: $fileName]\n${result.content}"
+                            // 本地解析成功，限制文本长度后发送
+
+                            val maxLength = 5000  // 限制发送给AI的文本长度
+                            val content = if (result.content.length > maxLength) {
+                                result.content.take(maxLength) + "\n\n...(内容过长，仅显示前${maxLength}字)"
+                            } else {
+                                result.content
+                            }
+                            val fullText = "$text\n\n[附件: $fileName]\n$content"
                             doSend(fullText)
                         }
                         is LocalParseResult.Error -> {
                             // 本地解析失败，降级到智谱（仅图片/视频）
-                            if (mimeType.startsWith("image/") || mimeType.startsWith("video/")) {
+                            android.util.Log.e("[ATTACH]", "❌ 本地解析失败: ${result.error}")
+                            android.util.Log.e("[ATTACH]", "📋 错误详情: ${result.error}")
+
+                            if (needCloudAI && base64Content != null) {
+                                android.util.Log.d("[ATTACH]", "📤 降级到云端AI处理")
                                 doSendWithAttachment(text, fileName, base64Content, mimeType)
                             } else {
+                                android.util.Log.e("[ATTACH]", "❌ 无法降级，显示错误消息")
                                 viewModel.setLoading(false)
+                                binding?.inputField?.text?.append(text)  // 恢复用户输入
                                 viewModel.addMessage(AgentChatMessage(
                                     role = AgentChatMessage.Role.ASSISTANT,
                                     text = "附件解析失败：${result.error}\n\n建议：请复制文件内容粘贴到对话框中"
                                 ))
-                                doSend(text)
                             }
                         }
                         null -> {
                             // 需要使用智谱多模态（图片/视频）
-                            doSendWithAttachment(text, fileName, base64Content, mimeType)
+                            android.util.Log.d("[ATTACH]", "📤 使用智谱多模态AI处理")
+                            android.util.Log.d("[ATTACH]", "📦 Base64编码长度: ${base64Content?.length ?: 0}")
+
+                            if (base64Content != null) {
+                                android.util.Log.d("[ATTACH]", "✅ Base64内容有效，调用多模态API")
+                                doSendWithAttachment(text, fileName, base64Content, mimeType)
+                            } else {
+                                android.util.Log.e("[ATTACH]", "❌ Base64内容为空")
+                                viewModel.setLoading(false)
+                                binding?.inputField?.text?.append(text)  // 恢复用户输入
+                                viewModel.addMessage(AgentChatMessage(
+                                    role = AgentChatMessage.Role.ASSISTANT,
+                                    text = "不支持的文件类型，请尝试图片或视频"
+                                ))
+                            }
                         }
                     }
                 }
             } catch (e: Exception) {
+                android.util.Log.e("[ATTACH]", "❌ 附件处理异常", e)
+                android.util.Log.e("[ATTACH]", "❌ 异常类型: ${e::class.simpleName}")
+                android.util.Log.e("[ATTACH]", "❌ 异常消息: ${e.message}")
+                android.util.Log.e("[ATTACH]", "❌ 堆栈跟踪: ${e.stackTraceToString()}")
                 activity?.runOnUiThread {
                     viewModel.setLoading(false)
-                    viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.ASSISTANT, text = "附件处理失败：${e.message}"))
-                    doSend(text)
+                    binding?.inputField?.text?.append(text)  // 恢复用户输入
+                    viewModel.addMessage(AgentChatMessage(
+                        role = AgentChatMessage.Role.ASSISTANT,
+                        text = "附件处理失败：${e.message}"
+                    ))
+                }
+            } catch (e: OutOfMemoryError) {
+                android.util.Log.e("[ATTACH]", "❌ 内存不足异常", e)
+                android.util.Log.e("[ATTACH]", "❌ 可用内存信息: ${android.app.ActivityManager.MemoryInfo()}")
+                activity?.runOnUiThread {
+                    viewModel.setLoading(false)
+                    binding?.inputField?.text?.append(text)  // 恢复用户输入
+                    viewModel.addMessage(AgentChatMessage(
+                        role = AgentChatMessage.Role.ASSISTANT,
+                        text = "内存不足，请尝试更小的文件"
+                    ))
                 }
             }
         }.start()
@@ -295,23 +558,34 @@ class AgentChatFragment :
     }
 
     private fun getMimeType(fileName: String): String {
-        return when {
+        android.util.Log.d("[ATTACH]", "判断MIME类型，文件名: $fileName")
+
+        // 统一使用 endsWith 方法，更可靠
+        val mimeTypeFromFile = when {
             fileName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
-            fileName.endsWith(".doc", ignoreCase = true) -> "application/msword"
             fileName.endsWith(".docx", ignoreCase = true) -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            fileName.endsWith(".xls", ignoreCase = true) -> "application/vnd.ms-excel"
+            fileName.endsWith(".doc", ignoreCase = true) && !fileName.endsWith(".docx", ignoreCase = true) -> "application/msword"
             fileName.endsWith(".xlsx", ignoreCase = true) -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            fileName.endsWith(".ppt", ignoreCase = true) -> "application/vnd.ms-powerpoint"
+            fileName.endsWith(".xls", ignoreCase = true) && !fileName.endsWith(".xlsx", ignoreCase = true) -> "application/vnd.ms-excel"
             fileName.endsWith(".pptx", ignoreCase = true) -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-            fileName.matches(Regex(".*\\.(jpg|jpeg)$", RegexOption.IGNORE_CASE)) -> "image/jpeg"
-            fileName.matches(Regex(".*\\.(png)$", RegexOption.IGNORE_CASE)) -> "image/png"
-            fileName.matches(Regex(".*\\.(gif)$", RegexOption.IGNORE_CASE)) -> "image/gif"
-            fileName.matches(Regex(".*\\.(webp)$", RegexOption.IGNORE_CASE)) -> "image/webp"
-            fileName.matches(Regex(".*\\.(mp4)$", RegexOption.IGNORE_CASE)) -> "video/mp4"
-            fileName.matches(Regex(".*\\.(mov)$", RegexOption.IGNORE_CASE)) -> "video/quicktime"
-            fileName.matches(Regex(".*\\.(mp3)$", RegexOption.IGNORE_CASE)) -> "audio/mpeg"
-            else -> "application/octet-stream"
+            fileName.endsWith(".ppt", ignoreCase = true) && !fileName.endsWith(".pptx", ignoreCase = true) -> "application/vnd.ms-powerpoint"
+            fileName.endsWith(".jpg", ignoreCase = true) || fileName.endsWith(".jpeg", ignoreCase = true) -> "image/jpeg"
+            fileName.endsWith(".png", ignoreCase = true) -> "image/png"
+            fileName.endsWith(".gif", ignoreCase = true) -> "image/gif"
+            fileName.endsWith(".webp", ignoreCase = true) -> "image/webp"
+            fileName.endsWith(".mp4", ignoreCase = true) -> "video/mp4"
+            fileName.endsWith(".mov", ignoreCase = true) -> "video/quicktime"
+            fileName.endsWith(".mp3", ignoreCase = true) -> "audio/mpeg"
+            else -> null
         }
+
+        if (mimeTypeFromFile != null) {
+            android.util.Log.d("[ATTACH]", "从文件名识别MIME: $mimeTypeFromFile")
+            return mimeTypeFromFile
+        }
+
+        android.util.Log.d("[ATTACH]", "无法从文件名识别，使用默认类型: application/octet-stream")
+        return "application/octet-stream"
     }
 
     private sealed class LocalParseResult {
@@ -320,63 +594,239 @@ class AgentChatFragment :
     }
 
     private fun parsePdfFile(file: File): LocalParseResult {
+        var parser: com.tom_roush.pdfbox.pdmodel.PDDocument? = null
         return try {
-            val parser = com.tom_roush.pdfbox.pdmodel.PDDocument.load(file)
+            android.util.Log.d("[PDF-PARSE]", "文件大小: ${file.length() / 1024}KB")
+
+            parser = com.tom_roush.pdfbox.pdmodel.PDDocument.load(file)
+            val totalPages = parser.numberOfPages
+            android.util.Log.d("[PDF-PARSE]", "总页数: $totalPages")
+
+            // 限制页数，避免解析超大PDF导致内存问题
+            val maxPages = 10
+            val pagesToParse = minOf(totalPages, maxPages)
+            android.util.Log.d("[PDF-PARSE]", "将解析前 $pagesToParse 页")
+
             val text = StringBuilder()
-            text.append("【PDF文档】\n页数：${parser.numberOfPages}\n\n内容：\n")
+            text.append("【PDF文档】\n")
+            if (totalPages > maxPages) {
+                text.append("总页数：${totalPages}（仅解析前${maxPages}页）\n\n内容：\n")
+            } else {
+                text.append("页数：${totalPages}\n\n内容：\n")
+            }
 
+            // 使用更宽松的文本提取模式
+            android.util.Log.d("[PDF-PARSE]", "开始提取文本...")
             val stripper = com.tom_roush.pdfbox.text.PDFTextStripper()
-            val pdfText = stripper.getText(parser)
+            stripper.startPage = 1
+            stripper.endPage = pagesToParse
+            stripper.setSortByPosition(true)
 
-            // 限制文本长度，避免太长
-            val maxLength = 10000
+            val pdfText = stripper.getText(parser)
+            android.util.Log.d("[PDF-PARSE]", "✅ 提取完成，文本长度: ${pdfText.length}")
+
+            // 限制文本长度
+            val maxLength = 5000
             if (pdfText.length > maxLength) {
+                android.util.Log.d("[PDF-PARSE]", "⚠️ 文本过长，截取到 $maxLength 字")
                 text.append(pdfText.take(maxLength))
-                text.append("\n\n...(内容过长，仅显示前${maxLength}字符)")
+                text.append("\n\n...(内容过长，仅显示前${maxLength}字)")
             } else {
                 text.append(pdfText)
             }
 
             parser.close()
             LocalParseResult.Success(text.toString())
+        } catch (e: OutOfMemoryError) {
+            android.util.Log.e("[PDF-PARSE]", "❌ 内存不足", e)
+            parser?.close()
+            LocalParseResult.Error("内存不足，请尝试更小的PDF文件")
         } catch (e: Exception) {
-            LocalParseResult.Error("【PDF解析失败】\n错误：${e.message}")
+            android.util.Log.e("[PDF-PARSE]", "❌ PDF解析失败: ${e.message}", e)
+            parser?.close()
+            LocalParseResult.Error("错误：${e.message}\n\n建议：截图上传或复制PDF中的文本")
+        }
+    }
+
+    private fun loadCMapResources() {
+        android.util.Log.d("[ATTACH]", "[PDF-CMap] 📚 开始加载 CMap 资源...")
+        val cmapDir = "com/tom_roush/pdfbox/resources/cmap/"
+
+        val assets = context?.assets
+        if (assets == null) {
+            android.util.Log.e("[ATTACH]", "[PDF-CMap] ❌ Assets 为 null，无法加载 CMap")
+            return
+        }
+
+        val cmapFiles = assets.list(cmapDir)
+        if (cmapFiles == null) {
+            android.util.Log.e("[ATTACH]", "[PDF-CMap] ❌ 无法列出 CMap 目录")
+            return
+        }
+
+        android.util.Log.d("[ATTACH]", "[PDF-CMap] 📂 找到 ${cmapFiles.size} 个 CMap 文件")
+
+        try {
+            val cMapManagerClass = Class.forName("com.tom_roush.pdfbox.pdmodel.font.CMapManager")
+            android.util.Log.d("[ATTACH]", "[PDF-CMap] ✅ 获取 CMapManager 类")
+
+            val cMapParserClass = Class.forName("com.tom_roush.fontbox.cmap.CMapParser")
+            android.util.Log.d("[ATTACH]", "[PDF-CMap] ✅ 获取 CMapParser 类")
+
+            // 尝试访问 CMapManager 的预定义 CMap 缓存
+            // 查找所有可能的字段名
+            val possibleFieldNames = listOf(
+                "PREDEFINED_CMAPS",
+                "predefinedCMaps",
+                "cmapCache",
+                "CMAP_CACHE"
+            )
+
+            var cacheField: java.lang.reflect.Field? = null
+            for (fieldName in possibleFieldNames) {
+                try {
+                    cacheField = cMapManagerClass.getDeclaredField(fieldName)
+                    android.util.Log.d("[ATTACH]", "[PDF-CMap] 🔍 找到字段: $fieldName")
+                    break
+                } catch (e: NoSuchFieldException) {
+                    // 继续尝试下一个字段名
+                }
+            }
+
+            if (cacheField != null) {
+                cacheField.isAccessible = true
+                val cache = cacheField.get(null)
+                android.util.Log.d("[ATTACH]", "[PDF-CMap] ✅ 缓存字段类型: ${cache?.javaClass?.name}")
+                android.util.Log.d("[ATTACH]", "[PDF-CMap] ✅ 缓存字段值: $cache")
+            } else {
+                android.util.Log.w("[ATTACH]", "[PDF-CMap] ⚠️ 未找到缓存字段")
+            }
+
+            // 尝试直接解析 CMap 并注册
+            val parseMethod = cMapParserClass.getDeclaredMethod("parse", java.io.InputStream::class.java)
+            parseMethod.isAccessible = true
+            android.util.Log.d("[ATTACH]", "[PDF-CMap] ✅ 找到 parse 方法")
+
+            // 尝试创建 CMap 对象并注册
+            var registeredCount = 0
+            for (cmapFile in cmapFiles) {
+                try {
+                    // 只注册关键的 CMap
+                    if (cmapFile !in listOf("Identity-H", "Identity-V", "Adobe-GB1-UCS2", "Adobe-CNS1-UCS2", "Adobe-Japan1-UCS2", "Adobe-Korea1-UCS2")) {
+                        continue
+                    }
+
+                    android.util.Log.d("[ATTACH]", "[PDF-CMap] 📖 尝试注册: $cmapFile")
+                    val inputStream = assets.open("$cmapDir$cmapFile")
+                    val cmap = parseMethod.invoke(null, inputStream)
+                    android.util.Log.d("[ATTACH]", "[PDF-CMap] ✅ 解析成功: $cmapFile -> $cmap")
+                    inputStream.close()
+                    registeredCount++
+                } catch (e: Exception) {
+                    android.util.Log.w("[ATTACH]", "[PDF-CMap] ⚠️ 注册失败 $cmapFile: ${e::class.simpleName} - ${e.message}")
+                }
+            }
+
+            android.util.Log.d("[ATTACH]", "[PDF-CMap] 📊 注册统计: 成功 $registeredCount")
+
+            android.util.Log.d("[ATTACH]", "[PDF-CMap] ✅ CMap 资源加载完成")
+        } catch (e: Exception) {
+            android.util.Log.e("[ATTACH]", "[PDF-CMap] ❌ 加载 CMap 资源时出错: ${e::class.simpleName} - ${e.message}")
+            e.printStackTrace()
         }
     }
 
     private fun parseDocxFile(file: File): LocalParseResult {
         return try {
-            val fis = java.io.FileInputStream(file)
-            val doc = org.apache.poi.xwpf.usermodel.XWPFDocument(fis)
-            val text = StringBuilder()
-            text.append("【Word文档】\n")
 
-            // 提取段落文本
-            val paragraphs = doc.paragraphs
-            var charCount = 0
-            val maxLength = 10000
-
-            for (para in paragraphs) {
-                val paraText = para.text
-                if (paraText.isNotEmpty()) {
-                    if (charCount + paraText.length > maxLength) {
-                        text.append(paraText.take(maxLength - charCount))
-                        break
-                    }
-                    text.append(paraText).append("\n")
-                    charCount += paraText.length
-                }
+            if (!file.exists()) {
+                android.util.Log.e("[DOCX-PARSE]", "❌ 文件不存在！")
+                return LocalParseResult.Error("文件不存在，请重试")
             }
 
-            if (charCount >= maxLength) {
-                text.append("\n...(内容过长，仅显示前${maxLength}字符)")
-            }
+            // 直接使用 File 对象，不通过 Uri
+            val text = extractDocxTextDirectly(file)
+            android.util.Log.d("[DOCX-PARSE]", "📝 文本预览: ${text.take(200)}")
 
-            doc.close()
-            fis.close()
-            LocalParseResult.Success(text.toString())
+            LocalParseResult.Success("【Word文档】\n$text")
+        } catch (e: OutOfMemoryError) {
+            android.util.Log.e("[DOCX-PARSE]", "❌ 内存不足", e)
+            LocalParseResult.Error("内存不足，请尝试更小的文件")
         } catch (e: Exception) {
-            LocalParseResult.Error("【Word文档解析失败】\n错误：${e.message}")
+            android.util.Log.e("[DOCX-PARSE]", "❌ 解析失败: ${e.message}", e)
+            LocalParseResult.Error("错误：${e.message}\n\n建议：复制文档中的文本粘贴到聊天框")
+        }
+    }
+
+    /**
+     * 直接从 File 对象提取 DOCX 文本
+     */
+    private fun extractDocxTextDirectly(file: File): String {
+        val result = StringBuilder()
+        val MAX_LENGTH = 5000
+
+
+        java.util.zip.ZipInputStream(file.inputStream()).use { zip ->
+            var entry = zip.nextEntry
+            var entryCount = 0
+
+            while (entry != null) {
+                entryCount++
+
+                if (entry.name == "word/document.xml") {
+
+                    // 读取 XML 内容
+                    val xmlContent = zip.reader().readText()
+
+                    // 提取 <w:t> 标签内的文本
+                    val textPattern = Regex("<w:t[^>]*>(.*?)</w:t>", RegexOption.DOT_MATCHES_ALL)
+                    val matches = textPattern.findAll(xmlContent).toList()
+
+
+                    var inParagraph = false
+                    for (match in matches) {
+                        val text = match.groupValues[1]
+                            .replace("&lt;", "<")
+                            .replace("&gt;", ">")
+                            .replace("&amp;", "&")
+                            .replace("&quot;", "\"")
+                            .replace("&apos;", "'")
+                            .trim()
+
+                        if (text.isNotEmpty()) {
+                            if (!inParagraph) {
+                                if (result.isNotEmpty()) result.append("\n")
+                                inParagraph = true
+                            }
+                            result.append(text).append(" ")
+
+                            // 限制长度
+                            if (result.length > MAX_LENGTH) {
+                                break
+                            }
+                        }
+                    }
+
+                    break
+                }
+                entry = zip.nextEntry
+            }
+
+            if (entryCount == 0) {
+                android.util.Log.e("[DOCX-PARSE]", "❌ ZIP文件为空")
+            }
+        }
+
+        // 后处理文本
+        val processed = result.toString()
+            .replace(Regex("\\s+"), " ")
+            .replace(Regex("\\n\\s*\\n"), "\n")
+            .trim()
+
+        return if (processed.length > MAX_LENGTH) {
+            processed.take(MAX_LENGTH) + "\n\n...(内容过长，仅显示前${MAX_LENGTH}字)"
+        } else {
+            processed
         }
     }
 
@@ -409,7 +859,7 @@ class AgentChatFragment :
                         break
                     }
 
-                    val cellValue = when (cell.cellType) {
+                    val cellValue = when (cell.cellTypeEnum) {
                         org.apache.poi.ss.usermodel.CellType.STRING -> cell.stringCellValue
                         org.apache.poi.ss.usermodel.CellType.NUMERIC -> cell.numericCellValue.toString()
                         org.apache.poi.ss.usermodel.CellType.BOOLEAN -> cell.booleanCellValue.toString()
@@ -432,8 +882,12 @@ class AgentChatFragment :
             workbook.close()
             fis.close()
             LocalParseResult.Success(text.toString())
+        } catch (e: OutOfMemoryError) {
+            android.util.Log.e("[EXCEL-PARSE]", "❌ 内存不足", e)
+            LocalParseResult.Error("内存不足，请尝试更小的文件")
         } catch (e: Exception) {
-            LocalParseResult.Error("【Excel解析失败】\n错误：${e.message}")
+            android.util.Log.e("[EXCEL-PARSE]", "❌ 解析失败: ${e.message}", e)
+            LocalParseResult.Error("错误：${e.message}")
         }
     }
 
@@ -445,7 +899,7 @@ class AgentChatFragment :
             text.append("【PowerPoint演示文稿】\n幻灯片数量：${slideShow.slides.size}\n\n")
 
             var slideCount = 0
-            val maxLength = 8000
+            val maxLength = 5000
             var charCount = 0
 
             for (slide in slideShow.slides) {
@@ -482,19 +936,32 @@ class AgentChatFragment :
             slideShow.close()
             fis.close()
             LocalParseResult.Success(text.toString())
+        } catch (e: OutOfMemoryError) {
+            android.util.Log.e("[PPTX-PARSE]", "❌ 内存不足", e)
+            LocalParseResult.Error("内存不足，请尝试更小的文件")
         } catch (e: Exception) {
-            LocalParseResult.Error("【PowerPoint解析失败】\n错误：${e.message}")
+            android.util.Log.e("[PPTX-PARSE]", "❌ 解析失败: ${e.message}", e)
+            LocalParseResult.Error("错误：${e.message}")
         }
     }
 
     private fun doSendWithAttachment(userText: String, fileName: String, base64Content: String, mimeType: String) {
+        android.util.Log.d("[IMAGE-DEBUG]", "========== 发送到多模态API ==========")
+        android.util.Log.d("[IMAGE-DEBUG]", "📝 用户文本: ${userText.take(100)}${if(userText.length>100)"..." else ""}")
+        android.util.Log.d("[IMAGE-DEBUG]", "📁 文件名: $fileName")
+        android.util.Log.d("[IMAGE-DEBUG]", "📋 MIME类型: $mimeType")
+        android.util.Log.d("[IMAGE-DEBUG]", "📊 Base64长度: ${base64Content.length}")
+        android.util.Log.d("[IMAGE-DEBUG]", "🔧 AgentProvider: ${agentProvider::class.simpleName}")
+
         // 发送用户消息，包含文件信息
         val messageWithFile = "$userText\n\n[附件: $fileName]"
+        android.util.Log.d("[IMAGE-DEBUG]", "💬 显示消息: $messageWithFile")
         viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.USER, text = messageWithFile))
 
         agentSession?.dispose()
         agentSession = null
 
+        android.util.Log.d("[IMAGE-DEBUG]", "🚀 调用 sendToLlmWithAttachment...")
         // 使用多模态API发送（仅图片/视频）
         viewModel.sendToLlmWithAttachment(
             text = userText,
@@ -503,6 +970,7 @@ class AgentChatFragment :
             mimeType = mimeType,
             agentProvider = agentProvider
         )
+        android.util.Log.d("[IMAGE-DEBUG]", "========== 发送完成 ==========")
     }
 
     private fun doSend(text: String) {
@@ -515,6 +983,15 @@ class AgentChatFragment :
             text = text,
             agentProvider = agentProvider,
         )
+    }
+
+    /**
+     * 生成debug版本的详细错误信息
+     * 仅在debug build中显示堆栈跟踪和技术细节
+     */
+
+    override fun onStart() {
+        super.onStart()
     }
 
     override fun onDestroyView() {

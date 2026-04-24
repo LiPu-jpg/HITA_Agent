@@ -14,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId "com.stupidtree.hitax"
-        minSdkVersion 23
+        minSdkVersion 26
         targetSdk 33
         compileSdk 35
         versionCode appVersionCodeValue
@@ -149,10 +149,14 @@ dependencies {
 
     implementation 'org.mnode.ical4j:ical4j:1.0.2'
 
-    //文档解析库 - 优先本地处理，减少API调用
-    implementation 'com.tom-roush:pdfbox-android:2.0.27.0' //PDF解析
-    implementation 'org.apache.poi:poi-ooxml:5.2.5' //Word/Excel/PowerPoint解析
-    implementation 'org.apache.poi:poi:5.2.5'
+    //文档解析库 - PDF本地解析，Office使用4.x版本兼容Android
+    implementation 'com.tom-roush:pdfbox-android:2.0.27.0' //PDF解析（已添加资源文件）
+    implementation 'org.apache.poi:poi-ooxml:4.1.2' //Word/Excel/PowerPoint解析
+    implementation 'org.apache.poi:poi:4.1.2'
+
+    // StAX API for Android 8.0+ (Apache POI dependency)
+    implementation 'javax.xml.stream:stax-api:1.0-2'
+    implementation 'com.fasterxml:aalto-xml:1.2.2'
 
     //爆炸效果
     implementation 'tyrantgit:explosionfield:1.0.1'
@@ -169,6 +173,7 @@ dependencies {
     implementation 'io.noties.markwon:html:4.6.2'
     // syntax highlight removed (prism4j artifacts not available in current mirrors)
     implementation 'ru.noties:jlatexmath-android:0.2.0'
+
 }
 
 // Compatibility alias for tooling/scripts that still invoke :app:testClasses (Java plugin task).

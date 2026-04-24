@@ -1,6 +1,7 @@
 package com.stupidtree.hitax.ui.main.agent
 
 import android.content.Context
+import android.text.method.LinkMovementMethod
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -14,12 +15,19 @@ import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
 import io.noties.markwon.linkify.LinkifyPlugin
 import io.noties.markwon.ext.tables.TablePlugin
 import io.noties.markwon.ext.tasklist.TaskListPlugin
+import io.noties.markwon.ext.latex.JLatexMathPlugin
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 
 class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.MessageHolder>() {
     private val items = mutableListOf<AgentChatMessage>()
     private var markwon: Markwon? = null
+
+    companion object {
+        private const val TAG = "AgentChatMessageAdapter"
+    }
+
     private val thinkingHandler = Handler(Looper.getMainLooper())
     private var thinkingPosition = 0
     private val thinkingTexts = listOf("正在思考", "正在思考.", "正在思考..", "正在思考...")
@@ -51,13 +59,26 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
     class MessageHolder(val binding: ItemAgentChatMessageBinding) : RecyclerView.ViewHolder(binding.root)
 
     private fun getMarkwon(context: Context): Markwon {
-        return markwon ?: Markwon.builder(context)
-            .usePlugin(LinkifyPlugin.create())
-            .usePlugin(TablePlugin.create(context))
-            .usePlugin(TaskListPlugin.create(context))
-            .usePlugin(StrikethroughPlugin.create())
-            .build()
-            .also { markwon = it }
+        return markwon ?: run {
+            Log.d(TAG, "Creating Markwon instance")
+            val builder = Markwon.builder(context)
+                .usePlugin(LinkifyPlugin.create())
+                .usePlugin(TablePlugin.create(context))
+                .usePlugin(TaskListPlugin.create(context))
+                .usePlugin(StrikethroughPlugin.create())
+
+            try {
+                builder.usePlugin(JLatexMathPlugin.create(13f))
+                Log.d(TAG, "JLatexMathPlugin enabled")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to enable JLatexMathPlugin", e)
+            }
+
+            builder.build().also {
+                markwon = it
+                Log.d(TAG, "Markwon instance created successfully")
+            }
+        }
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageHolder {
@@ -96,7 +117,11 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
                     holder.binding.thinkingText.visibility = View.GONE
                 } else {
                     holder.binding.thinkingIndicator.visibility = View.GONE
+                    // Use Markwon for all markdown + LaTeX rendering
+                    Log.d(TAG, "Rendering markdown message: ${item.text.take(50)}...")
                     getMarkwon(holder.itemView.context).setMarkdown(holder.binding.messageText, item.text)
+                    // Enable link clicking
+                    holder.binding.messageText.movementMethod = LinkMovementMethod.getInstance()
                     holder.binding.messageText.setTextColor(holder.itemView.context.getColor(R.color.black))
 
                     if (item.thinking != null) {
