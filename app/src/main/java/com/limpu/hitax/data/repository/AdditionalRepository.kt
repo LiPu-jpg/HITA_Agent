@@ -4,11 +4,11 @@ import android.app.Application
 import androidx.lifecycle.LiveData
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.source.web.StaticWebSource
-import com.limpu.hitax.data.source.web.additional.AdditionalSource
+import com.limpu.hitax.data.source.web.additional.AdditionalWebSource
 import com.limpu.hitax.data.source.web.service.AdditionalService
 
 class AdditionalRepository @Suppress("UNUSED_PARAMETER") internal constructor(application: Application) {
-    private val additionalWebSource:AdditionalService = AdditionalSource()
+    private val additionalWebSource:AdditionalService = AdditionalWebSource()
 
     fun getLectures(pageSize:Int,pageOffset:Int): LiveData<DataState<List<Map<String,String>>>> {
         return additionalWebSource.getLectures(pageSize,pageOffset)

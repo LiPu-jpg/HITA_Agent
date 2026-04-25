@@ -20,14 +20,13 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
 
-class BenbuEASSource : EASService {
-    private val hostName = "http://jwts-hit-edu-cn.ivpn.hit.edu.cn:1080"
+class WeihaiEASWebSource : EASService {
+    private val hostName = "https://webvpn.hitwh.edu.cn/http/77726476706e69737468656265737421fae0558f693861446900c7a99c406d3667"
     private val timeout = AppConstants.Network.READ_TIMEOUT.toInt()
     private val executor = Executors.newCachedThreadPool()
 
     companion object {
-        private const val DEBUG_WEEK = 7
-        private val DEBUG_DOW = setOf(5, 6)
+        private const val WEBVPN_JWTS_QUERY_HINT = "vpn-12-o1-jwts.hitwh.edu.cn"
         private val SAFE_PERSONAL_INFO_LABELS = setOf("姓名", "学号", "院系", "学院", "系", "专业", "年级", "班级")
     }
 
@@ -40,25 +39,16 @@ class BenbuEASSource : EASService {
 
         executor.execute {
             try {
-                LogUtils.w( "=== 🔐 Benbu login START ===")
+                LogUtils.w( "=== 🔐 Weihai login START ===")
                 LogUtils.w( "username length=${username.length}")
 
                 val cookiesMap = parseCookiesFromJson(username)
                 LogUtils.w( "parsed cookies: ${cookiesMap.keys} count=${cookiesMap.size}")
-                LogUtils.w( "key cookies: HIT=${cookiesMap["HIT"]?.take(8)} JSESSIONID=${cookiesMap["JSESSIONID"]?.take(8)} TWFID=${cookiesMap["TWFID"]?.take(8)}")
+                LogUtils.w( "key cookies: HIT=${cookiesMap["HIT"]?.take(8)} JSESSIONID=${cookiesMap["JSESSIONID"]?.take(8)} ticket=${cookiesMap.keys.find { it.contains("vpn_ticket", ignoreCase = true) }?.take(20)}")
 
                 if (cookiesMap.isEmpty()) {
                     LogUtils.e( "❌ cookies EMPTY")
                     result.postValue(DataState(DataState.STATE.FETCH_FAILED, "cookies 为空"))
-                    return@execute
-                }
-
-                // 检查必需的 cookies
-                val requiredCookies = listOf("JSESSIONID", "HIT", "TWFID")
-                val missingCookies = requiredCookies.filter { !cookiesMap.containsKey(it) }
-                if (missingCookies.isNotEmpty()) {
-                    LogUtils.e( "❌ Missing required cookies: $missingCookies")
-                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "缺少必需的cookies: $missingCookies"))
                     return@execute
                 }
 
@@ -83,18 +73,18 @@ class BenbuEASSource : EASService {
                 if (response.statusCode() == 200) {
                     val token = EASToken().apply {
                         cookies.putAll(cookiesMap)
-                        campus = EASToken.Campus.BENBU
+                        campus = EASToken.Campus.WEIHAI
                         this.username = extractLoginIdentity(cookiesMap)
                         this.password = password.ifBlank { username }
                     }
-                    LogUtils.w( "✅ Benbu login SUCCESS! username=${token.username}")
+                    LogUtils.w( "✅ Weihai login SUCCESS! username=${token.username}")
                     result.postValue(DataState(token, DataState.STATE.SUCCESS))
                 } else {
-                    LogUtils.e( "❌ Benbu login FAILED statusCode=${response.statusCode()}")
+                    LogUtils.e( "❌ Weihai login FAILED statusCode=${response.statusCode()}")
                     result.postValue(DataState(DataState.STATE.FETCH_FAILED, "登录验证失败 HTTP ${response.statusCode()}"))
                 }
             } catch (e: Exception) {
-                LogUtils.e( "❌ Benbu login EXCEPTION: ${e.javaClass.simpleName} ${e.message}")
+                LogUtils.e( "❌ Weihai login EXCEPTION: ${e.javaClass.simpleName} ${e.message}")
                 e.printStackTrace()
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "登录失败"))
             }
@@ -119,7 +109,36 @@ class BenbuEASSource : EASService {
     }
 
     override fun loginCheck(token: EASToken): LiveData<DataState<Pair<Boolean, EASToken>>> {
-        return MutableLiveData(DataState(Pair(true, token), DataState.STATE.SUCCESS))
+        val result = MutableLiveData<DataState<Pair<Boolean, EASToken>>>()
+        result.value = DataState(DataState.STATE.NOTHING)
+
+        executor.execute {
+            try {
+                val response = Jsoup.connect("$hostName/reAuth")
+                    .cookies(token.cookies)
+                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
+                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
+                    .timeout(timeout)
+                    .ignoreContentType(true)
+                    .ignoreHttpErrors(true)
+                    .method(Connection.Method.GET)
+                    .execute()
+                token.cookies.putAll(response.cookies())
+                val body = response.body()
+                val loggedIn = response.statusCode() == 200 && body.contains("reAuth_success")
+                if (loggedIn) {
+                    result.postValue(DataState(Pair(true, token), DataState.STATE.SUCCESS))
+                } else if (isWeihaiAuthExpiredResponse(response, body)) {
+                    result.postValue(DataState(Pair(false, token), DataState.STATE.SUCCESS))
+                } else {
+                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "登录状态检查失败"))
+                }
+            } catch (e: Exception) {
+                result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "登录状态检查失败"))
+            }
+        }
+
+        return result
     }
 
     override fun getAllTerms(token: EASToken): LiveData<DataState<List<TermItem>>> {
@@ -191,7 +210,7 @@ class BenbuEASSource : EASService {
         term: TermItem
     ): LiveData<DataState<MutableList<TermSubject>>> {
         return MutableLiveData<DataState<MutableList<TermSubject>>>().apply {
-            postValue(DataState(DataState.STATE.FETCH_FAILED, "本部暂不支持课程列表"))
+            postValue(DataState(DataState.STATE.FETCH_FAILED, "威海暂不支持课程列表"))
         }
     }
 
@@ -204,30 +223,45 @@ class BenbuEASSource : EASService {
 
         executor.execute {
             try {
+                val termCode = term.getCode()
+                LogUtils.d( "getTimetableOfTerm request path=/kbcx/queryGrkb params={fhlj=kbcx/queryGrkb,xnxq=$termCode}")
                 val response = Jsoup.connect("$hostName/kbcx/queryGrkb")
                     .cookies(token.cookies)
                     .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
                     .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                     .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
                     .data("fhlj", "kbcx/queryGrkb")
-                    .data("xnxq", term.getCode())
+                    .data("xnxq", termCode)
                     .timeout(timeout)
                     .ignoreContentType(true)
                     .ignoreHttpErrors(true)
                     .method(Connection.Method.POST)
                     .execute()
 
-                if (response.statusCode() == 200) {
-                    val body = response.body()
-                    ensureTimetableResponse(term, body, response.statusCode())
-                    val parsedCourses = BenbuScheduleParser.parseScheduleHtml(body)
-                    val courses = mergeAdjacentCourses(parsedCourses)
-                    logEmptyTimetableDetails(term, body, courses)
-                    LogUtils.d( "getTimetableOfTerm term=${term.getCode()} rawCourseCount=${parsedCourses.size} mergedCourseCount=${courses.size} cookieKeys=${token.cookies.keys.sorted()} ${cookieFingerprintSummary(token.cookies)}")
-                    result.postValue(DataState(courses))
-                } else {
-                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "HTTP ${response.statusCode()}"))
+                val statusCode = response.statusCode()
+                val body = response.body()
+                val hasTimetableTable = Jsoup.parse(body).selectFirst("table.addlist_01") != null
+                LogUtils.d(
+                    "getTimetableOfTerm response term=$termCode status=$statusCode hasAddlist01=$hasTimetableTable cookieKeys=${token.cookies.keys.sorted()} ${cookieFingerprintSummary(token.cookies)}"
+                )
+
+                if (isWeihaiAuthExpiredResponse(response, body)) {
+                    LogUtils.w( "getTimetableOfTerm auth expired term=$termCode status=$statusCode")
+                    result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
+                    return@execute
                 }
+
+                if (statusCode != 200) {
+                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "HTTP $statusCode"))
+                    return@execute
+                }
+
+                ensureTimetableResponse(term, body, statusCode)
+                val parsedCourses = BenbuScheduleParser.parseScheduleHtml(body)
+                val courses = mergeAdjacentCourses(parsedCourses)
+                logEmptyTimetableDetails(term, body, courses)
+                LogUtils.d( "getTimetableOfTerm parsed term=$termCode rawCourseCount=${parsedCourses.size} mergedCourseCount=${courses.size}")
+                result.postValue(DataState(courses))
             } catch (e: Exception) {
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
@@ -271,41 +305,32 @@ class BenbuEASSource : EASService {
         executor.execute {
             try {
                 val buildings = mutableListOf<BuildingItem>()
+                val seen = hashSetOf<String>()
 
-                // 查询一校区教学楼
-                val campus1Response = Jsoup.connect("$hostName/kjscx/queryJxlListBySjid?sf_request_type=ajax")
-                    .cookies(token.cookies)
-                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
-                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
-                    .header("X-Requested-With", "XMLHttpRequest")
-                    .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-                    .data("id", "1")
-                    .timeout(timeout)
-                    .ignoreContentType(true)
-                    .ignoreHttpErrors(true)
-                    .method(Connection.Method.POST)
-                    .execute()
-
-                if (campus1Response.statusCode() == 200) {
-                    buildings.addAll(parseBuildingJson(campus1Response.body()))
+                fun appendFromCampusId(campusId: String) {
+                    val response = Jsoup.connect("$hostName/kjscx/queryJxlListBySjid?sf_request_type=ajax")
+                        .cookies(token.cookies)
+                        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
+                        .header("Accept", "application/json, text/javascript, */*; q=0.01")
+                        .header("X-Requested-With", "XMLHttpRequest")
+                        .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                        .data("id", campusId)
+                        .timeout(timeout)
+                        .ignoreContentType(true)
+                        .ignoreHttpErrors(true)
+                        .method(Connection.Method.POST)
+                        .execute()
+                    if (response.statusCode() != 200) return
+                    parseBuildingJson(response.body()).forEach { item ->
+                        if (item.id.isBlank() || !seen.add(item.id)) return@forEach
+                        buildings.add(item)
+                    }
                 }
 
-                // 查询二校区教学楼
-                val campus2Response = Jsoup.connect("$hostName/kjscx/queryJxlListBySjid?sf_request_type=ajax")
-                    .cookies(token.cookies)
-                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
-                    .header("Accept", "application/json, text/javascript, */*; q=0.01")
-                    .header("X-Requested-With", "XMLHttpRequest")
-                    .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-                    .data("id", "2")
-                    .timeout(timeout)
-                    .ignoreContentType(true)
-                    .ignoreHttpErrors(true)
-                    .method(Connection.Method.POST)
-                    .execute()
-
-                if (campus2Response.statusCode() == 200) {
-                    buildings.addAll(parseBuildingJson(campus2Response.body()))
+                appendFromCampusId("01")
+                if (buildings.isEmpty()) {
+                    appendFromCampusId("1")
+                    appendFromCampusId("2")
                 }
 
                 result.postValue(DataState(buildings))
@@ -429,7 +454,7 @@ class BenbuEASSource : EASService {
         return try {
             var response = executeOnce()
             var doc = parseValidTermDoc(response)
-            var authExpired = isBenbuAuthExpiredResponse(response, response.body())
+            var authExpired = isWeihaiAuthExpiredResponse(response, response.body())
 
             if (doc == null) {
                 LogUtils.d( "fetchTermDoc retry by missing selector select=$selectName url=$url status=${response.statusCode()}")
@@ -591,12 +616,13 @@ class BenbuEASSource : EASService {
         val table = doc.selectFirst("table.addlist_01")
         val rows = table?.select("tr").orEmpty()
         val rowSummaries = rows.take(6).mapIndexed { index, row ->
-            val cells = row.select("td")
+            val cells = row.select("td,th")
             val texts = cells.take(8).map { cell ->
                 cell.text().replace(Regex("\\s+"), " ").trim().take(40)
             }
-            "r$index td=${cells.size} texts=$texts"
+            "r$index cells=${cells.size} texts=$texts"
         }
+        val headerRowCellCount = rows.firstOrNull()?.select("td,th")?.size ?: 0
         val formInputs = doc.select("form input[name], form select[name]")
             .take(20)
             .joinToString { element ->
@@ -605,7 +631,7 @@ class BenbuEASSource : EASService {
             }
         val bodySample = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.take(240).orEmpty()
         LogUtils.w(
-            "empty timetable details term=${term.getCode()} rows=${rows.size} rowSummaries=$rowSummaries formFields=$formInputs sample=$bodySample"
+            "empty timetable details term=${term.getCode()} hasAddlist01=${table != null} rows=${rows.size} headerCells=$headerRowCellCount rowSummaries=$rowSummaries formFields=$formInputs sample=$bodySample"
         )
     }
 
@@ -630,12 +656,6 @@ class BenbuEASSource : EASService {
         for (course in sorted) {
             val last = merged.lastOrNull()
             if (last != null && canMergeCourses(last, course)) {
-                maybeLogMergeDebug(
-                    left = last,
-                    right = course,
-                    stage = "MERGE",
-                    reason = "merge adjacent periods"
-                )
                 last.last += course.last
                 if (last.classroom.isNullOrBlank()) {
                     last.classroom = course.classroom
@@ -644,15 +664,6 @@ class BenbuEASSource : EASService {
                     last.code = course.code
                 }
             } else {
-                if (last != null) {
-                    val reason = mergeBlockReason(last, course)
-                    maybeLogMergeDebug(
-                        left = last,
-                        right = course,
-                        stage = "SKIP",
-                        reason = reason
-                    )
-                }
                 merged.add(copyCourse(course))
             }
         }
@@ -691,59 +702,6 @@ class BenbuEASSource : EASService {
         return true
     }
 
-    private fun mergeBlockReason(left: CourseItem, right: CourseItem): String {
-        if (left.dow != right.dow) return "dow mismatch ${left.dow} vs ${right.dow}"
-        val leftName = normalized(left.name)
-        val rightName = normalized(right.name)
-        if (leftName != rightName) return "name mismatch '$leftName' vs '$rightName'"
-        val leftTeacher = normalized(left.teacher)
-        val rightTeacher = normalized(right.teacher)
-        if (leftTeacher != rightTeacher) return "teacher mismatch '$leftTeacher' vs '$rightTeacher'"
-        val leftWeeks = left.weeks.sorted()
-        val rightWeeks = right.weeks.sorted()
-        if (leftWeeks != rightWeeks) return "weeks mismatch $leftWeeks vs $rightWeeks"
-
-        val leftEndPeriod = left.begin + left.last - 1
-        if (leftEndPeriod + 1 != right.begin) return "period not adjacent ${left.begin}-${leftEndPeriod} vs ${right.begin}"
-
-        val schedule = defaultScheduleStructure()
-        if (leftEndPeriod !in 1..schedule.size || right.begin !in 1..schedule.size) {
-            return "period out of schedule range leftEnd=$leftEndPeriod rightBegin=${right.begin}"
-        }
-
-        val leftEndTime = schedule[leftEndPeriod - 1].to
-        val rightStartTime = schedule[right.begin - 1].from
-        val gapMinutes = leftEndTime.getDistanceInMinutes(rightStartTime)
-        if (gapMinutes < 0 || gapMinutes >= 30) return "time gap=$gapMinutes"
-
-        val leftClassroom = normalized(left.classroom)
-        val rightClassroom = normalized(right.classroom)
-        if (leftClassroom.isNotEmpty() && rightClassroom.isNotEmpty() && leftClassroom != rightClassroom) {
-            return "classroom mismatch '$leftClassroom' vs '$rightClassroom'"
-        }
-
-        val leftCode = normalized(left.code)
-        val rightCode = normalized(right.code)
-        if (leftCode.isNotEmpty() && rightCode.isNotEmpty() && leftCode != rightCode) {
-            return "code mismatch '$leftCode' vs '$rightCode'"
-        }
-
-        return "unknown"
-    }
-
-    private fun maybeLogMergeDebug(left: CourseItem, right: CourseItem, stage: String, reason: String) {
-        val weeksUnion = (left.weeks + right.weeks).distinct()
-        val dow = left.dow
-        if (dow !in DEBUG_DOW || !weeksUnion.contains(DEBUG_WEEK)) return
-        val leftEnd = left.begin + left.last - 1
-        val rightEnd = right.begin + right.last - 1
-        LogUtils.d(
-            "[DBG_W7_D56][$stage] reason=$reason " +
-                "L{name=${left.name},teacher=${left.teacher},weeks=${left.weeks.sorted()},dow=${left.dow},period=${left.begin}-$leftEnd,room=${left.classroom},code=${left.code}} " +
-                "R{name=${right.name},teacher=${right.teacher},weeks=${right.weeks.sorted()},dow=${right.dow},period=${right.begin}-$rightEnd,room=${right.classroom},code=${right.code}}"
-        )
-    }
-
     private fun normalized(value: String?): String {
         return value?.trim().orEmpty()
     }
@@ -763,18 +721,18 @@ class BenbuEASSource : EASService {
 
     private fun defaultScheduleStructure(): MutableList<TimePeriodInDay> {
         return mutableListOf(
-            TimePeriodInDay(TimeInDay(8, 0), TimeInDay(8, 50)),
-            TimePeriodInDay(TimeInDay(8, 55), TimeInDay(9, 45)),
-            TimePeriodInDay(TimeInDay(10, 0), TimeInDay(10, 50)),
-            TimePeriodInDay(TimeInDay(10, 55), TimeInDay(11, 45)),
-            TimePeriodInDay(TimeInDay(13, 45), TimeInDay(14, 35)),
-            TimePeriodInDay(TimeInDay(14, 40), TimeInDay(15, 30)),
-            TimePeriodInDay(TimeInDay(15, 45), TimeInDay(16, 35)),
-            TimePeriodInDay(TimeInDay(16, 40), TimeInDay(17, 30)),
-            TimePeriodInDay(TimeInDay(18, 30), TimeInDay(19, 20)),
-            TimePeriodInDay(TimeInDay(19, 25), TimeInDay(20, 15)),
-            TimePeriodInDay(TimeInDay(20, 30), TimeInDay(21, 20)),
-            TimePeriodInDay(TimeInDay(21, 25), TimeInDay(22, 15))
+            TimePeriodInDay(TimeInDay(8, 0), TimeInDay(8, 45)),
+            TimePeriodInDay(TimeInDay(9, 0), TimeInDay(9, 45)),
+            TimePeriodInDay(TimeInDay(10, 5), TimeInDay(10, 50)),
+            TimePeriodInDay(TimeInDay(11, 5), TimeInDay(11, 50)),
+            TimePeriodInDay(TimeInDay(14, 0), TimeInDay(14, 45)),
+            TimePeriodInDay(TimeInDay(15, 0), TimeInDay(15, 45)),
+            TimePeriodInDay(TimeInDay(16, 5), TimeInDay(16, 50)),
+            TimePeriodInDay(TimeInDay(17, 5), TimeInDay(17, 50)),
+            TimePeriodInDay(TimeInDay(18, 40), TimeInDay(19, 25)),
+            TimePeriodInDay(TimeInDay(19, 40), TimeInDay(20, 25)),
+            TimePeriodInDay(TimeInDay(20, 45), TimeInDay(21, 30)),
+            TimePeriodInDay(TimeInDay(21, 45), TimeInDay(22, 30))
         )
     }
 
@@ -791,30 +749,160 @@ class BenbuEASSource : EASService {
             try {
                 val weekStart = weeks.firstOrNull() ?: "1"
                 val weekEnd = weeks.lastOrNull() ?: weekStart
+                val xiaoquCandidates = linkedSetOf("01", "1", "2", "")
+                val roomCandidates = linkedSetOf("，", "")
 
-                val response = Jsoup.connect("$hostName/kjscx/queryKjs")
-                    .cookies(token.cookies)
-                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
-                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                    .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
-                    .data("pageXnxq", term.getCode())
-                    .data("pageZc1", weekStart)
-                    .data("pageZc2", weekEnd)
-                    .data("pageXiaoqu", "")
-                    .data("pageLhdm", building.id)
-                    .data("pageCddm", "")
-                    .timeout(timeout)
-                    .ignoreContentType(true)
-                    .ignoreHttpErrors(true)
-                    .method(Connection.Method.POST)
-                    .execute()
-
-                if (response.statusCode() == 200) {
-                    val classrooms = BenbuClassroomParser.parseEmptyClassroomHtml(response.body())
-                    result.postValue(DataState(classrooms))
-                } else {
-                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "HTTP ${response.statusCode()}"))
+                fun normalizeCode(raw: String): String {
+                    val trimmed = raw.trim()
+                    return trimmed.trimStart('0').ifEmpty { "0" }
                 }
+
+                fun fetchBuildingsForCampus(xiaoqu: String): List<BuildingItem> {
+                    if (xiaoqu.isBlank()) return emptyList()
+                    return try {
+                        val response = Jsoup.connect("$hostName/kjscx/queryJxlListBySjid?sf_request_type=ajax")
+                            .cookies(token.cookies)
+                            .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
+                            .header("Accept", "application/json, text/javascript, */*; q=0.01")
+                            .header("X-Requested-With", "XMLHttpRequest")
+                            .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                            .data("id", xiaoqu)
+                            .timeout(timeout)
+                            .ignoreContentType(true)
+                            .ignoreHttpErrors(true)
+                            .method(Connection.Method.POST)
+                            .execute()
+                        if (response.statusCode() == 200) parseBuildingJson(response.body()) else emptyList()
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                }
+
+                var lastResponse: Connection.Response? = null
+                var lastBody = ""
+                var lastClassrooms: List<ClassroomItem> = emptyList()
+                var lastXiaoqu = ""
+                var lastLhdm = ""
+                var lastCddm = ""
+
+                val targetBuildingCode = normalizeCode(building.id)
+
+                for (xiaoqu in xiaoquCandidates) {
+                    val remoteBuildings = fetchBuildingsForCampus(xiaoqu)
+                    val selectedBuildingName = building.name?.trim().orEmpty()
+                    val matchedRemoteCodes = remoteBuildings
+                        .filter { remote ->
+                            normalizeCode(remote.id) == targetBuildingCode ||
+                                (selectedBuildingName.isNotBlank() && remote.name?.trim() == selectedBuildingName)
+                        }
+                        .map { it.id.trim() }
+
+                    val buildingCandidates = linkedSetOf<String>()
+                    matchedRemoteCodes.forEach { buildingCandidates.add(it) }
+                    buildingCandidates.add(building.id.trim())
+                    buildingCandidates.add(building.id.trimStart('0'))
+                    buildingCandidates.add(building.id.trimStart('0').padStart(2, '0'))
+                    buildingCandidates.add("")
+
+                    LogUtils.d(
+                        "queryEmptyClassroom xiaoqu=$xiaoqu remoteBuildings=${remoteBuildings.size} matchedRemote=$matchedRemoteCodes buildingCandidates=$buildingCandidates"
+                    )
+
+                    for (lhdm in buildingCandidates) {
+                        for (cddm in roomCandidates) {
+                            val params = linkedMapOf(
+                                "pageXnxq" to term.getCode(),
+                                "pageZc1" to weekStart,
+                                "pageZc2" to weekEnd,
+                                "pageXiaoqu" to xiaoqu,
+                                "pageLhdm" to lhdm,
+                                "pageCddm" to cddm
+                            )
+                            LogUtils.d(
+                                "queryEmptyClassroom term=${term.getCode()} building=${building.id} weeks=$weekStart-$weekEnd path=/kjscx/queryKjs pageXiaoqu=${params["pageXiaoqu"]} pageLhdm=${params["pageLhdm"]} pageCddm=${params["pageCddm"]}"
+                            )
+
+                            val response = Jsoup.connect("$hostName/kjscx/queryKjs?$WEBVPN_JWTS_QUERY_HINT")
+                                .cookies(token.cookies)
+                                .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
+                                .header("Accept", "application/json, text/javascript, */*; q=0.01")
+                                .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
+                                .header("Origin", "https://webvpn.hitwh.edu.cn")
+                                .header("Referer", "$hostName/kjscx/queryKjs")
+                                .header("X-Requested-With", "XMLHttpRequest")
+                                .header("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                                .header("sec-fetch-site", "same-origin")
+                                .header("sec-fetch-mode", "cors")
+                                .header("sec-fetch-dest", "empty")
+                                .data(params)
+                                .timeout(timeout)
+                                .ignoreContentType(true)
+                                .ignoreHttpErrors(true)
+                                .method(Connection.Method.POST)
+                                .execute()
+
+                            val body = response.body()
+                            if (isWeihaiAuthExpiredResponse(response, body)) {
+                                LogUtils.w(
+                                    "queryEmptyClassroom auth expired term=${term.getCode()} building=${building.id} weeks=$weekStart-$weekEnd status=${response.statusCode()}"
+                                )
+                                result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
+                                return@execute
+                            }
+                            if (response.statusCode() != 200) {
+                                continue
+                            }
+
+                            val classrooms = BenbuClassroomParser.parseEmptyClassroomHtml(body)
+                            val doc = Jsoup.parse(body)
+                            val title = doc.title().trim()
+                            val tableCount = doc.select("table").size
+                            val firstNames = classrooms.take(6).map { it.name }
+                            LogUtils.d(
+                                "queryEmptyClassroom parsed=${classrooms.size} title=$title tables=$tableCount first=$firstNames pageXiaoqu=$xiaoqu pageLhdm=$lhdm pageCddm=$cddm"
+                            )
+
+                            lastResponse = response
+                            lastBody = body
+                            lastClassrooms = classrooms
+                            lastXiaoqu = xiaoqu
+                            lastLhdm = lhdm
+                            lastCddm = cddm
+
+                            if (classrooms.isNotEmpty()) {
+                                result.postValue(DataState(classrooms))
+                                return@execute
+                            }
+                        }
+                    }
+                }
+
+                val response = lastResponse
+                if (response == null) {
+                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "HTTP request failed"))
+                    return@execute
+                }
+
+                val doc = Jsoup.parse(lastBody)
+                if (lastClassrooms.isEmpty()) {
+                    val rowSummaries = doc.select("table.dataTable tr")
+                        .take(8)
+                        .mapIndexed { idx, row ->
+                            val tdCount = row.select("td").size
+                            val thCount = row.select("th").size
+                            val text = row.text().replace(Regex("\\s+"), " ").take(80)
+                            "r$idx td=$tdCount th=$thCount text=$text"
+                        }
+                    val headerInputs = doc.select("form input[name], form select[name]")
+                        .take(16)
+                        .joinToString { element ->
+                            "${element.tagName()}[name=${element.attr("name")},value=${element.`val`().take(20)}]"
+                        }
+                    LogUtils.w(
+                        "queryEmptyClassroom empty details pageXiaoqu=$lastXiaoqu pageLhdm=$lastLhdm pageCddm=$lastCddm rows=$rowSummaries formFields=$headerInputs"
+                    )
+                }
+                result.postValue(DataState(lastClassrooms))
             } catch (e: Exception) {
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
@@ -834,10 +922,10 @@ class BenbuEASSource : EASService {
 
         executor.execute {
             try {
-                val response = requestBenbuScores(term, token, testType)
+                val response = requestWeihaiScores(term, token, testType)
                 val body = response.body()
                 if (response.statusCode() == 200) {
-                    if (isBenbuAuthExpiredResponse(response, body)) {
+                    if (isWeihaiAuthExpiredResponse(response, body)) {
                         logScoreFailure("getPersonalScores", term, testType, response.statusCode(), body)
                         result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
                         return@execute
@@ -848,7 +936,7 @@ class BenbuEASSource : EASService {
                     logScoreDebug("getPersonalScores", term, testType, response.statusCode(), body, parsed, filtered)
                     result.postValue(DataState(scores))
                 } else {
-                    if (isBenbuAuthExpiredResponse(response, body)) {
+                    if (isWeihaiAuthExpiredResponse(response, body)) {
                         logScoreFailure("getPersonalScores", term, testType, response.statusCode(), body)
                         result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
                     } else {
@@ -874,10 +962,10 @@ class BenbuEASSource : EASService {
 
         executor.execute {
             try {
-                val scoreResponse = requestBenbuScores(term, token, testType)
+                val scoreResponse = requestWeihaiScores(term, token, testType)
                 val body = scoreResponse.body()
                 if (scoreResponse.statusCode() != 200) {
-                    if (isBenbuAuthExpiredResponse(scoreResponse, body)) {
+                    if (isWeihaiAuthExpiredResponse(scoreResponse, body)) {
                         logScoreFailure("getPersonalScoresWithSummary", term, testType, scoreResponse.statusCode(), body)
                         result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
                     } else {
@@ -886,7 +974,7 @@ class BenbuEASSource : EASService {
                     }
                     return@execute
                 }
-                if (isBenbuAuthExpiredResponse(scoreResponse, body)) {
+                if (isWeihaiAuthExpiredResponse(scoreResponse, body)) {
                     logScoreFailure("getPersonalScoresWithSummary", term, testType, scoreResponse.statusCode(), body)
                     result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
                     return@execute
@@ -895,7 +983,7 @@ class BenbuEASSource : EASService {
                 val filtered = parsed.filter { item -> matchesRequestedTerm(item.termName, term) }
                 val scores = if (filtered.isNotEmpty() || parsed.isEmpty()) filtered else parsed
                 logScoreDebug("getPersonalScoresWithSummary", term, testType, scoreResponse.statusCode(), body, parsed, filtered)
-                val summary = fetchBenbuScoreSummary(token)
+                val summary = fetchWeihaiScoreSummary(token)
                 result.postValue(DataState(ScoreQueryResult(scores, summary), DataState.STATE.SUCCESS))
             } catch (e: Exception) {
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
@@ -907,7 +995,7 @@ class BenbuEASSource : EASService {
 
     override fun getExamItems(token: EASToken): LiveData<DataState<List<ExamItem>>> {
         val result = MutableLiveData<DataState<List<ExamItem>>>()
-        result.value = DataState(DataState.STATE.FETCH_FAILED, "本部暂不支持考试安排查询")
+        result.value = DataState(DataState.STATE.FETCH_FAILED, "威海暂不支持考试安排查询")
         return result
     }
 
@@ -991,25 +1079,26 @@ class BenbuEASSource : EASService {
             }
     }
 
-    private fun requestBenbuScores(
+    private fun requestWeihaiScores(
         term: TermItem,
         token: EASToken,
         testType: EASService.TestType
     ): Connection.Response {
         val (path, params) = when (testType) {
             EASService.TestType.ALL -> {
-                "/xfj/queryListXfj" to linkedMapOf(
-                    "pageXnxqks" to term.getCode(),
-                    "pageXnxqjs" to term.getCode(),
-                    "pageKcmc" to ""
+                "/cjcx/queryQmcj" to linkedMapOf(
+                    "pageXnxq" to term.getCode(),
+                    "pageBkcxbj" to "",
+                    "pageSfjg" to "",
+                    "pageKcmc" to "",
                 )
             }
             EASService.TestType.NORMAL -> {
                 "/cjcx/queryQmcj" to linkedMapOf(
                     "pageXnxq" to term.getCode(),
-                    "pageBkcxbj" to "0",
+                    "pageBkcxbj" to "",
                     "pageSfjg" to "",
-                    "pageKcmc" to ""
+                    "pageKcmc" to "",
                 )
             }
             EASService.TestType.RESIT -> {
@@ -1023,11 +1112,11 @@ class BenbuEASSource : EASService {
                     "pageXnxq" to term.getCode(),
                     "pageBkcxbj" to "2",
                     "pageSfjg" to "",
-                    "pageKcmc" to ""
+                    "pageKcmc" to "",
                 )
             }
         }
-        LogUtils.d( "requestBenbuScores term=${term.getCode()} name=${term.termName} testType=$testType path=$path params=$params")
+        LogUtils.d( "requestWeihaiScores term=${term.getCode()} name=${term.termName} testType=$testType path=$path params=$params")
 
         fun executeOnce(): Connection.Response {
             val resp = Jsoup.connect(hostName + path)
@@ -1046,7 +1135,7 @@ class BenbuEASSource : EASService {
         }
 
         var response = executeOnce()
-        if (isBenbuAuthExpiredResponse(response, response.body()) && tryRelogin(token)) {
+        if (isWeihaiAuthExpiredResponse(response, response.body()) && tryRelogin(token)) {
             response = executeOnce()
         }
         return response
@@ -1063,28 +1152,48 @@ class BenbuEASSource : EASService {
         return true
     }
 
-    private fun isBenbuAuthExpiredResponse(resp: Connection.Response, body: String): Boolean {
+    private fun isWeihaiAuthExpiredResponse(resp: Connection.Response, body: String): Boolean {
         if (resp.statusCode() == 401 || resp.statusCode() == 403) return true
+
+        if (body.contains("\"code\":\"reAuth_success\"", ignoreCase = true)
+            || body.contains("\"code\": " + "\"reAuth_success\"", ignoreCase = true)
+        ) {
+            return false
+        }
+
         val doc = Jsoup.parse(body)
         val title = doc.title().lowercase()
         val text = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.lowercase().orEmpty()
-        val hasScoreTable = doc.selectFirst("table.bot_line") != null
+
         val hasLoginForm = doc.select("input[name=mm], input[name=password], form[action*=login], form[action*=authentication]").isNotEmpty()
+        val hasReAuthPageMarker = body.contains("reAuth", ignoreCase = true)
+                && !body.contains("reAuth_success", ignoreCase = true)
+
+        val hasScoreBusinessMarker = title.contains("成绩查询")
+                || body.contains("pageBkcxbj", ignoreCase = true)
+                || body.contains("queryQmcj", ignoreCase = true)
+                || body.contains("queryQzcj", ignoreCase = true)
+                || body.contains("cjcx/query", ignoreCase = true)
+
         val isJsChallengePage = text.contains("your browser does not support javascript")
                 || text.contains("javascript is disabled in your browser")
                 || text.contains("please enable javascript")
                 || text.contains("enable javascript to continue")
                 || title.contains("just a moment")
                 || title.contains("attention required")
+
         if (isJsChallengePage) return true
-        if (hasLoginForm && !hasScoreTable) return true
-        if (!hasScoreTable && (title.contains("登录") || title.contains("统一身份认证") || title.contains("ivpn") || text.contains("登录") || text.contains("未登录") || text.contains("认证"))) {
+        if (hasReAuthPageMarker) return true
+        if (hasLoginForm) return true
+        if (hasScoreBusinessMarker) return false
+        if (title.contains("登录") || title.contains("统一身份认证") || text.contains("未登录")) {
             return true
         }
         return false
     }
 
-    private fun fetchBenbuScoreSummary(token: EASToken): ScoreSummary? {
+
+    private fun fetchWeihaiScoreSummary(token: EASToken): ScoreSummary? {
         return try {
             val response = Jsoup.connect("$hostName/xfj/queryListXfj")
                 .cookies(token.cookies)
@@ -1099,13 +1208,13 @@ class BenbuEASSource : EASService {
             if (response.statusCode() != 200) {
                 return null
             }
-            extractBenbuScoreSummary(Jsoup.parse(response.body()))
+            extractWeihaiScoreSummary(Jsoup.parse(response.body()))
         } catch (_: Exception) {
             null
         }
     }
 
-    private fun extractBenbuScoreSummary(doc: Document): ScoreSummary? {
+    private fun extractWeihaiScoreSummary(doc: Document): ScoreSummary? {
         val values = mutableMapOf<String, String>()
         doc.select("span[id]").forEach { span ->
             val id = span.id().trim()

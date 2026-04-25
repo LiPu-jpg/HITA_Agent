@@ -9,7 +9,7 @@ import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.*
 
-class AdditionalSource : AdditionalService {
+class AdditionalWebSource : AdditionalService {
     @SuppressLint("SimpleDateFormat")
     override fun getLectures(
         pageSize: Int,

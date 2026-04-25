@@ -18,9 +18,9 @@ import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.model.timetable.Timetable
 import com.limpu.hitax.data.source.preference.EasPreferenceSource
 import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
-import com.limpu.hitax.data.source.web.eas.BenbuEASSource
-import com.limpu.hitax.data.source.web.eas.EASource
-import com.limpu.hitax.data.source.web.eas.WeihaiEASSource
+import com.limpu.hitax.data.source.web.eas.BenbuEASWebSource
+import com.limpu.hitax.data.source.web.eas.EASWebSource
+import com.limpu.hitax.data.source.web.eas.WeihaiEASWebSource
 import com.limpu.hitax.data.source.web.service.EASService
 import com.limpu.hitax.ui.eas.classroom.BuildingItem
 import com.limpu.hitax.ui.eas.classroom.ClassroomItem
@@ -40,9 +40,9 @@ import com.limpu.hitax.utils.LogUtils
 
 class EASRepository internal constructor(application: Application) {
     private val appContext = application.applicationContext
-    private val shenzhenService: EASource = EASource()
-    private val benbuService: EASService = BenbuEASSource()
-    private val weihaiService: EASService = WeihaiEASSource()
+    private val shenzhenService: EASWebSource = EASWebSource()
+    private val benbuService: EASService = BenbuEASWebSource()
+    private val weihaiService: EASService = WeihaiEASWebSource()
     private var easPreferenceSource = EasPreferenceSource.getInstance(application)
     private var eventItemDao = AppDatabase.getDatabase(application).eventItemDao()
     private var timetableDao = AppDatabase.getDatabase(application).timetableDao()
@@ -226,9 +226,9 @@ class EASRepository internal constructor(application: Application) {
         }
         val service = getService(easToken.campus)
         return when (service) {
-            is EASource -> service.getPersonalScoresWithSummary(term, easToken, testType)
-            is BenbuEASSource -> service.getPersonalScoresWithSummary(term, easToken, testType)
-            is WeihaiEASSource -> service.getPersonalScoresWithSummary(term, easToken, testType)
+            is EASWebSource -> service.getPersonalScoresWithSummary(term, easToken, testType)
+            is BenbuEASWebSource -> service.getPersonalScoresWithSummary(term, easToken, testType)
+            is WeihaiEASWebSource -> service.getPersonalScoresWithSummary(term, easToken, testType)
             else -> service.getPersonalScores(term, easToken, testType).map { state ->
                 if (state.state == DataState.STATE.SUCCESS) {
                     DataState(ScoreQueryResult(items = state.data ?: emptyList(), summary = null), state.state)
