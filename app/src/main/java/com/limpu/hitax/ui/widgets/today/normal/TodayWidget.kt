@@ -12,6 +12,8 @@ import com.limpu.hitax.ui.widgets.WidgetUtils.EVENT_REFRESH
 import com.limpu.hitax.ui.widgets.today.TodayUtils.goAsync
 import com.limpu.hitax.ui.widgets.today.TodayUtils.setUpOneWidget
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Implementation of App Widget functionality.
@@ -31,7 +33,10 @@ class TodayWidget : AppWidgetProvider() {
         val timetableRepo =
             TimetableRepository.getInstance(context.applicationContext as Application)
         goAsync{
-            val events = timetableRepo.getTodayEventsSync()
+            // 确保数据库操作在后台线程执行
+            val events = withContext(Dispatchers.IO) {
+                timetableRepo.getTodayEventsSync()
+            }
             for (appWidgetId in appWidgetIds) {
                 Log.e("WI", "UPDATE:$appWidgetId")
                 setUpOneWidget(context, events, appWidgetManager, appWidgetId,false)
@@ -56,7 +61,10 @@ class TodayWidget : AppWidgetProvider() {
                 val timetableRepo =
                     TimetableRepository.getInstance(context.applicationContext as Application)
                 goAsync {
-                    val events = timetableRepo.getTodayEventsSync()
+                    // 确保数据库操作在后台线程执行
+                    val events = withContext(Dispatchers.IO) {
+                        timetableRepo.getTodayEventsSync()
+                    }
                     for (appWidgetId in mgr.getAppWidgetIds(cn)) {
                         Log.e("WI", "refressh$appWidgetId")
                         setUpOneWidget(context, events, mgr, appWidgetId,false)

@@ -14,6 +14,8 @@ import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.ui.widgets.WidgetThemeUtils
 import com.limpu.hitax.ui.widgets.today.normal.TodayWidget.Companion.EVENT_EXTRA
 import com.limpu.hitax.utils.TimeTools
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 
 internal class ListRemoteViewsFactory(val mContext: Context, intent: Intent) :
     RemoteViewsService.RemoteViewsFactory {
@@ -88,7 +90,10 @@ internal class ListRemoteViewsFactory(val mContext: Context, intent: Intent) :
     override fun onDataSetChanged() {
         val timetableRepo =
             TimetableRepository.getInstance(mContext.applicationContext as Application)
-        val events = timetableRepo.getTodayEventsSync()
+        // 确保数据库操作在后台线程执行
+        val events = runBlocking(Dispatchers.IO) {
+            timetableRepo.getTodayEventsSync()
+        }
         mBeans.clear()
         mBeans.addAll(events.sortedBy { it.from.time })
         highlightIndex = findHighlightIndex(mBeans)
