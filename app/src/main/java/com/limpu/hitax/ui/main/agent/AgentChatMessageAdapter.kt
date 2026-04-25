@@ -1,12 +1,14 @@
 package com.limpu.hitax.ui.main.agent
 
 import android.content.Context
+import android.graphics.Color
 import android.text.method.LinkMovementMethod
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.limpu.hitax.R
 import com.limpu.hitax.databinding.ItemAgentChatMessageBinding
@@ -103,9 +105,10 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
                 holder.binding.thinkingHeader.visibility = View.GONE
                 holder.binding.thinkingText.visibility = View.GONE
                 layoutParams.gravity = Gravity.END
-                // 使用固定蓝色而不是根据科目变化的colorPrimary
-                holder.binding.messageCard.setCardBackgroundColor(holder.itemView.context.getColor(R.color.cruel_summer_primary))
-                holder.binding.messageText.setTextColor(holder.itemView.context.getColor(android.R.color.white))
+                // 用户消息使用蓝色气泡 (强制使用 #304ffe 蓝色)
+                holder.binding.messageCard.setCardBackgroundColor(Color.parseColor("#304ffe"))
+                holder.binding.messageCard.strokeWidth = 0
+                holder.binding.messageText.setTextColor(Color.WHITE)
             }
 
             AgentChatMessage.Role.ASSISTANT -> {
@@ -144,7 +147,9 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
                     }
                 }
                 layoutParams.gravity = Gravity.START
-                holder.binding.messageCard.setCardBackgroundColor(holder.itemView.context.getColor(R.color.baseWhite))
+                // AI助手消息使用白色气泡
+                holder.binding.messageCard.setCardBackgroundColor(Color.WHITE)
+                holder.binding.messageCard.strokeWidth = 0
             }
 
             AgentChatMessage.Role.TRACE -> {
