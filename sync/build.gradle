@@ -33,7 +33,7 @@ android {
     buildFeatures {
         buildConfig = true
     }
-    namespace 'com.stupidtree.sync'
+    namespace 'com.limpu.sync'
 }
 
 dependencies {

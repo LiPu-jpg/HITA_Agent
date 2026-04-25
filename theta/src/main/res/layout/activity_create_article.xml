@@ -84,7 +84,7 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <com.stupidtree.hita.theta.ui.widgets.EmoticonsEditText
+            <com.limpu.hita.theta.ui.widgets.EmoticonsEditText
                 android:id="@+id/content"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

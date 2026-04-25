@@ -11,6 +11,7 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:name=".HApplication"
@@ -28,8 +29,8 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.stupidtree.hita.WIDGET_EVENT_CLICK" />
-                <action android:name="com.stupidtree.hita.WIDGET_EVENT_REFRESH" />
+                <action android:name="com.limpu.hita.WIDGET_EVENT_CLICK" />
+                <action android:name="com.limpu.hita.WIDGET_EVENT_REFRESH" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -44,8 +45,8 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.stupidtree.hita.WIDGET_EVENT_CLICK2" />
-                <action android:name="com.stupidtree.hita.WIDGET_EVENT_REFRESH" />
+                <action android:name="com.limpu.hita.WIDGET_EVENT_CLICK2" />
+                <action android:name="com.limpu.hita.WIDGET_EVENT_REFRESH" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -54,7 +55,9 @@
 
         <activity
             android:name=".ui.main.MainActivity"
-            android:launchMode="singleTop" />
+            android:launchMode="singleTop"
+            android:theme="@style/AppTheme.ChatTheme"
+            android:windowSoftInputMode="stateHidden|adjustResize" />
         <activity android:name=".ui.timetable.manager.TimetableManagerActivity" />
         <activity android:name=".ui.subject.SubjectActivity" />
         <activity android:name=".ui.myprofile.MyProfileActivity" />

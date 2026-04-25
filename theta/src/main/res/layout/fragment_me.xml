@@ -123,7 +123,7 @@
                         android:orientation="vertical"
                         android:paddingBottom="6dp">
 
-                        <com.stupidtree.hitax.ui.widgets.FocusTextView
+                        <com.limpu.hitax.ui.widgets.FocusTextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center|start"
@@ -198,7 +198,7 @@
                         android:orientation="vertical"
                         android:paddingBottom="6dp">
 
-                        <com.stupidtree.hitax.ui.widgets.FocusTextView
+                        <com.limpu.hitax.ui.widgets.FocusTextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center|start"
@@ -267,7 +267,7 @@
                         android:orientation="vertical"
                         android:paddingBottom="6dp">
 
-                        <com.stupidtree.hitax.ui.widgets.FocusTextView
+                        <com.limpu.hitax.ui.widgets.FocusTextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center|start"
@@ -277,7 +277,7 @@
                             android:textColor="?attr/textColorPrimary"
                             android:textSize="16sp" />
 
-                        <com.stupidtree.hitax.ui.widgets.FocusTextView
+                        <com.limpu.hitax.ui.widgets.FocusTextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center|start"
@@ -346,7 +346,7 @@
                         android:orientation="vertical"
                         android:paddingBottom="6dp">
 
-                        <com.stupidtree.hitax.ui.widgets.FocusTextView
+                        <com.limpu.hitax.ui.widgets.FocusTextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center|start"
@@ -356,7 +356,7 @@
                             android:textColor="?attr/textColorPrimary"
                             android:textSize="16sp" />
 
-                        <com.stupidtree.hitax.ui.widgets.FocusTextView
+                        <com.limpu.hitax.ui.widgets.FocusTextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center|start"
@@ -423,7 +423,7 @@
                         android:orientation="vertical"
                         android:paddingBottom="6dp">
 
-                        <com.stupidtree.hitax.ui.widgets.FocusTextView
+                        <com.limpu.hitax.ui.widgets.FocusTextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center|start"
@@ -433,7 +433,7 @@
                             android:textColor="?attr/textColorPrimary"
                             android:textSize="16sp" />
 
-                        <com.stupidtree.hitax.ui.widgets.FocusTextView
+                        <com.limpu.hitax.ui.widgets.FocusTextView
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center|start"

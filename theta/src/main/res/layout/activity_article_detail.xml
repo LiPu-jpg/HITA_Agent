@@ -153,7 +153,7 @@
                     app:layout_collapseParallaxMultiplier="0.9"
                     app:layout_scrollFlags="enterAlwaysCollapsed">
 
-                    <com.stupidtree.hita.theta.ui.widgets.EmoticonsTextView2
+                    <com.limpu.hita.theta.ui.widgets.EmoticonsTextView2
                         android:id="@+id/content"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"

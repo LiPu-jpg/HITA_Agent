@@ -86,19 +86,21 @@
         <EditText
             android:id="@+id/inputField"
             android:layout_width="0dp"
-            android:layout_height="44dp"
+            android:layout_height="wrap_content"
+            android:minHeight="44dp"
             android:layout_weight="1"
             android:background="@drawable/bottom_sheet_rounded_background"
             android:backgroundTint="?attr/backgroundColorSecond"
             android:hint="@string/agent_chat_hint"
             android:imeOptions="actionSend"
-            android:inputType="text"
-            android:maxLines="1"
+            android:inputType="textCapSentences"
+            android:maxLines="4"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:textColor="?attr/textColorPrimary"
             android:textColorHint="?attr/textColorSecondary"
-            android:textSize="14sp" />
+            android:textSize="14sp"
+            android:scrollbars="vertical" />
 
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/sendButton"
@@ -107,7 +109,7 @@
             android:layout_marginStart="8dp"
             android:contentDescription="@string/send"
             android:src="@android:drawable/ic_menu_send"
-            app:backgroundTint="?attr/colorPrimary"
+            app:backgroundTint="@color/cruel_summer_primary"
             app:fabCustomSize="44dp"
             app:tint="@color/white" />
 

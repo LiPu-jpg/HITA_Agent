@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
-        <activity android:name="com.stupidtree.hita.theta.ui.create.CreateArticleActivity" />
+        <activity android:name="com.limpu.hita.theta.ui.create.CreateArticleActivity" />
         <activity android:name=".ThetaActivity"
             android:windowSoftInputMode="adjustPan|stateAlwaysHidden"/>
         <activity android:name=".ui.detail.ArticleDetailActivity"

@@ -34,7 +34,7 @@ android {
         buildConfig = true
         viewBinding = true
     }
-    namespace 'com.stupidtree.style'
+    namespace 'com.limpu.style'
 }
 
 dependencies {

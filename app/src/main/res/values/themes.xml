@@ -140,6 +140,11 @@
         <item name="windowNoTitle">true</item>
     </style>
 
+    <!-- 聊天页面专用主题 - 不透明状态栏以确保 adjustResize 正常工作 -->
+    <style name="AppTheme.ChatTheme" parent="AppTheme">
+        <item name="android:statusBarColor">?attr/colorPrimary</item>
+    </style>
+
     <style name="AppTheme.AppBarOverlay" parent="ThemeOverlay.AppCompat.Dark.ActionBar" />
 
     <style name="AppTheme.PopupOverlay" parent="ThemeOverlay.AppCompat.Light" />

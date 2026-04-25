@@ -29,7 +29,7 @@
             android:overScrollMode="never" />
     </FrameLayout>
 
-    <com.stupidtree.hitax.ui.widgets.pullextend.ExpendPoint
+    <com.limpu.hitax.ui.widgets.pullextend.ExpendPoint
         android:id="@+id/expend_point"
         android:layout_width="match_parent"
         android:layout_height="24dp"

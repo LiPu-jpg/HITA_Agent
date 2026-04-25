@@ -8,7 +8,7 @@
 
         <provider
             android:name=".MFileProvider"
-            android:authorities="com.stupidtree.hitax.fileprovider"
+            android:authorities="com.limpu.hita.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data

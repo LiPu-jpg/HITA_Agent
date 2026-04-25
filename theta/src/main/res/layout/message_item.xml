@@ -81,7 +81,7 @@
             android:textSize="14sp"
             android:visibility="visible" />
 
-        <com.stupidtree.hita.theta.ui.widgets.EmoticonsTextView
+        <com.limpu.hita.theta.ui.widgets.EmoticonsTextView
             android:id="@+id/action_content"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -127,7 +127,7 @@
 
             </LinearLayout>
 
-            <com.stupidtree.hita.theta.ui.widgets.EmoticonsTextView
+            <com.limpu.hita.theta.ui.widgets.EmoticonsTextView
                 android:id="@+id/content"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

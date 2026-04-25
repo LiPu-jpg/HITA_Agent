@@ -38,7 +38,7 @@ android {
     buildFeatures {
         buildConfig = true
     }
-    namespace 'com.stupidtree.stupiduser'
+    namespace 'com.limpu.stupiduser'
 }
 
 dependencies {

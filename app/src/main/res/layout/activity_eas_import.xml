@@ -133,7 +133,7 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
 
-                    <com.stupidtree.hitax.ui.widgets.SelectableIconCardView
+                    <com.limpu.hitax.ui.widgets.SelectableIconCardView
                         android:id="@+id/card_name"
                         android:layout_width="match_parent"
                         android:layout_height="144dp"
@@ -150,9 +150,9 @@
                         app:cardIconPadding="14dp"
                         app:cardSubtitleText="@string/timetable_name">
 
-                    </com.stupidtree.hitax.ui.widgets.SelectableIconCardView>
+                    </com.limpu.hitax.ui.widgets.SelectableIconCardView>
 
-                    <com.stupidtree.hitax.ui.widgets.SelectableIconCardView
+                    <com.limpu.hitax.ui.widgets.SelectableIconCardView
                         android:id="@+id/card_date"
                         android:layout_width="match_parent"
                         android:layout_height="144dp"
@@ -167,7 +167,7 @@
                         app:cardIconPadding="10dp"
                         app:cardSubtitleText="@string/start_date_of_curriculum">
 
-                    </com.stupidtree.hitax.ui.widgets.SelectableIconCardView>
+                    </com.limpu.hitax.ui.widgets.SelectableIconCardView>
 
                 </LinearLayout>
 

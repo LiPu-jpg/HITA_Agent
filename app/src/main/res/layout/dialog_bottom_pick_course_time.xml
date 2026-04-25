@@ -92,7 +92,7 @@
             android:paddingLeft="24dp"
             android:paddingRight="24dp">
 
-            <com.stupidtree.style.widgets.MWheel3DView
+            <com.limpu.style.widgets.MWheel3DView
                 android:id="@+id/pickdow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -107,7 +107,7 @@
                 app:unselectedColor="?attr/backgroundIconColorBottom"
                 app:visibleItems="3" />
 
-            <com.stupidtree.style.widgets.MWheel3DView
+            <com.limpu.style.widgets.MWheel3DView
                 android:id="@+id/pickfromt"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -128,7 +128,7 @@
                 android:layout_gravity="center"
                 android:text="@string/dialog_pick_course_to" />
 
-            <com.stupidtree.style.widgets.MWheel3DView
+            <com.limpu.style.widgets.MWheel3DView
                 android:id="@+id/picktot"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
