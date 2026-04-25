@@ -115,10 +115,9 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
                 val blueColor = Color.parseColor("#304ffe")
                 holder.binding.messageCard.setCardBackgroundColor(blueColor)
                 holder.binding.messageCard.setBackgroundColor(blueColor)
-                holder.binding.messageCard.setCardForegroundColor(blueColor)
                 holder.binding.messageCard.strokeWidth = 0
                 holder.binding.messageText.setTextColor(Color.WHITE)
-                Log.d(TAG, "Setting USER message color to blue: #$0x${Integer.toHexString(blueColor)}")
+                Log.d(TAG, "Setting USER message color to blue: #0x${Integer.toHexString(blueColor)}")
             }
 
             AgentChatMessage.Role.ASSISTANT -> {
