@@ -89,6 +89,7 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
             parent,
             false,
         )
+        Log.d(TAG, "Creating ViewHolder")
         return MessageHolder(binding)
     }
 
@@ -96,6 +97,11 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
 
     override fun onBindViewHolder(holder: MessageHolder, position: Int) {
         val item = items[position]
+
+        // 首先重置所有颜色到默认状态
+        holder.binding.messageCard.setCardBackgroundColor(Color.WHITE)
+        holder.binding.messageCard.strokeWidth = 0
+        holder.binding.messageText.setTextColor(Color.BLACK)
 
         val layoutParams = holder.binding.messageCard.layoutParams as FrameLayout.LayoutParams
         when (item.role) {
@@ -105,10 +111,14 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
                 holder.binding.thinkingHeader.visibility = View.GONE
                 holder.binding.thinkingText.visibility = View.GONE
                 layoutParams.gravity = Gravity.END
-                // 用户消息使用蓝色气泡 (强制使用 #304ffe 蓝色)
-                holder.binding.messageCard.setCardBackgroundColor(Color.parseColor("#304ffe"))
+                // 用户消息使用蓝色气泡 (多重设置确保生效)
+                val blueColor = Color.parseColor("#304ffe")
+                holder.binding.messageCard.setCardBackgroundColor(blueColor)
+                holder.binding.messageCard.setBackgroundColor(blueColor)
+                holder.binding.messageCard.setCardForegroundColor(blueColor)
                 holder.binding.messageCard.strokeWidth = 0
                 holder.binding.messageText.setTextColor(Color.WHITE)
+                Log.d(TAG, "Setting USER message color to blue: #$0x${Integer.toHexString(blueColor)}")
             }
 
             AgentChatMessage.Role.ASSISTANT -> {
@@ -149,7 +159,9 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
                 layoutParams.gravity = Gravity.START
                 // AI助手消息使用白色气泡
                 holder.binding.messageCard.setCardBackgroundColor(Color.WHITE)
+                holder.binding.messageCard.setBackgroundColor(Color.WHITE)
                 holder.binding.messageCard.strokeWidth = 0
+                Log.d(TAG, "Setting ASSISTANT message color to white")
             }
 
             AgentChatMessage.Role.TRACE -> {
