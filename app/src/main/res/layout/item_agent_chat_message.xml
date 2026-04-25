@@ -12,9 +12,9 @@
         android:id="@+id/messageCard"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        app:cardCornerRadius="12dp"
-        app:cardElevation="1dp"
-        app:cardMaxElevation="2dp"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="2dp"
+        app:cardMaxElevation="4dp"
         app:cardBackgroundColor="@android:color/white"
         app:strokeWidth="0dp">
 
