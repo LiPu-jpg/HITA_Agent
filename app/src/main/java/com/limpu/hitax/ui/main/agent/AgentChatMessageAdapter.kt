@@ -240,7 +240,16 @@ class AgentChatMessageAdapter : RecyclerView.Adapter<AgentChatMessageAdapter.Mes
         val filtered = newItems.filter { it.role != AgentChatMessage.Role.TRACE }
         items.addAll(filtered)
         Log.d(TAG, "After filtering TRACE: ${filtered.size} items")
+
+        // 强制打印所有消息的详细信息
+        items.forEachIndexed { index, msg ->
+            Log.d(TAG, "Item[$index]: role=${msg.role}, hasText=${msg.text.isNotEmpty()}, len=${msg.text.length}")
+        }
+
         notifyDataSetChanged()
         Log.d(TAG, "notifyDataSetChanged called, total items: ${itemCount}")
+
+        // 验证是否真的设置成功
+        Log.d(TAG, "Verification: items.size=${items.size}, itemCount=${itemCount}")
     }
 }
