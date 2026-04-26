@@ -246,8 +246,8 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
                 return when (position) {
                     0 -> FragmentTimeLine()
                     1 -> TimetableFragment()
-                    2 -> NavigationFragment()
-                    else -> AgentChatFragment()
+                    2 -> AgentChatFragment()      // 助手
+                    else -> NavigationFragment()    // 功能中心
                 }
             }
 
