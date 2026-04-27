@@ -5,18 +5,19 @@ import android.text.TextWatcher
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.Toast
+import androidx.fragment.app.viewModels
 import com.limpu.hitax.R
 import com.limpu.stupiduser.data.model.UserLocal
 import com.limpu.hitax.databinding.FragmentSignUpBinding
 import com.limpu.hitax.ui.about.UserAgreementDialog
+import com.limpu.hitax.ui.base.HiltBaseFragment
 import com.limpu.hitax.utils.AnimationUtils
-import com.limpu.style.base.BaseFragment
+import dagger.hilt.android.AndroidEntryPoint
 
-class SignUpFragment : BaseFragment<SignUpViewModel, FragmentSignUpBinding>() {
+@AndroidEntryPoint
+class SignUpFragment : HiltBaseFragment<FragmentSignUpBinding>() {
 
-    override fun getViewModelClass(): Class<SignUpViewModel> {
-        return SignUpViewModel::class.java
-    }
+    protected val viewModel: SignUpViewModel by viewModels()
 
     override fun initViews(view: View) {
         viewModel.loginFormState.observe(this, { signUpFormState: SignUpFormState? ->

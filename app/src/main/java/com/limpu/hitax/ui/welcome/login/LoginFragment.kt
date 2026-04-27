@@ -8,16 +8,21 @@ import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.TextView
 import android.widget.Toast
+import androidx.fragment.app.viewModels
 import com.limpu.hitax.databinding.FragmentLoginBinding
 import com.limpu.hitax.ui.about.UserAgreementDialog
+import com.limpu.hitax.ui.base.HiltBaseFragment
 import com.limpu.hitax.utils.AnimationUtils
 import com.limpu.stupiduser.data.model.LoginResult
-import com.limpu.style.base.BaseFragment
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * 登录页面Fragment
  */
-class LoginFragment : BaseFragment<LoginViewModel, FragmentLoginBinding>() {
+@AndroidEntryPoint
+class LoginFragment : HiltBaseFragment<FragmentLoginBinding>() {
+
+    protected val viewModel: LoginViewModel by viewModels()
 
     override fun initViews(view: View) {
         //登录表单的数据变更监听器
@@ -121,10 +126,6 @@ class LoginFragment : BaseFragment<LoginViewModel, FragmentLoginBinding>() {
         fun newInstance(): LoginFragment {
             return LoginFragment()
         }
-    }
-
-    override fun getViewModelClass(): Class<LoginViewModel> {
-        return LoginViewModel::class.java
     }
 
     override fun initViewBinding(): FragmentLoginBinding {

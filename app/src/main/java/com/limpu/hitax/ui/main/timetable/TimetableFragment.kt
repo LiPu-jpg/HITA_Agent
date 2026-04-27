@@ -18,7 +18,9 @@ import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.model.timetable.Timetable
 import com.limpu.hitax.data.repository.TimetableRepository
+import androidx.fragment.app.viewModels
 import com.limpu.hitax.databinding.FragmentTimetableBinding
+import com.limpu.hitax.ui.base.HiltBaseFragment
 import com.limpu.hitax.ui.event.add.PopupAddEvent
 import com.limpu.hitax.ui.main.timetable.views.TimeTableView
 import com.limpu.hitax.ui.main.timetable.views.TimetableWeekView
@@ -26,14 +28,16 @@ import com.limpu.hitax.ui.main.timetable.views.LeftLabelView
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.EventsUtils
 import com.limpu.hitax.utils.TimeTools
-import com.limpu.style.base.BaseFragment
+import dagger.hilt.android.AndroidEntryPoint
 import tyrantgit.explosionfield.ExplosionField
 import java.util.*
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-class TimetableFragment :
-    BaseFragment<TimetableViewModel, FragmentTimetableBinding>() {
+@AndroidEntryPoint
+class TimetableFragment : HiltBaseFragment<FragmentTimetableBinding>() {
+
+    protected val viewModel: TimetableViewModel by viewModels()
 
     companion object {
         const val WINDOW_SIZE: Int = 5
@@ -46,10 +50,6 @@ class TimetableFragment :
 
     override fun initViewBinding(): FragmentTimetableBinding {
         return FragmentTimetableBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<TimetableViewModel> {
-        return TimetableViewModel::class.java
     }
 
     override fun onAttach(context: Context) {

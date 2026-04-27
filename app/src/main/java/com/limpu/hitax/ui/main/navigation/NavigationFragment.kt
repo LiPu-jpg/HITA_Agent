@@ -16,7 +16,9 @@ import com.limpu.hitax.data.source.preference.CourseReminderStore
 import com.limpu.hitax.data.source.preference.EasPreferenceSource
 import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.data.work.CourseReminderScheduler
+import androidx.fragment.app.viewModels
 import com.limpu.hitax.databinding.FragmentNavigationBinding
+import com.limpu.hitax.ui.base.HiltBaseFragment
 import com.limpu.hitax.ui.eas.classroom.EmptyClassroomActivity
 import com.limpu.hitax.ui.eas.exam.ExamActivity
 import com.limpu.hitax.ui.eas.imp.ImportTimetableActivity
@@ -26,9 +28,12 @@ import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.ActivityUtils.CourseResourceMode
 import com.limpu.hitax.utils.IcsImportUtils
 import com.limpu.stupiduser.data.repository.LocalUserRepository
-import com.limpu.style.base.BaseFragment
+import dagger.hilt.android.AndroidEntryPoint
 
-class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationBinding>() {
+@AndroidEntryPoint
+class NavigationFragment : HiltBaseFragment<FragmentNavigationBinding>() {
+
+    protected val viewModel: NavigationViewModel by viewModels()
     private val easTokenObserver = Observer<com.limpu.hitax.data.model.eas.EASToken> {
         refreshEasUserCard()
     }
@@ -52,10 +57,6 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
         }
     }
     
-    override fun getViewModelClass(): Class<NavigationViewModel> {
-        return NavigationViewModel::class.java
-    }
-
     override fun initViews(view: View) {
         viewModel.recentTimetableLiveData.observe(this) {
             if (it == null) {

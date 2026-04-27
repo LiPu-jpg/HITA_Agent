@@ -9,6 +9,7 @@ import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.fragment.app.viewModels
 import com.limpu.hitax.BuildConfig
 import com.limpu.hitax.agent.core.AgentProvider
 import com.limpu.hitax.utils.LogUtils
@@ -19,16 +20,16 @@ import com.limpu.hitax.agent.timetable.TimetableAgentInput
 import com.limpu.hitax.agent.timetable.TimetableAgentOutput
 import com.limpu.hitax.data.model.chat.ChatSession
 import com.limpu.hitax.databinding.FragmentAgentChatBinding
-import com.limpu.style.base.BaseFragment
+import com.limpu.hitax.ui.base.HiltBaseFragment
+import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 
-class AgentChatFragment :
-    BaseFragment<AgentChatViewModel, FragmentAgentChatBinding>() {
+@AndroidEntryPoint
+class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
 
-    override fun getViewModelClass(): Class<AgentChatViewModel> =
-        AgentChatViewModel::class.java
+    protected val viewModel: AgentChatViewModel by viewModels()
 
     override fun initViewBinding(): FragmentAgentChatBinding =
         FragmentAgentChatBinding.inflate(layoutInflater)

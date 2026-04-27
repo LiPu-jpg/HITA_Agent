@@ -15,19 +15,24 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.timetable.EventItem
+import androidx.fragment.app.viewModels
 import com.limpu.hitax.databinding.FragmentTimelineBinding
+import com.limpu.hitax.ui.base.HiltBaseFragmentWithReceiver
 import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.hitax.ui.widgets.pullextend.ExtendListHeader
 import com.limpu.hitax.utils.EventsUtils
 import com.limpu.hitax.utils.HintUtils
 import com.limpu.hitax.utils.TimeTools
 import com.limpu.hitax.utils.TimeTools.TTY_WK_FOLLOWING
-import com.limpu.style.base.BaseFragmentWithReceiver
 import com.limpu.style.base.BaseListAdapter
+import dagger.hilt.android.AndroidEntryPoint
 import java.util.*
 import kotlin.Comparator
 
-class FragmentTimeLine : BaseFragmentWithReceiver<FragmentTimelineViewModel, FragmentTimelineBinding>() {
+@AndroidEntryPoint
+class FragmentTimeLine : HiltBaseFragmentWithReceiver<FragmentTimelineBinding>() {
+
+    protected val viewModel: FragmentTimelineViewModel by viewModels()
     private var listAdapter: TimelineListAdapter? = null
     private var topListAdapter: TimelineTopListAdapter? = null
     private var mainPageController: MainPageController? = null
@@ -172,11 +177,6 @@ class FragmentTimeLine : BaseFragmentWithReceiver<FragmentTimelineViewModel, Fra
 
     override fun initViewBinding(): FragmentTimelineBinding {
         return FragmentTimelineBinding.inflate(layoutInflater)
-    }
-
-
-    override fun getViewModelClass(): Class<FragmentTimelineViewModel> {
-        return FragmentTimelineViewModel::class.java
     }
 
     interface MainPageController {
