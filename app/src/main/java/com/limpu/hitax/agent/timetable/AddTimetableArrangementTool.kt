@@ -4,6 +4,7 @@ import com.limpu.hitax.agent.core.AgentTool
 import com.limpu.hitax.agent.core.AgentToolResult
 import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.repository.TimetableRepository
+import com.limpu.hitax.utils.LogUtils
 import java.sql.Timestamp
 import java.util.Calendar
 import kotlin.concurrent.thread
@@ -36,15 +37,15 @@ class AddTimetableArrangementTool : AgentTool<TimetableAgentInput, TimetableAgen
 
         thread(start = true) {
             try {
-                android.util.Log.d("AddTimetableArrangementTool", "[DEBUG] Starting tool execution")
+                LogUtils.d("[DEBUG] Starting tool execution")
                 val repository = TimetableRepository.getInstance(input.application)
-                android.util.Log.d("AddTimetableArrangementTool", "[DEBUG] Got repository instance")
+                LogUtils.d("[DEBUG] Got repository instance")
 
                 val timetable = input.timetableId
                     ?.let { repository.getTimetableByIdSync(it) }
                     ?: repository.getRecentTimetableSync()
                     ?: repository.ensureDefaultCustomTimetableSync()
-                android.util.Log.d("AddTimetableArrangementTool", "[DEBUG] Got timetable: id=${timetable.id}, name=${timetable.name}")
+                    LogUtils.d("[DEBUG] Got timetable: id=${timetable.id}, name=${timetable.name}")
 
                 val event = EventItem().apply {
                     type = arrangement.type
@@ -60,10 +61,10 @@ class AddTimetableArrangementTool : AgentTool<TimetableAgentInput, TimetableAgen
                     lastNumber = 0
                     color = -1
                 }
-                android.util.Log.d("AddTimetableArrangementTool", "[DEBUG] Created event: id=${event.id}, name=${event.name}, timetableId=${event.timetableId}, from=${event.from}, to=${event.to}")
+                LogUtils.d("[DEBUG] Created event: id=${event.id}, name=${event.name}, timetableId=${event.timetableId}, from=${event.from}, to=${event.to}")
 
                 repository.addEventsSync(listOf(event))
-                android.util.Log.d("AddTimetableArrangementTool", "[DEBUG] addEventsSync called successfully")
+                LogUtils.d("[DEBUG] addEventsSync called successfully")
 
                 if (event.to.time > timetable.endTime.time) {
                     val c = Calendar.getInstance()
@@ -74,10 +75,10 @@ class AddTimetableArrangementTool : AgentTool<TimetableAgentInput, TimetableAgen
                     c.set(Calendar.MINUTE, 59)
                     timetable.endTime.time = c.timeInMillis
                     repository.saveTimetableSync(timetable)
-                    android.util.Log.d("AddTimetableArrangementTool", "[DEBUG] Updated timetable endTime")
+                    LogUtils.d("[DEBUG] Updated timetable endTime")
                 }
 
-                android.util.Log.d("AddTimetableArrangementTool", "[DEBUG] Tool execution successful, returning result")
+                LogUtils.d("[DEBUG] Tool execution successful, returning result")
                 onResult(
                     AgentToolResult.success(
                         TimetableAgentOutput(
@@ -89,7 +90,7 @@ class AddTimetableArrangementTool : AgentTool<TimetableAgentInput, TimetableAgen
                     )
                 )
             } catch (e: Exception) {
-                android.util.Log.e("AddTimetableArrangementTool", "[DEBUG] Tool execution failed", e)
+                LogUtils.e("[DEBUG] Tool execution failed", e)
                 onResult(AgentToolResult.failure(e.message ?: "add timetable arrangement failed"))
             }
         }

@@ -9,14 +9,11 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
-import com.limpu.hita.theta.ui.list.ArticleListFragment
-import com.limpu.hita.theta.ui.user.UserListFragment
 import com.limpu.hitax.R
 import com.limpu.hitax.databinding.ActivitySearchBinding
 import com.limpu.style.base.BaseActivity
 import com.limpu.style.base.BaseTabAdapter
 import com.limpu.hitax.ui.search.teacher.FragmentSearchTeacher
-import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.style.base.FragmentSearchResult
 
 class SearchActivity : BaseActivity<SearchViewModel, ActivitySearchBinding>(),
@@ -55,15 +52,7 @@ class SearchActivity : BaseActivity<SearchViewModel, ActivitySearchBinding>(),
         if (text.isNullOrEmpty() || purpose.isNullOrEmpty()) return
         var index = 0
         when (purpose) {
-//            "timetable" -> index = 0
-            ActivityUtils.SearchType.TEACHER.name -> index = 0
-            ActivityUtils.SearchType.USER.name -> index = 1
-            ActivityUtils.SearchType.ARTICLE.name -> index = 2
-//            "user" -> index = 2
-//            "location" -> index = 3
-//            "library" -> index = 4
-//            "hitsz" -> index = 5
-//            "hitzs" -> index = 6
+            "TEACHER" -> index = 0
         }
         binding.pager.currentItem = index
         return
@@ -75,9 +64,7 @@ class SearchActivity : BaseActivity<SearchViewModel, ActivitySearchBinding>(),
             override fun onEditorAction(textView: TextView, i: Int, keyEvent: KeyEvent?): Boolean {
                 if (textView.text.toString().isBlank()) return false
                 if (i == EditorInfo.IME_ACTION_GO || i == EditorInfo.IME_ACTION_SEARCH) {
-                    /*隐藏软键盘*/
                     val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager?
-                    // 隐藏软键盘
                     imm?.hideSoftInputFromWindow(window.decorView.windowToken, 0)
                     setSearchText(getSearchText())
                     return true
@@ -110,36 +97,22 @@ class SearchActivity : BaseActivity<SearchViewModel, ActivitySearchBinding>(),
         }
     }
 
-    class SearchPagerAdapter(fm: FragmentManager, val context: Context) : BaseTabAdapter(fm, 3) {
+    class SearchPagerAdapter(fm: FragmentManager, val context: Context) : BaseTabAdapter(fm, 1) {
         private var titles: IntArray = intArrayOf(
-            //R.string.tab_search_timetable,
-            R.string.tab_search_teacher,
-            R.string.tab_search_user,
-            R.string.tab_search_article
-//            R.string.tab_search_location,
-//            R.string.tab_search_library,
-//            R.string.tab_hitsz_website_info,
-//            R.string.tab_search_zsw
+            R.string.tab_search_teacher
         )
-
 
         override fun getPageTitle(position: Int): CharSequence {
             return context.getString(titles[position])
         }
 
         override fun destroyItem(container: ViewGroup, position: Int, `object`: Any) {
-            //super.destroyItem(container, position, object);
             mFragments[position] = null
         }
 
         override fun initItem(position: Int): Fragment {
-            return when (position) {
-                0 -> FragmentSearchTeacher()
-                1 -> UserListFragment.newInstance("search", "")
-                else -> ArticleListFragment.newInstance("search", "")
-            }
+            return FragmentSearchTeacher()
         }
-
     }
 
     override fun initViewBinding(): ActivitySearchBinding {

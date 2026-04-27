@@ -1,6 +1,5 @@
 package com.limpu.hitax.utils
 
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -13,8 +12,6 @@ import kotlinx.coroutines.withContext
  * 提供常用的性能优化模式和工具方法
  */
 object PerformanceUtils {
-
-    private const val TAG = "PerformanceUtils"
 
     /**
      * 批量操作优化
@@ -98,14 +95,14 @@ object PerformanceUtils {
             val result = operation()
             val duration = System.currentTimeMillis() - startTime
             if (duration > 1000) {
-                Log.w(TAG, "$operationName took ${duration}ms (SLOW)")
+                LogUtils.w("$operationName took ${duration}ms (SLOW)")
             } else {
-                Log.d(TAG, "$operationName took ${duration}ms")
+                LogUtils.d("$operationName took ${duration}ms")
             }
             result
         } catch (e: Exception) {
             val duration = System.currentTimeMillis() - startTime
-            Log.e(TAG, "$operationName failed after ${duration}ms", e)
+            LogUtils.e("$operationName failed after ${duration}ms", e)
             throw e
         }
     }
@@ -121,7 +118,7 @@ object PerformanceUtils {
         val maxMemory = runtime.maxMemory()
         val usedPercent = (usedMemory * 100) / maxMemory
 
-        Log.d(TAG, "$label - Memory: ${formatBytes(usedMemory)} / ${formatBytes(maxMemory)} ($usedPercent%)")
+        LogUtils.d("$label - Memory: ${formatBytes(usedMemory)} / ${formatBytes(maxMemory)} ($usedPercent%)")
     }
 
     /**
@@ -167,7 +164,7 @@ object PerformanceUtils {
                 return operation()
             } catch (e: Exception) {
                 lastException = e
-                Log.w(TAG, "Operation failed on attempt ${attempt + 1}: ${e.message}")
+                LogUtils.w("Operation failed on attempt ${attempt + 1}: ${e.message}")
                 if (attempt < maxRetries - 1) {
                     kotlinx.coroutines.delay(delayMs * (attempt + 1))
                 }

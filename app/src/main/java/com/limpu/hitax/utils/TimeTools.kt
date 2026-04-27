@@ -2,7 +2,6 @@ package com.limpu.hitax.utils
 
 import android.content.Context
 import android.text.TextUtils
-import android.util.Log
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.timetable.TimeInDay
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
@@ -121,7 +120,7 @@ object TimeTools {
     fun isSameWeekWithStartDate(calendar1: Calendar, time: Long): Boolean {
         val end = calendar1.timeInMillis + WEEK_MILLS
         val res = time >= calendar1.timeInMillis && time < end
-        Log.e(
+        LogUtils.d(
             "sameWeek",
             "${printDate(calendar1.timeInMillis)},${printDate(time)}"
         )

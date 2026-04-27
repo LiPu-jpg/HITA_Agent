@@ -2,6 +2,7 @@ package com.limpu.hitax
 
 import android.app.Application
 import com.limpu.hitax.utils.LogUtils
+import dagger.hilt.android.HiltAndroidApp
 import androidx.annotation.WorkerThread
 import com.google.gson.Gson
 import java.util.concurrent.ConcurrentHashMap
@@ -26,6 +27,7 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
+@HiltAndroidApp
 class HApplication : Application() {
 
     // 应用级别的协程作用域，生命周期与应用一致

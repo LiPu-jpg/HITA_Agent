@@ -6,9 +6,9 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.ui.widgets.WidgetUtils.EVENT_REFRESH
+import com.limpu.hitax.utils.LogUtils
 import com.limpu.hitax.ui.widgets.today.TodayUtils.goAsync
 import com.limpu.hitax.ui.widgets.today.TodayUtils.setUpOneWidget
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -38,7 +38,7 @@ class TodayWidget : AppWidgetProvider() {
                 timetableRepo.getTodayEventsSync()
             }
             for (appWidgetId in appWidgetIds) {
-                Log.e("WI", "UPDATE:$appWidgetId")
+                LogUtils.d("UPDATE:$appWidgetId")
                 setUpOneWidget(context, events, appWidgetManager, appWidgetId,false)
             }
         }
@@ -47,8 +47,15 @@ class TodayWidget : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         super.onReceive(context, intent)
-        //val appWidgetId = intent?.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,AppWidgetManager.INVALID_APPWIDGET_ID)
-        when (intent!!.action) {
+        when (intent?.action) {
+            Intent.ACTION_CONFIGURATION_CHANGED -> {
+                val mgr = AppWidgetManager.getInstance(context)
+                val cn = ComponentName(context, TodayWidget::class.java)
+                val ids = mgr.getAppWidgetIds(cn)
+                if (ids.isNotEmpty()) {
+                    onUpdate(context, mgr, ids)
+                }
+            }
             EVENT_CLICK -> {
 //                Log.e("WI", "click")
 //                val bd = intent.extras
@@ -66,7 +73,7 @@ class TodayWidget : AppWidgetProvider() {
                         timetableRepo.getTodayEventsSync()
                     }
                     for (appWidgetId in mgr.getAppWidgetIds(cn)) {
-                        Log.e("WI", "refressh$appWidgetId")
+                        LogUtils.d("refressh$appWidgetId")
                         setUpOneWidget(context, events, mgr, appWidgetId,false)
                     }
                 }
@@ -81,7 +88,7 @@ class TodayWidget : AppWidgetProvider() {
     }
 
     override fun onDisabled(context: Context) {
-        Log.e("WI", "onDisabled")
+        LogUtils.d("onDisabled")
         super.onDisabled(context)
     }
 

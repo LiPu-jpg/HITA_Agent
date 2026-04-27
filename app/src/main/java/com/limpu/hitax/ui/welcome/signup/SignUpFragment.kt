@@ -8,6 +8,7 @@ import android.widget.Toast
 import com.limpu.hitax.R
 import com.limpu.stupiduser.data.model.UserLocal
 import com.limpu.hitax.databinding.FragmentSignUpBinding
+import com.limpu.hitax.ui.about.UserAgreementDialog
 import com.limpu.hitax.utils.AnimationUtils
 import com.limpu.style.base.BaseFragment
 
@@ -35,6 +36,11 @@ class SignUpFragment : BaseFragment<SignUpViewModel, FragmentSignUpBinding>() {
                 }
                 if (signUpFormState.nicknameError != null) {
                     binding?.nickname?.error = getString(signUpFormState.nicknameError!!)
+                }
+                if (signUpFormState.agreementError != null && viewModel.isAgreementChecked.not()) {
+                    binding?.agreementText?.let {
+                        Toast.makeText(context, getString(signUpFormState.agreementError!!), Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
 
@@ -81,8 +87,29 @@ class SignUpFragment : BaseFragment<SignUpViewModel, FragmentSignUpBinding>() {
         binding?.password?.addTextChangedListener(afterTextChangedListener)
         binding?.passwordConfirm?.addTextChangedListener(afterTextChangedListener)
         binding?.nickname?.addTextChangedListener(afterTextChangedListener)
+
+        // 用户协议勾选监听
+        binding?.agreementCheckbox?.setOnCheckedChangeListener { _, isChecked ->
+            viewModel.isAgreementChecked = isChecked
+            viewModel.signUpDataChanged(
+                binding?.username?.text.toString(),
+                binding?.password?.text.toString(),
+                binding?.passwordConfirm?.text.toString(),
+                binding?.nickname?.text.toString()
+            )
+        }
+
+        // 用户协议文本点击打开协议弹窗
+        binding?.agreementText?.setOnClickListener {
+            UserAgreementDialog().show(childFragmentManager, "user_agreement")
+        }
+
         binding?.signUp?.let { AnimationUtils.enableLoadingButton(it,false) }
         binding?.signUp?.setOnClickListener {
+            if (!viewModel.isAgreementChecked) {
+                Toast.makeText(context, getString(R.string.user_agreement_required), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
             binding?.signUp?.startAnimation()
             viewModel.signUp(

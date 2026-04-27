@@ -11,11 +11,8 @@ import com.limpu.stupiduser.data.model.UserProfile
 import com.limpu.stupiduser.data.source.web.service.ProfileService
 import com.limpu.stupiduser.data.source.web.service.codes.SUCCESS
 import com.limpu.stupiduser.data.source.web.service.codes.TOKEN_INVALID
-import com.limpu.stupiduser.data.model.FollowResult
 import com.limpu.stupiduser.data.source.web.service.codes
 import com.limpu.stupiduser.util.HttpUtils
-import okhttp3.MultipartBody
-import retrofit2.Call
 
 /**
  * 层次：DataSource
@@ -104,29 +101,6 @@ class ProfileWebSource(context: Context) : BaseWebSource<ProfileService>(
         }
     }
 
-    fun follow(token: String, userId: String, follow: Boolean): LiveData<DataState<FollowResult>> {
-        return service.follow(HttpUtils.getHeaderAuth(token), userId, follow).map { input ->
-
-            if (input != null) {
-                when (input.code) {
-                    SUCCESS -> input.data?.let { return@map DataState(it) }
-                    TOKEN_INVALID -> return@map DataState(DataState.STATE.TOKEN_INVALID)
-                    else -> return@map DataState(DataState.STATE.FETCH_FAILED)
-                }
-            }
-            DataState(DataState.STATE.FETCH_FAILED)
-        }
-    }
-
-    fun followCall(
-        token: String,
-        userId: String,
-        follow: Boolean
-    ): Call<ApiResponse<FollowResult>> {
-        return service.followCall(HttpUtils.getHeaderAuth(token), userId, follow)
-    }
-
-
     /**
      * 更换性别
      * @param token 令牌
@@ -151,37 +125,6 @@ class ProfileWebSource(context: Context) : BaseWebSource<ProfileService>(
                 }
                 DataState(DataState.STATE.FETCH_FAILED)
             }
-    }
-
-
-    /**
-     * 更换头像
-     * @param token 令牌
-     * @param file 图片请求包
-     * @return 返回
-     */
-    fun changeAvatar(token: String, file: MultipartBody.Part): LiveData<DataState<String>> {
-        return service.uploadAvatar(
-            file,
-            HttpUtils.getHeaderAuth(token)
-        ).map { input ->
-            Log.e("avatar", input.toString())
-            if (input == null) {
-                return@map DataState(DataState.STATE.FETCH_FAILED)
-            }
-            when (input.code) {
-                SUCCESS -> {
-                    if (input.data != null) {
-                        return@map DataState(input.data!!)
-                    } else {
-                        return@map DataState(DataState.STATE.FETCH_FAILED)
-                    }
-                }
-
-                TOKEN_INVALID -> return@map DataState(DataState.STATE.TOKEN_INVALID)
-                else -> return@map DataState(DataState.STATE.FETCH_FAILED, input.message)
-            }
-        }
     }
 
 

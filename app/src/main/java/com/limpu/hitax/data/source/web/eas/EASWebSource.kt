@@ -1,10 +1,10 @@
 package com.limpu.hitax.data.source.web.eas
 
 import android.annotation.SuppressLint
-import android.util.Log
 import android.util.Base64
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import com.limpu.hitax.utils.LogUtils
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.eas.CourseItem
 import com.limpu.hitax.data.model.eas.CourseScoreItem
@@ -48,7 +48,6 @@ class EASWebSource internal constructor() : EASService {
     private val jwHostName = "https://jw.hitsz.edu.cn"
     private val basicAuth = "Basic aW5jb246MTIzNDU="
     private val timeout = 15000
-    private val TAG = "EASource"
     private val DEBUG_WEEK = 6
     private val DEBUG_DOW = 1
 
@@ -664,7 +663,7 @@ class EASWebSource internal constructor() : EASService {
                         val summary = debugWeekRows
                             .sortedWith(compareBy<CourseItem> { it.dow }.thenBy { it.begin })
                             .joinToString(" || ") { debugCourseIdentity(it) }
-                        Log.d(TAG, "raw week=$week dow=$DEBUG_DOW rows=${debugWeekRows.size} term=${term.getCode()} -> $summary")
+                        LogUtils.d("raw week=$week dow=$DEBUG_DOW rows=${debugWeekRows.size} term=${term.getCode()} -> $summary")
                     }
                 }
 
@@ -674,8 +673,7 @@ class EASWebSource internal constructor() : EASService {
                 val debugBeforeMerge = result
                     .filter { it.dow == DEBUG_DOW && it.weeks.contains(DEBUG_WEEK) }
                     .sortedWith(compareBy<CourseItem> { it.begin }.thenBy { it.name })
-                Log.d(
-                    TAG,
+                LogUtils.d(
                     "dedup week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugBeforeMerge.size} term=${term.getCode()} -> " +
                         debugBeforeMerge.joinToString(" || ") { debugCourseIdentity(it) }
                 )
@@ -683,8 +681,7 @@ class EASWebSource internal constructor() : EASService {
                 val debugAfterMerge = mergedAdjacent
                     .filter { it.dow == DEBUG_DOW && it.weeks.contains(DEBUG_WEEK) }
                     .sortedWith(compareBy<CourseItem> { it.begin }.thenBy { it.name })
-                Log.d(
-                    TAG,
+                LogUtils.d(
                     "merged week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugAfterMerge.size} term=${term.getCode()} -> " +
                         debugAfterMerge.joinToString(" || ") { debugCourseIdentity(it) }
                 )
@@ -986,8 +983,7 @@ class EASWebSource internal constructor() : EASService {
                     }
 
                     if (shouldDebugPair(base, candidate)) {
-                        Log.d(
-                            TAG,
+                        LogUtils.d(
                             "no-merge week=$DEBUG_WEEK dow=$DEBUG_DOW reason=${mergeBlockReason(base, candidate)} left=${debugCourseIdentity(base)} right=${debugCourseIdentity(candidate)}"
                         )
                     }
@@ -1048,8 +1044,7 @@ class EASWebSource internal constructor() : EASService {
         }
 
         if (shouldDebugPair(left, right)) {
-            Log.d(
-                TAG,
+            LogUtils.d(
                 "week-split-merge shared=$sharedWeeks leftOnly=$leftOnlyWeeks rightOnly=$rightOnlyWeeks left=${debugCourseIdentity(left)} right=${debugCourseIdentity(right)}"
             )
         }

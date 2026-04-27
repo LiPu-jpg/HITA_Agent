@@ -13,7 +13,7 @@ import com.limpu.stupiduser.data.repository.UserRepository
 
 /**
  * 层次：ViewModel
- * 登录界面的ViewModel
+ * 注册界面的ViewModel
  */
 class SignUpViewModel(application: Application) : AndroidViewModel(application) {
     /**
@@ -24,6 +24,9 @@ class SignUpViewModel(application: Application) : AndroidViewModel(application) 
 
     //Trigger：控制登录的进行
     private val signUpController = MutableLiveData<SignUpTrigger>()
+
+    // 用户协议勾选状态
+    var isAgreementChecked = false
 
     /**
      * 仓库区
@@ -94,6 +97,10 @@ class SignUpViewModel(application: Application) : AndroidViewModel(application) 
         } else if (nickname.isNullOrEmpty()) {
             signUpFormState.setValue(
                 SignUpFormState(null, null, null, R.string.empty_nickname)
+            )
+        } else if (!isAgreementChecked) {
+            signUpFormState.setValue(
+                SignUpFormState(null, null, null, null, R.string.user_agreement_required)
             )
         } else {
             signUpFormState.setValue(SignUpFormState(true))

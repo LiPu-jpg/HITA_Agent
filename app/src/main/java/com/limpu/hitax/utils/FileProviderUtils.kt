@@ -9,7 +9,6 @@ import android.net.Uri
 import android.os.Build
 import android.provider.DocumentsContract
 import android.provider.MediaStore
-import android.util.Log
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.IOException
@@ -131,7 +130,7 @@ object FileProviderUtils {
                     filePath = context.getExternalFilesDir(null).toString() + "/" + split[1]
                 }
             } else {
-                Log.e("FileHandlerUtil", "路径错误")
+                LogUtils.e("路径错误")
             }
         } else if ("content".equals(uri.scheme, ignoreCase = true)) {
             // 如果是 content 类型的 Uri

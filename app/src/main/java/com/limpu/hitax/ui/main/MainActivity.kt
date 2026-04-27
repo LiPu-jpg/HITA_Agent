@@ -6,7 +6,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import com.limpu.hitax.utils.LogUtils
 import android.view.HapticFeedbackConstants
 import android.view.MenuItem
 import android.view.View
@@ -329,7 +329,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
             }
         }
         viewModel.loggedInUserLiveData.observe(this) {
-            Log.e("user", it.toString())
+            LogUtils.e(it.toString())
             refreshDrawerEasInfo()
         }
     }

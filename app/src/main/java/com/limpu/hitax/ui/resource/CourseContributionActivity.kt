@@ -16,6 +16,7 @@ import com.limpu.hitax.data.model.resource.CourseSummary
 import com.limpu.hitax.databinding.ActivityCourseContributionBinding
 import com.limpu.hitax.ui.widgets.PopUpCalendarPicker
 import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.utils.LogUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
@@ -71,12 +72,12 @@ class CourseContributionActivity :
             binding.progress.isVisible = false
             if (state.state == DataState.STATE.SUCCESS) {
                 val summary = state.data ?: return@observe
-                android.util.Log.d("CourseContrib", "Loaded: repoType=${summary.repoType}, courses=${summary.courses.size}, teachers=${summary.teachers.size}")
+                LogUtils.d("Loaded: repoType=${summary.repoType}, courses=${summary.courses.size}, teachers=${summary.teachers.size}")
                 repoType = summary.repoType.ifBlank { repoType }
                 if (repoType == "multi-project" && selectedCourse == null) {
                     selectedCourse = summary.courses.firstOrNull()
                     binding.courseValue.text = selectedCourse?.name?.ifBlank { selectedCourse?.code } ?: ""
-                    android.util.Log.d("CourseContrib", "Selected course: ${selectedCourse?.name}, teachers: ${selectedCourse?.teachers}")
+                    LogUtils.d("Selected course: ${selectedCourse?.name}, teachers: ${selectedCourse?.teachers}")
                 }
                 if (repoType != "multi-project" && binding.teacherInput.text.isNullOrBlank()) {
                     summary.teachers.firstOrNull()?.let { binding.teacherInput.setText(it) }

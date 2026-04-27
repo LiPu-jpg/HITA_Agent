@@ -1,19 +1,17 @@
 package com.limpu.hitax.data.source.web.eas
 
-import android.util.Log
+import com.limpu.hitax.utils.LogUtils
 import com.limpu.hitax.data.model.eas.CourseScoreItem
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 
 object BenbuScoreParser {
 
-    private const val TAG = "BenbuScoreParser"
-
     fun parseGradesHtml(html: String): List<CourseScoreItem> {
         val doc = Jsoup.parse(html)
         val tables = doc.select("table").toList()
         if (tables.isEmpty()) {
-            Log.d(TAG, "parseGradesHtml: no table in page, title=${doc.title().trim()}")
+            LogUtils.d("parseGradesHtml: no table in page, title=${doc.title().trim()}")
             return emptyList()
         }
 
@@ -24,7 +22,7 @@ object BenbuScoreParser {
         tables.forEachIndexed { index, table ->
             val rows = table.select("tr")
             if (rows.size < 2) {
-                Log.d(TAG, "parseGradesHtml: table#$index rows=${rows.size} skipped(<2)")
+                LogUtils.d("parseGradesHtml: table#$index rows=${rows.size} skipped(<2)")
                 return@forEachIndexed
             }
 
@@ -37,7 +35,7 @@ object BenbuScoreParser {
                         it.contains("成绩") || it.contains("最终成绩") || it.contains("总成绩")
                     }
             }
-            Log.d(TAG, "parseGradesHtml: table#$index rows=${rows.size} row0=$row0 row1=$row1 headerIndex=$headerIndex")
+            LogUtils.d("parseGradesHtml: table#$index rows=${rows.size} row0=$row0 row1=$row1 headerIndex=$headerIndex")
             if (headerIndex < 0 || headerIndex >= rows.lastIndex) return@forEachIndexed
 
             val headers = rows[headerIndex].select("th, td").map { normalizeHeader(it.text()) }
@@ -71,7 +69,7 @@ object BenbuScoreParser {
                 tableResult.add(item)
             }
 
-            Log.d(TAG, "parseGradesHtml: table#$index rows=${rows.size} parsed=${tableResult.size} headers=$headers")
+            LogUtils.d("parseGradesHtml: table#$index rows=${rows.size} parsed=${tableResult.size} headers=$headers")
             if (tableResult.size > bestResult.size) {
                 bestResult = tableResult
                 bestHeader = headers
@@ -80,9 +78,9 @@ object BenbuScoreParser {
         }
 
         if (bestResult.isEmpty()) {
-            Log.d(TAG, "parseGradesHtml: parsed empty, title=${doc.title().trim()} tableCount=${tables.size}")
+            LogUtils.d("parseGradesHtml: parsed empty, title=${doc.title().trim()} tableCount=${tables.size}")
         } else {
-            Log.d(TAG, "parseGradesHtml: picked table rows=$bestRowCount parsed=${bestResult.size} headers=$bestHeader")
+            LogUtils.d("parseGradesHtml: picked table rows=$bestRowCount parsed=${bestResult.size} headers=$bestHeader")
         }
         return bestResult
     }

@@ -6,13 +6,8 @@ import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.map
 import com.limpu.component.data.DataState
 import com.limpu.stupiduser.data.UserDatabase
-import com.limpu.stupiduser.data.model.FollowResult
 import com.limpu.stupiduser.data.model.UserProfile
 import com.limpu.stupiduser.data.source.web.ProfileWebSource
-import okhttp3.MediaType
-import okhttp3.MultipartBody
-import okhttp3.RequestBody
-import java.io.File
 
 /**
  * Repository层：用户资料页面的Repository
@@ -48,39 +43,6 @@ class ProfileRepository(application: Application) {
             }
         }
         return result
-    }
-
-    fun follow(token: String, userId: String, follow: Boolean): LiveData<DataState<FollowResult>> {
-        return profileWebSource.follow(token, userId, follow)
-    }
-
-    /**
-     * 更改用户头像
-     *
-     * @param token    令牌
-     * @param filePath 头像路径
-     * @return 操作结果
-     */
-    fun changeAvatar(token: String, filePath: String): LiveData<DataState<String>> {
-        //读取图片文件
-        val file = File(filePath)
-        // MutableLiveData<DataState<String>> result = new MutableLiveData<>();
-        val requestFile = RequestBody.create(MediaType.parse("multipart/form-data"), file)
-        //构造一个图片格式的POST表单
-        val body = MultipartBody.Part.createFormData("upload", file.name, requestFile)
-        //调用网络数据源的服务，上传头像
-        return profileWebSource.changeAvatar(
-            token,
-            body
-        )
-            .map { input ->
-
-                if (input.state === DataState.STATE.SUCCESS) {
-                    //通知本地用户更新资料
-                    localUserRepository.changeLocalAvatar(input.data)
-                }
-                input
-            }
     }
 
     /**

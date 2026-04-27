@@ -1,4 +1,4 @@
-package com.stupidtree.stupiduser
+package com.limpu.stupiduser
 
 import org.junit.Test
 

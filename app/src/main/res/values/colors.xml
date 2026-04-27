@@ -46,7 +46,7 @@
     <color name="widget_text_primary_light">#FF202020</color>
     <color name="widget_text_primary_dark">#FFFFFFFF</color>
     <color name="widget_text_secondary_light">#FF858585</color>
-    <color name="widget_text_secondary_dark">#B3FFFFFF</color>
+    <color name="widget_text_secondary_dark">#D9FFFFFF</color>
     <color name="widget_divider_light">#1F000000</color>
     <color name="widget_divider_dark">#33FFFFFF</color>
     <color name="widget_location_chip_dark">#22304FFE</color>

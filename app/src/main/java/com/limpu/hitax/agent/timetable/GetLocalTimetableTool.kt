@@ -1,9 +1,9 @@
 package com.limpu.hitax.agent.timetable
 
-import android.util.Log
 import com.limpu.hitax.agent.core.AgentTool
 import com.limpu.hitax.agent.core.AgentToolResult
 import com.limpu.hitax.data.repository.TimetableRepository
+import com.limpu.hitax.utils.LogUtils
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.concurrent.thread
@@ -24,7 +24,7 @@ class GetLocalTimetableTool : AgentTool<TimetableAgentInput, TimetableAgentOutpu
             try {
                 val repository = TimetableRepository.getInstance(input.application)
                 val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA)
-                Log.d("GetLocalTimetable", "Query range: from=${sdf.format(input.fromMs ?: 0)}, to=${sdf.format(input.toMs ?: 0)}, timetableId=${input.timetableId}")
+                LogUtils.d("Query range: from=${sdf.format(input.fromMs ?: 0)}, to=${sdf.format(input.toMs ?: 0)}, timetableId=${input.timetableId}")
 
                 val events = if (input.timetableId != null) {
                     val timetable = repository.getTimetableByIdSync(input.timetableId)
@@ -32,16 +32,16 @@ class GetLocalTimetableTool : AgentTool<TimetableAgentInput, TimetableAgentOutpu
                             onResult(AgentToolResult.failure("timetable ${input.timetableId} not found"))
                             return@thread
                         }
-                    Log.d("GetLocalTimetable", "Single timetable: ${timetable.name}")
+                    LogUtils.d("Single timetable: ${timetable.name}")
                     repository.getEventsOfTimetableSync(timetable.id, input.fromMs, input.toMs)
                 } else {
-                    Log.d("GetLocalTimetable", "No timetableId, querying ALL timetables")
+                    LogUtils.d("No timetableId, querying ALL timetables")
                     repository.getEventsOfAllTimetablesSync(input.fromMs, input.toMs)
                 }.sortedBy { it.from.time }
 
-                Log.d("GetLocalTimetable", "Found ${events.size} events")
+                LogUtils.d("Found ${events.size} events")
                 events.take(5).forEach { ev ->
-                    Log.d("GetLocalTimetable", "  event: ${ev.name}, from=${sdf.format(ev.from.time)}, to=${sdf.format(ev.to.time)}, type=${ev.type}, timetableId=${ev.timetableId}")
+                    LogUtils.d("  event: ${ev.name}, from=${sdf.format(ev.from.time)}, to=${sdf.format(ev.to.time)}, type=${ev.type}, timetableId=${ev.timetableId}")
                 }
 
                 onResult(

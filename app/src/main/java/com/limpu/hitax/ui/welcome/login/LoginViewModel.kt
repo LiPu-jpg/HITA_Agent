@@ -24,6 +24,9 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     //状态数据：登录章台
     private val loginState = MutableLiveData<LoginTrigger>()
 
+    // 用户协议勾选状态
+    var isAgreementChecked = false
+
     /**
      * 仓库区
      */
@@ -60,6 +63,8 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
             loginFormState.setValue(LoginFormState(R.string.invalid_username, null))
         } else if (!TextTools.isPasswordValid(password)) {
             loginFormState.setValue(LoginFormState(null, R.string.invalid_password))
+        } else if (!isAgreementChecked) {
+            loginFormState.setValue(LoginFormState(null, null, R.string.user_agreement_required))
         } else {
             loginFormState.setValue(LoginFormState(true))
         }

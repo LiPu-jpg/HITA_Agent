@@ -8,7 +8,6 @@ import android.content.Intent.ACTION_DATE_CHANGED
 import android.content.Intent.ACTION_TIME_TICK
 import android.content.IntentFilter
 import android.os.Bundle
-import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.ImageView

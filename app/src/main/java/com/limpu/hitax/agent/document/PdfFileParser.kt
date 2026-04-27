@@ -2,7 +2,7 @@ package com.limpu.hitax.agent.document
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
+import com.limpu.hitax.utils.LogUtils
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import kotlinx.coroutines.Dispatchers
@@ -25,7 +25,6 @@ import java.io.File
 class PdfFileParser : FileParser {
 
     companion object {
-        private const val TAG = "PdfFileParser"
         private const val MAX_PAGES_TO_PARSE = 10  // 最多解析10页，避免内存问题
         private const val MAX_TEXT_LENGTH = 5000    // 最大文本长度
     }
@@ -36,7 +35,7 @@ class PdfFileParser : FileParser {
     override suspend fun parse(context: Context, uri: Uri, fileName: String): ParseResult {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "开始解析PDF: $fileName")
+                LogUtils.d("开始解析PDF: $fileName")
 
                 // 1. 检查文件大小
                 val fileSize = getFileSize(context, uri)
@@ -53,7 +52,7 @@ class PdfFileParser : FileParser {
                 // 3. 使用 PDFBox 解析
                 PDDocument.load(tempFile).use { document ->
                     val totalPages = document.numberOfPages
-                    Log.d(TAG, "PDF总页数: $totalPages")
+                    LogUtils.d("PDF总页数: $totalPages")
 
                     if (totalPages == 0) {
                         return@withContext ParseResult.Error("PDF文件为空")
@@ -69,7 +68,7 @@ class PdfFileParser : FileParser {
                     }
 
                     val extractedText = stripper.getText(document)
-                    Log.d(TAG, "提取文本长度: ${extractedText.length}")
+                    LogUtils.d("提取文本长度: ${extractedText.length}")
 
                     // 清理文本（移除多余空白）
                     val cleanedText = cleanExtractedText(extractedText)
@@ -93,14 +92,14 @@ class PdfFileParser : FileParser {
                     )
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "PDF解析失败", e)
+                LogUtils.e("PDF解析失败", e)
                 ParseResult.Error(
                     message = "PDF解析失败: ${e.message}",
                     cause = e,
                     isRetryable = false
                 )
             } catch (e: OutOfMemoryError) {
-                Log.e(TAG, "内存不足", e)
+                LogUtils.e("内存不足", e)
                 ParseResult.Error(
                     message = "内存不足，请尝试更小的PDF文件",
                     cause = e,
@@ -145,7 +144,7 @@ class PdfFileParser : FileParser {
                 tempFile.delete()
             }
         } catch (e: Exception) {
-            Log.w(TAG, "清理临时文件失败", e)
+            LogUtils.e("清理临时文件失败", e)
         }
     }
 

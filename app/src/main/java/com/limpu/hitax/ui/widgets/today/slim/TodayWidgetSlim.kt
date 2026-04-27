@@ -6,9 +6,9 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.ui.widgets.WidgetUtils.EVENT_REFRESH
+import com.limpu.hitax.utils.LogUtils
 import com.limpu.hitax.ui.widgets.today.TodayUtils
 import com.limpu.hitax.ui.widgets.today.TodayUtils.goAsync
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -47,7 +47,15 @@ class TodayWidgetSlim : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent?) {
         super.onReceive(context, intent)
-        when (intent!!.action) {
+        when (intent?.action) {
+            Intent.ACTION_CONFIGURATION_CHANGED -> {
+                val mgr = AppWidgetManager.getInstance(context)
+                val cn = ComponentName(context, TodayWidgetSlim::class.java)
+                val ids = mgr.getAppWidgetIds(cn)
+                if (ids.isNotEmpty()) {
+                    onUpdate(context, mgr, ids)
+                }
+            }
             EVENT_REFRESH -> {
                 val cn = ComponentName(context, TodayWidgetSlim::class.java)
                 val mgr = AppWidgetManager.getInstance(context)

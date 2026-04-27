@@ -1,4 +1,4 @@
-package com.stupidtree.sync
+package com.limpu.sync
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.stupidtree.sync.test", appContext.packageName)
+        assertEquals("com.limpu.sync.test", appContext.packageName)
     }
 }

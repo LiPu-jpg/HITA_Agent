@@ -10,7 +10,6 @@ import android.widget.ImageView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityOptionsCompat
-import com.limpu.hita.theta.ThetaActivity
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
@@ -48,7 +47,7 @@ object ActivityUtils {
     }
 
 
-    enum class SearchType { TEACHER, CLASS,ARTICLE,USER }
+    enum class SearchType { TEACHER }
 
     enum class CourseResourceMode { VIEW, SUBMIT }
 
@@ -214,16 +213,6 @@ object ActivityUtils {
         val i = Intent(from, TimetableDetailActivity::class.java)
         i.putExtra("id", id)
         from.startActivity(i)
-    }
-
-    fun startThetaActivity(from: Context) {
-        if(LocalUserRepository.getInstance(from).getLoggedInUser().isValid()){
-            val i = Intent(from, ThetaActivity::class.java)
-            from.startActivity(i)
-        }else{
-            Toast.makeText(from, R.string.eas_login_prompt, Toast.LENGTH_SHORT).show()
-        }
-
     }
 
     fun startProfileActivity(from: Context, userId: String?, imageView: ImageView?=null) {

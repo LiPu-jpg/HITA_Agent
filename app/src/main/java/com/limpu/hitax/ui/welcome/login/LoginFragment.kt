@@ -9,6 +9,7 @@ import android.view.inputmethod.EditorInfo
 import android.widget.TextView
 import android.widget.Toast
 import com.limpu.hitax.databinding.FragmentLoginBinding
+import com.limpu.hitax.ui.about.UserAgreementDialog
 import com.limpu.hitax.utils.AnimationUtils
 import com.limpu.stupiduser.data.model.LoginResult
 import com.limpu.style.base.BaseFragment
@@ -29,6 +30,11 @@ class LoginFragment : BaseFragment<LoginViewModel, FragmentLoginBinding>() {
             }
             if (loginFormState.passwordError != null) {
                 binding?.password?.error = getString(loginFormState.passwordError!!)
+            }
+            if (loginFormState.agreementError != null && viewModel.isAgreementChecked.not()) {
+                binding?.agreementText?.let {
+                    Toast.makeText(context, getString(loginFormState.agreementError!!), Toast.LENGTH_SHORT).show()
+                }
             }
         })
 
@@ -74,23 +80,42 @@ class LoginFragment : BaseFragment<LoginViewModel, FragmentLoginBinding>() {
         }
         binding?.username?.addTextChangedListener(afterTextChangedListener)
         binding?.password?.addTextChangedListener(afterTextChangedListener)
+
+        // 用户协议勾选监听
+        binding?.agreementCheckbox?.setOnCheckedChangeListener { _, isChecked ->
+            viewModel.isAgreementChecked = isChecked
+            viewModel.loginDataChanged(binding?.username?.text.toString(),
+                    binding?.password?.text.toString())
+        }
+
+        // 用户协议文本点击打开协议弹窗
+        binding?.agreementText?.setOnClickListener {
+            UserAgreementDialog().show(childFragmentManager, "user_agreement")
+        }
+
         binding?.login?.let { AnimationUtils.enableLoadingButton(it,false) }
-        //使得手机输入法上”完成“按钮映射到登录动作
+        //使得手机输入法上"完成"按钮映射到登录动作
         binding?.password?.setOnEditorActionListener { _: TextView?, actionId: Int, _: KeyEvent? ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
-                viewModel.login(binding?.username?.text.toString(),
-                        binding?.password?.text.toString())
+                attemptLogin()
             }
             false
         }
         binding?.login?.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            binding?.login?.startAnimation()
-            viewModel.login(binding?.username?.text.toString(),
-                    binding?.password?.text.toString())
+            attemptLogin()
         }
     }
 
+    private fun attemptLogin() {
+        if (!viewModel.isAgreementChecked) {
+            Toast.makeText(context, getString(com.limpu.hitax.R.string.user_agreement_required), Toast.LENGTH_SHORT).show()
+            return
+        }
+        binding?.login?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+        binding?.login?.startAnimation()
+        viewModel.login(binding?.username?.text.toString(),
+                binding?.password?.text.toString())
+    }
 
     companion object {
         fun newInstance(): LoginFragment {
