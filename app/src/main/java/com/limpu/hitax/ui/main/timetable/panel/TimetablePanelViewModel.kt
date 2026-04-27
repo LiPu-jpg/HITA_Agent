@@ -8,17 +8,19 @@ import com.limpu.hitax.data.repository.SubjectRepository
 import com.limpu.hitax.data.repository.EasSettingsRepository
 import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.data.repository.TimetableStyleRepository
-import com.limpu.hitax.data.repository.TimetableStyleRepository.Companion.KEY_COLOR_ENABLE
-import com.limpu.hitax.data.repository.TimetableStyleRepository.Companion.KEY_DRAW_BG_LINE
-import com.limpu.hitax.data.repository.TimetableStyleRepository.Companion.KEY_FADE_ENABLE
-import com.limpu.hitax.data.repository.TimetableStyleRepository.Companion.KEY_LABEL_PERIOD
-import com.limpu.hitax.data.repository.TimetableStyleRepository.Companion.KEY_START_DATE
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
+import com.limpu.hitax.data.repository.KEY_COLOR_ENABLE
+import com.limpu.hitax.data.repository.KEY_DRAW_BG_LINE
+import com.limpu.hitax.data.repository.KEY_FADE_ENABLE
+import com.limpu.hitax.data.repository.KEY_LABEL_PERIOD
+import com.limpu.hitax.data.repository.KEY_START_DATE
 class TimetablePanelViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val timetableStyleRepository = TimetableStyleRepository.getInstance(application)
-    private val easSettingsRepository = EasSettingsRepository.getInstance(application)
-    private val subjectRepository = SubjectRepository.getInstance(application)
-    private val timetableRepository = TimetableRepository.getInstance(application)
+    private val timetableStyleRepository = TimetableStyleRepository(application)
+    private val easSettingsRepository = EasSettingsRepository(application)
+    private val subjectRepository = SubjectRepository(application)
+    private val timetableRepository = TimetableRepository(application)
 
     val startDateLiveData: SharedPreferenceIntLiveData
         get() = timetableStyleRepository.startTimeLiveData
@@ -57,18 +59,20 @@ class TimetablePanelViewModel(application: Application) : AndroidViewModel(appli
     }
 
     fun triggerAutoReimportNow() {
-        val token = com.limpu.hitax.data.repository.EASRepository
-            .getInstance(getApplication())
-            .getEasToken()
+        val app: Application = getApplication()
+        val easRepo = com.limpu.hitax.data.repository.EASRepository(
+            app,
+            EasPreferenceSource(app.applicationContext),
+            TimetablePreferenceSource(app.applicationContext)
+        )
+        val token = easRepo.getEasToken()
         if (!token.isLogin()) return
         val isUndergrad = token.stutype == com.limpu.hitax.data.model.eas.EASToken.TYPE.UNDERGRAD
-        com.limpu.hitax.data.repository.EASRepository
-            .getInstance(getApplication())
-            .startAutoImportCurrentTimetable(isUndergrad) { success ->
-                if (success) {
-                    easSettingsRepository.setLastAutoReimportTs(System.currentTimeMillis())
-                }
+        easRepo.startAutoImportCurrentTimetable(isUndergrad) { success ->
+            if (success) {
+                easSettingsRepository.setLastAutoReimportTs(System.currentTimeMillis())
             }
+        }
     }
 
     fun startResetColor(){

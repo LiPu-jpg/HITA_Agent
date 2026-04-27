@@ -10,16 +10,20 @@ import com.limpu.hitax.BuildConfig
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.StaticRepository
 import com.limpu.hitax.data.repository.UpdateRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
+import com.limpu.hitax.data.source.web.GitHubWebSource
+import com.limpu.hitax.data.source.web.StaticWebSource
 import com.limpu.hitax.utils.LiveDataUtils
 import com.limpu.stupiduser.data.model.CheckUpdateResult
 import com.limpu.stupiduser.data.repository.LocalUserRepository
 import com.limpu.stupiduser.data.repository.ManagerRepository
 
 class AboutViewModel(application: Application) : AndroidViewModel(application) {
-    private val staticRepo = StaticRepository.getInstance(application)
-    private val localUserRepository = LocalUserRepository.getInstance(application)
-    private val managerRepository = ManagerRepository.getInstance(application)
-    private val updateRepository = UpdateRepository.getInstance(application)
+    private val staticRepo = StaticRepository(application, StaticWebSource(application.applicationContext))
+    private val localUserRepository = LocalUserRepository(application.applicationContext)
+    private val managerRepository = ManagerRepository(application)
+    private val updateRepository = UpdateRepository(application.applicationContext, GitHubWebSource(application.applicationContext))
 
     private val refreshController = MutableLiveData<Trigger>()
 
@@ -43,7 +47,7 @@ class AboutViewModel(application: Application) : AndroidViewModel(application) {
             return@switchMap managerRepository.checkUpdate(
                 localUserRepository.getLoggedInUser().token?:"",
                 it,
-                EASRepository.getInstance(application).getEasToken().stuId
+                EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken().stuId
             )
         } else {
             return@switchMap LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))

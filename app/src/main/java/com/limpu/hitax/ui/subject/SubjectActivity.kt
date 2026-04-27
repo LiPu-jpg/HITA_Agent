@@ -30,6 +30,8 @@ import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TermSubject
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.HoaRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.ActivitySubjectBinding
 import com.limpu.hitax.ui.event.add.PopupAddEvent
 import com.limpu.hitax.utils.ActivityUtils
@@ -69,8 +71,8 @@ class SubjectActivity : BaseActivity<SubjectViewModel, ActivitySubjectBinding>()
     lateinit var editModeHelper: EditModeHelper<EventItem>
     var isCourseExpanded = false
 
-    private val easRepository by lazy { EASRepository.getInstance(application) }
-    private val hoaRepository by lazy { HoaRepository.getInstance() }
+    private val easRepository by lazy { EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)) }
+    private val hoaRepository by lazy { HoaRepository() }
     private val hoaCampus by lazy { easRepository.getHoaCampus() }
     private val subjectMetaSupported by lazy { easRepository.isSubjectMetaSupported() }
 

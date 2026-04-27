@@ -12,6 +12,8 @@ import com.limpu.hitax.data.model.eas.EASToken
  * 类型：SharedPreference
  * 数据：同步读取，异步写入
  */
+private const val SP_NAME_EAS_TOKEN = "local_eas_token"
+
 class EasPreferenceSource(context: Context) {
     private val preference: SharedPreferences =
         context.getSharedPreferences(SP_NAME_EAS_TOKEN, Context.MODE_PRIVATE)
@@ -84,22 +86,6 @@ class EasPreferenceSource(context: Context) {
             }
         }
         return result
-    }
-
-
-    companion object {
-        private const val SP_NAME_EAS_TOKEN = "local_eas_token"
-
-        @SuppressLint("StaticFieldLeak")
-        private var instance: EasPreferenceSource? = null
-
-        @JvmStatic
-        fun getInstance(context: Context): EasPreferenceSource {
-            if (instance == null) {
-                instance = EasPreferenceSource(context.applicationContext)
-            }
-            return instance!!
-        }
     }
 
 }

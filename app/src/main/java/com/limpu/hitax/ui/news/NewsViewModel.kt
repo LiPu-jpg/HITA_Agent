@@ -8,7 +8,7 @@ import com.limpu.component.data.StringTrigger
 import com.limpu.hitax.data.repository.AdditionalRepository
 
 class NewsViewModel(application: Application) : AndroidViewModel(application) {
-    val addRepo = AdditionalRepository.getInstance(application)
+    val addRepo = AdditionalRepository(application)
 
     val refreshController = MutableLiveData<StringTrigger>()
     val metaData =  refreshController.switchMap {

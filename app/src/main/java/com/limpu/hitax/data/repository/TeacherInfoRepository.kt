@@ -6,7 +6,7 @@ import com.limpu.hitax.data.source.web.TeacherWebSource
 import com.limpu.component.data.DataState
 import com.limpu.hitax.ui.search.teacher.TeacherSearched
 
-class TeacherInfoRepository @Suppress("UNUSED_PARAMETER") internal constructor(application: Application) {
+class TeacherInfoRepository @Suppress("UNUSED_PARAMETER") constructor(application: Application) {
 
 
     fun getTeacherProfile(
@@ -25,15 +25,5 @@ class TeacherInfoRepository @Suppress("UNUSED_PARAMETER") internal constructor(a
 
     fun searchTeachers(text:String):LiveData<DataState<List<TeacherSearched>>>{
         return TeacherWebSource.searchTeachers(text)
-    }
-    companion object {
-        @Volatile
-        private var instance: TeacherInfoRepository? = null
-        fun getInstance(application: Application): TeacherInfoRepository {
-            synchronized(TeacherInfoRepository::class.java) {
-                if (instance == null) instance = TeacherInfoRepository(application)
-                return instance!!
-            }
-        }
     }
 }

@@ -18,8 +18,8 @@ import java.util.Calendar
 
 class TimetableViewModel(application: Application) :
     AndroidViewModel(application) {
-    private val timetableRepository = TimetableRepository.getInstance(application)
-    private val timetableStyleRepository = TimetableStyleRepository.getInstance(application)
+    private val timetableRepository = TimetableRepository(application)
+    private val timetableStyleRepository = TimetableStyleRepository(application)
 
     private val timetableController = MutableLiveData<Trigger>()
     val timetableLiveData: LiveData<List<Timetable>> = timetableController.switchMap{

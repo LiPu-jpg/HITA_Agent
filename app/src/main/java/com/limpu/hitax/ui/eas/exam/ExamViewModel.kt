@@ -10,6 +10,8 @@ import com.limpu.component.data.Trigger
 import com.limpu.hitax.data.model.eas.ExamItem
 import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.data.source.local.ExamMemoStore
 import com.limpu.hitax.ui.eas.EASViewModel
 
@@ -17,7 +19,7 @@ class ExamViewModel(application: Application) : EASViewModel(application){
     /**
      * 仓库区
      */
-    private val easRepository = EASRepository.getInstance(application)
+    private val easRepository = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext))
     private val memoStore = ExamMemoStore(application)
 
     /**

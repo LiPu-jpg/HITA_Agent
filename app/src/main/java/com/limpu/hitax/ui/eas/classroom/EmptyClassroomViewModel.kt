@@ -6,6 +6,8 @@ import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.TimetableRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.component.data.DataState
 import com.limpu.component.data.Trigger
 import com.limpu.hitax.ui.eas.EASViewModel
@@ -15,8 +17,8 @@ class EmptyClassroomViewModel(application: Application) : EASViewModel(applicati
     /**
      * 仓库区
      */
-    private val easRepository = EASRepository.getInstance(application)
-    private val timetableRepository = TimetableRepository.getInstance(application)
+    private val easRepository = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext))
+    private val timetableRepository = TimetableRepository(application)
 
 
     private val pageController = MutableLiveData<Trigger>()

@@ -22,7 +22,7 @@ class GetLocalTimetableTool : AgentTool<TimetableAgentInput, TimetableAgentOutpu
 
         thread(start = true) {
             try {
-                val repository = TimetableRepository.getInstance(input.application)
+                val repository = TimetableRepository(input.application)
                 val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA)
                 LogUtils.d("Query range: from=${sdf.format(input.fromMs ?: 0)}, to=${sdf.format(input.toMs ?: 0)}, timetableId=${input.timetableId}")
 

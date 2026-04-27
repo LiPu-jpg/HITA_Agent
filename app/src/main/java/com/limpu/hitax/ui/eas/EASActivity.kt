@@ -5,6 +5,8 @@ import androidx.viewbinding.ViewBinding
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.ui.eas.login.PopUpLoginEAS
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.style.base.BaseActivity
@@ -43,7 +45,7 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : BaseActivity<T, 
         }
         reloginInProgress = true
         pendingSessionRetryAction = retryAction
-        val tokenCampus = EASRepository.getInstance(application).getEasToken().campus
+        val tokenCampus = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken().campus
         ActivityUtils.showEasVerifyWindow<Activity>(
             getThis(),
             directTo = null,

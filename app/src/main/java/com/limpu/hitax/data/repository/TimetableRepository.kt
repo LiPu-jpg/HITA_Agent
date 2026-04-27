@@ -501,11 +501,4 @@ class TimetableRepository(val application: Application) {
         }
     }
 
-    companion object {
-        private var instance: TimetableRepository? = null
-        fun getInstance(application: Application): TimetableRepository {
-            if (instance == null) instance = TimetableRepository(application)
-            return instance!!
-        }
-    }
 }

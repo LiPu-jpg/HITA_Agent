@@ -41,18 +41,6 @@ class StaticWebSource(context: Context):BaseWebSource<StaticService>(context){
             }else DataState(DataState.STATE.FETCH_FAILED)
         }
     }
-    companion object {
-        var instance: StaticWebSource? = null
-        fun getInstance(context: Context): StaticWebSource {
-            synchronized(StaticWebSource::class.java) {
-                if (instance == null) {
-                    instance = StaticWebSource(context.applicationContext)
-                }
-                return instance!!
-            }
-        }
-    }
-
     override fun getServiceClass(): Class<StaticService> {
         return StaticService::class.java
     }

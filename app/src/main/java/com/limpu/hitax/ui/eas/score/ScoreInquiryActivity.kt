@@ -146,7 +146,7 @@ class ScoreInquiryActivity :
     override fun initViews() {
         super.initViews()
         bindLiveData()
-        scoreReminderStore = ScoreReminderStore.getInstance(applicationContext)
+        scoreReminderStore = ScoreReminderStore(applicationContext)
         binding.scoreReminderSwitch.isChecked = scoreReminderStore.isEnabled()
         binding.scoreReminderSwitch.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {

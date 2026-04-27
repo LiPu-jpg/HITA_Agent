@@ -24,6 +24,8 @@ import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.data.repository.EasSettingsRepository
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.ActivityMainBinding
 import com.limpu.hitax.ui.about.ActivityAbout
 import com.limpu.hitax.ui.about.UserAgreementDialog
@@ -191,7 +193,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
         viewModel.startRefreshUser()
         refreshTheme()
         refreshDrawerEasInfo()
-        EASRepository.getInstance(application).observeEasToken().observe(this, easTokenObserver)
+        EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).observeEasToken().observe(this, easTokenObserver)
         maybeAutoReimportTimetable()
         try {
             val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -207,7 +209,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
             }
             if (System.currentTimeMillis() - lastCheckTs > 5 * 60 * 1000) checkedUpdate = false
             if (!checkedUpdate) {
-                if (LocalUserRepository.getInstance(this).getLoggedInUser().isValid()) {
+                if (LocalUserRepository(this).getLoggedInUser().isValid()) {
                     checkedUpdate = true
                     lastCheckTs = System.currentTimeMillis()
                 }
@@ -220,9 +222,9 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
     }
 
     private fun maybeAutoReimportTimetable() {
-        val settings = EasSettingsRepository.getInstance(application)
+        val settings = EasSettingsRepository(application)
         if (!settings.isAutoReimportEnabled()) return
-        val token = EASRepository.getInstance(application).getEasToken()
+        val token = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken()
         if (!token.isLogin()) return
         if (autoReimportAttempted) return
         val now = System.currentTimeMillis()
@@ -230,7 +232,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
         if (now - last < autoReimportIntervalMs) return
         autoReimportAttempted = true
         val isUndergrad = token.stutype == com.limpu.hitax.data.model.eas.EASToken.TYPE.UNDERGRAD
-        EASRepository.getInstance(application).startAutoImportCurrentTimetable(isUndergrad) { success ->
+        EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).startAutoImportCurrentTimetable(isUndergrad) { success ->
             if (success) {
                 settings.setLastAutoReimportTs(System.currentTimeMillis())
             }
@@ -336,7 +338,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
 
 
     private fun refreshDrawerEasInfo() {
-        val localUser = LocalUserRepository.getInstance(applicationContext).getLoggedInUser()
+        val localUser = LocalUserRepository(applicationContext).getLoggedInUser()
         if (localUser.isValid()) {
             com.limpu.stupiduser.util.ImageUtils.loadAvatarInto(
                 this,
@@ -355,7 +357,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
             return
         }
 
-        val easToken = EASRepository.getInstance(application).getEasToken()
+        val easToken = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken()
         if (easToken.isLogin()) {
             drawerUsername?.text = easToken.name?.ifBlank { easToken.stuId?.ifBlank { easToken.username } }
                 ?: easToken.stuId?.ifBlank { easToken.username }
@@ -411,7 +413,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
     }
 
     override fun onStop() {
-        EASRepository.getInstance(application).observeEasToken().removeObserver(easTokenObserver)
+        EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).observeEasToken().removeObserver(easTokenObserver)
         super.onStop()
     }
 

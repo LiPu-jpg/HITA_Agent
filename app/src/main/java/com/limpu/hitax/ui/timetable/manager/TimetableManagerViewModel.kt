@@ -15,7 +15,7 @@ class TimetableManagerViewModel(application: Application) : AndroidViewModel(app
     /**
      * 仓库区
      */
-    private val timetableRepository = TimetableRepository.getInstance(application)
+    private val timetableRepository = TimetableRepository(application)
     val timetablesLiveData:LiveData<List<Timetable>> = timetableRepository.getTimetables()
 
     private val exportController = MutableLiveData<Timetable>()

@@ -16,8 +16,8 @@ class TimetableDetailViewModel(application: Application) : AndroidViewModel(appl
     /**
      * 仓库区
      */
-    private val timetableRepository = TimetableRepository.getInstance(application)
-    private val subjectsRepository = SubjectRepository.getInstance(application)
+    private val timetableRepository = TimetableRepository(application)
+    private val subjectsRepository = SubjectRepository(application)
 
 
     /**

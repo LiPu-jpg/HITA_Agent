@@ -176,19 +176,12 @@ class SubjectRepository(application: Application) {
         return res
     }
 
-    companion object {
-        private var instance: SubjectRepository? = null
-        fun getInstance(application: Application): SubjectRepository {
-            if (instance == null) instance = SubjectRepository(application)
-            return instance!!
-        }
-    }
+}
 
-    fun List<TermSubject>.getIds(): List<String> {
-        val ids = mutableListOf<String>()
-        for (s in this) {
-            ids.add(s.id)
-        }
-        return ids
+fun List<TermSubject>.getIds(): List<String> {
+    val ids = mutableListOf<String>()
+    for (s in this) {
+        ids.add(s.id)
     }
+    return ids
 }

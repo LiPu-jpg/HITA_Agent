@@ -38,12 +38,15 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import com.limpu.hitax.utils.LogUtils
 
-class EASRepository internal constructor(application: Application) {
+class EASRepository constructor(
+    application: Application,
+    private val easPreferenceSource: EasPreferenceSource,
+    private val timetablePreferenceSource: TimetablePreferenceSource
+) {
     private val appContext = application.applicationContext
     private val shenzhenService: EASWebSource = EASWebSource()
     private val benbuService: EASService = BenbuEASWebSource()
     private val weihaiService: EASService = WeihaiEASWebSource()
-    private var easPreferenceSource = EasPreferenceSource.getInstance(application)
     private var eventItemDao = AppDatabase.getDatabase(application).eventItemDao()
     private var timetableDao = AppDatabase.getDatabase(application).timetableDao()
     private var subjectDao = AppDatabase.getDatabase(application).subjectDao()
@@ -618,7 +621,7 @@ class EASRepository internal constructor(application: Application) {
                 service.getScheduleStructure(term, isUndergraduate, token),
                 6
             )
-            val schedule = scheduleState.data ?: TimetablePreferenceSource.getInstance(appContext).getSchedule()
+            val schedule = scheduleState.data ?: timetablePreferenceSource.getSchedule()
             LogUtils.d( "autoImport schedule state=${scheduleState.state} size=${schedule.size} message=${scheduleState.message}")
             if (startDate == null) {
                 onResult?.invoke(false)
@@ -692,18 +695,6 @@ class EASRepository internal constructor(application: Application) {
     }
 
 
-    companion object {
-        private const val TAG = "EASRepository"
-
-        @Volatile
-        private var instance: EASRepository? = null
-        fun getInstance(application: Application): EASRepository {
-            synchronized(EASService::class.java) {
-                if (instance == null) instance = EASRepository(application)
-                return instance!!
-            }
-        }
-    }
 }
 
 private fun List<EventItem>.getIds(): List<String> {

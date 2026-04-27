@@ -249,7 +249,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                 .setInitValue(viewModel.timetableLiveData.value?.data)
                 .setDataLoader(object : DialogSelectableLiveList.DataLoader<Timetable> {
                     override fun loadData(): LiveData<List<DialogSelectableLiveList.ItemData<Timetable>>> {
-                        return TimetableRepository.getInstance(activity!!.application).getTimetables()
+                        return TimetableRepository(activity!!.application).getTimetables()
                             .switchMap {
                                 val res = mutableListOf<DialogSelectableLiveList.ItemData<Timetable>>()
                                 for (data: Timetable in it) {
@@ -271,7 +271,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                 .setInitValue(viewModel.subjectLiveData.value?.data)
                 .setDataLoader(object : DialogSelectableLiveList.DataLoader<TermSubject> {
                     override fun loadData(): LiveData<List<DialogSelectableLiveList.ItemData<TermSubject>>> {
-                        return SubjectRepository.getInstance(activity!!.application)
+                        return SubjectRepository(activity!!.application)
                             .getSubjects(viewModel.timetableLiveData.value?.data?.id ?: "")
                             .switchMap {
                                 val res = mutableListOf<DialogSelectableLiveList.ItemData<TermSubject>>()
@@ -352,7 +352,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                 }).setInitValue(viewModel.teacherLiveData.value?.data ?: "")
                 .setDataLoader(object : DialogAutoEditText.DataLoader {
                     override fun loadData(str: String): LiveData<List<String>> {
-                        return TeacherInfoRepository.getInstance(activity!!.application)
+                        return TeacherInfoRepository(activity!!.application)
                             .searchTeachers(str).switchMap {
                                 val r = mutableListOf<String>()
                                 it.data?.let { dt ->
@@ -378,7 +378,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                 }).setInitValue(viewModel.locationLiveData.value?.data ?: "")
                 .setDataLoader(object : DialogAutoEditText.DataLoader {
                     override fun loadData(str: String): LiveData<List<String>> {
-                        return TimetableRepository.getInstance(activity!!.application)
+                        return TimetableRepository(activity!!.application)
                             .searchLocation(str)
                     }
                 }).show(childFragmentManager, "pick_location")

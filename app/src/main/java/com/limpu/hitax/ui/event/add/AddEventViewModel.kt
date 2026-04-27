@@ -21,8 +21,8 @@ class AddEventViewModel(application: Application) : AndroidViewModel(application
         FREE_RANGE
     }
 
-    private val eventRepo = TimetableRepository.getInstance(application)
-    private val subjectRepo = SubjectRepository.getInstance(application)
+    private val eventRepo = TimetableRepository(application)
+    private val subjectRepo = SubjectRepository(application)
 
     val addModeLiveData = MutableLiveData(AddMode.BATCH_PERIOD)
     val timetableLiveData = MutableLiveData<DataState<Timetable>>()

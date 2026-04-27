@@ -14,6 +14,8 @@ import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.ActivityEasImportBinding
 import com.limpu.hitax.ui.eas.EASActivity
 import com.limpu.hitax.ui.widgets.PopUpCalendarPicker
@@ -73,7 +75,7 @@ class ImportTimetableActivity :
                 (binding.buttonImport.width / 2) * (1 - binding.buttonImport.scaleX)
         })
         binding.cardName.isEnabled = false
-        val token = EASRepository.getInstance(application).getEasToken()
+        val token = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken()
         val isUndergrad = token.stutype == EASToken.TYPE.UNDERGRAD
         binding.stutype.isChecked = isUndergrad
         viewModel.changeIsUndergraduate(isUndergrad)
@@ -122,7 +124,7 @@ class ImportTimetableActivity :
         }
 
         refreshLocalUiOnly()
-        if (EASRepository.getInstance(application).getEasToken().isLogin()) {
+        if (EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken().isLogin()) {
             refresh()
         }
         if (autoImportPending) {
@@ -144,7 +146,7 @@ class ImportTimetableActivity :
     }
 
     override fun onLoginCheckSuccess(retry: Boolean) {
-        val token = EASRepository.getInstance(application).getEasToken()
+        val token = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken()
         binding.stutype.isChecked = (token.stutype == EASToken.TYPE.UNDERGRAD)
         viewModel.changeIsUndergraduate(binding.stutype.isChecked)
         refresh()
@@ -164,7 +166,7 @@ class ImportTimetableActivity :
     }
 
     private fun ensureLoggedInForImport(onSuccess: () -> Unit) {
-        if (EASRepository.getInstance(application).getEasToken().isLogin()) {
+        if (EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken().isLogin()) {
             onSuccess()
             return
         }

@@ -11,12 +11,14 @@ import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.source.preference.BenbuStartDatePreferenceSource
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.ui.eas.EASViewModel
 import java.util.Calendar
 
 class ImportTimetableViewModel(application: Application) : EASViewModel(application) {
-    private val easRepository = EASRepository.getInstance(application)
-    private val benbuStartDatePreference = BenbuStartDatePreferenceSource.getInstance(application)
+    private val easRepository = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext))
+    private val benbuStartDatePreference = BenbuStartDatePreferenceSource(application.applicationContext)
 
     private val termsController = MutableLiveData<Trigger>()
     private var startDateSource: LiveData<DataState<Calendar>>? = null

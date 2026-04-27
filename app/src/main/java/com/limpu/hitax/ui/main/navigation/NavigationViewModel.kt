@@ -11,7 +11,7 @@ import com.limpu.hitax.data.repository.TimetableRepository
 
 class NavigationViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val timetableRepository = TimetableRepository.getInstance(application)
+    private val timetableRepository = TimetableRepository(application)
 
     private val recentTimetableController = MutableLiveData<Trigger>()
     val recentTimetableLiveData: LiveData<Timetable?> = recentTimetableController.switchMap {

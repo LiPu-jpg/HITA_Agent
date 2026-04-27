@@ -25,16 +25,4 @@ class GitHubWebSource(context: Context) : BaseWebSource<GitHubService>(
         }
     }
 
-    companion object {
-        private var instance: GitHubWebSource? = null
-
-        fun getInstance(context: Context): GitHubWebSource {
-            synchronized(GitHubWebSource::class.java) {
-                if (instance == null) {
-                    instance = GitHubWebSource(context.applicationContext)
-                }
-                return instance!!
-            }
-        }
-    }
 }

@@ -14,8 +14,8 @@ class EventItemViewModel(application: Application) : AndroidViewModel(applicatio
     /**
      * 仓库区
      */
-    private val subjectRepository = SubjectRepository.getInstance(application)
-    private val timetableRepository =TimetableRepository.getInstance(application)
+    private val subjectRepository = SubjectRepository(application)
+    private val timetableRepository = TimetableRepository(application)
 
     /**
      * 数据区

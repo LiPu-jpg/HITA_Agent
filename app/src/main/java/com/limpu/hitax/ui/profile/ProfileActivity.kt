@@ -55,7 +55,7 @@ class ProfileActivity : BaseActivity<ProfileViewModel, ActivityProfileBinding>()
                 object : PopUpText.OnConfirmListener {
                     override fun OnConfirm() {
                         viewModel.logout(getThis())
-                        TimetableRepository.getInstance(application).actionClearData()
+                        TimetableRepository(application).actionClearData()
                         StupidSync.clearData()
                         finish()
                     }

@@ -17,8 +17,8 @@ class SubjectViewModel(application: Application) : AndroidViewModel(application)
     /**
      * 仓库区
      */
-    private val subjectRepository = SubjectRepository.getInstance(application)
-    private val timetableRepository = TimetableRepository.getInstance(application)
+    private val subjectRepository = SubjectRepository(application)
+    private val timetableRepository = TimetableRepository(application)
 
     /**
      * LiveData区

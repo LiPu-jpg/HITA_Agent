@@ -11,7 +11,7 @@ import com.limpu.hitax.data.repository.AdditionalRepository
 class LectureViewModel(application: Application) : AndroidViewModel(application) {
 
     val pageSize = 10
-    val additionalRepo = AdditionalRepository.getInstance(application)
+    val additionalRepo = AdditionalRepository(application)
 
     val pageOffset = MutableLiveData<Pair<Int, Boolean>>()
     val listData = pageOffset.switchMap{ trigger ->

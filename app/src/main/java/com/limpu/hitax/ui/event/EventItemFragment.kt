@@ -9,6 +9,8 @@ import com.limpu.hitax.R
 import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TimeInDay
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.DialogBottomTimetableClassBinding
 import com.limpu.hitax.ui.subject.SubjectActivity
 import com.limpu.hitax.utils.ActivityUtils
@@ -42,7 +44,9 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
 //    }
 
     var parent: EventParent? = null
-    private val easRepository by lazy { EASRepository.getInstance(requireActivity().application) }
+    private val easRepository by lazy {
+        EASRepository(requireActivity().application, EasPreferenceSource(requireActivity().application.applicationContext), TimetablePreferenceSource(requireActivity().application.applicationContext))
+    }
     private val hoaCampus by lazy { easRepository.getHoaCampus() }
     private var currentSubject: com.limpu.hitax.data.model.timetable.TermSubject? = null
 //    override fun onAttach(context: Context) {

@@ -14,6 +14,8 @@ import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.DialogBottomEasVerifyBinding
 import com.limpu.hitax.utils.ImageUtils
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
@@ -85,7 +87,7 @@ class PopUpLoginEAS :
             val bitmap = ImageUtils.getResourceBitmap(requireContext(), iconId)
             binding?.buttonLogin?.doneLoadingAnimation(getColorPrimary(), bitmap)
             if (it.state == DataState.STATE.SUCCESS) {
-                val token = EASRepository.getInstance(requireActivity().application).getEasToken()
+                val token = EASRepository(requireActivity().application, EasPreferenceSource(requireActivity().application.applicationContext), TimetablePreferenceSource(requireActivity().application.applicationContext)).getEasToken()
                 LogUtils.d( "popup login success savedToken campus=${token.campus} isLogin=${token.isLogin()} cookieKeys=${token.cookies.keys.sorted()}")
                 onResponseListener?.onSuccess(this)
 
@@ -214,8 +216,8 @@ class PopUpLoginEAS :
 
     override fun onStart() {
         super.onStart()
-        val token = EASRepository.getInstance(requireActivity().application)
-            .getEasToken()
+val token = EASRepository(requireActivity().application, EasPreferenceSource(requireActivity().application.applicationContext), TimetablePreferenceSource(requireActivity().application.applicationContext))
+                    .getEasToken()
         binding?.username?.setText(token.username)
         binding?.password?.setText(token.password)
         val preferred = preferredCampus

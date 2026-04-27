@@ -293,7 +293,7 @@ class TimetableFragment :
                                         v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                                         Thread{
                                             activity?.application?.let {
-                                                TimetableRepository.getInstance(it).actionDeleteEvents(
+                                                TimetableRepository(it).actionDeleteEvents(
                                                     listOf(eventItem)
                                                 )
                                             }
@@ -330,7 +330,7 @@ class TimetableFragment :
                                             v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                                             Thread{
                                                 activity?.application?.let {
-                                                    TimetableRepository.getInstance(it).actionDeleteEvents(
+                                                    TimetableRepository(it).actionDeleteEvents(
                                                         eventItems
                                                     )
                                                 }
@@ -354,7 +354,7 @@ class TimetableFragment :
                                                     v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                                                     Thread{
                                                         activity?.application?.let {
-                                                            TimetableRepository.getInstance(it).actionDeleteEvents(
+                                                            TimetableRepository(it).actionDeleteEvents(
                                                                 listOf(selectedEvent)
                                                             )
                                                         }

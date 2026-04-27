@@ -8,13 +8,15 @@ import androidx.lifecycle.switchMap
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 
 class LoginEASViewModel(application: Application) : AndroidViewModel(application){
 
     /**
      * 仓库区
      */
-    private val easRepository = EASRepository.getInstance(application)
+    private val easRepository = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext))
 
     /**
      * LiveData区

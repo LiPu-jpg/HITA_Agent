@@ -31,7 +31,7 @@ class TodayWidget : AppWidgetProvider() {
     ) {
         // There may be multiple widgets active, so update all of them
         val timetableRepo =
-            TimetableRepository.getInstance(context.applicationContext as Application)
+            TimetableRepository(context.applicationContext as Application)
         goAsync{
             // 确保数据库操作在后台线程执行
             val events = withContext(Dispatchers.IO) {
@@ -66,7 +66,7 @@ class TodayWidget : AppWidgetProvider() {
                 val cn = ComponentName(context, TodayWidget::class.java)
                 val mgr = AppWidgetManager.getInstance(context)
                 val timetableRepo =
-                    TimetableRepository.getInstance(context.applicationContext as Application)
+                    TimetableRepository(context.applicationContext as Application)
                 goAsync {
                     // 确保数据库操作在后台线程执行
                     val events = withContext(Dispatchers.IO) {

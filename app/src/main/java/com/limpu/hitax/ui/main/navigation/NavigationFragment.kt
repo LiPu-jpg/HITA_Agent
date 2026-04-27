@@ -13,6 +13,8 @@ import com.limpu.hitax.R
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.data.source.preference.CourseReminderStore
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.data.work.CourseReminderScheduler
 import com.limpu.hitax.databinding.FragmentNavigationBinding
 import com.limpu.hitax.ui.eas.classroom.EmptyClassroomActivity
@@ -123,7 +125,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
         }
         
         // 课程提醒开关
-        val reminderStore = CourseReminderStore.getInstance(requireContext())
+        val reminderStore = CourseReminderStore(requireContext())
         binding?.switchCourseReminder?.isChecked = reminderStore.isEnabled()
         binding?.switchCourseReminder?.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
@@ -163,13 +165,13 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
         super.onStart()
         viewModel.startRefresh()
         activity?.application?.let {
-            EASRepository.getInstance(it).observeEasToken().observe(viewLifecycleOwner, easTokenObserver)
+            EASRepository(it, EasPreferenceSource(it.applicationContext), TimetablePreferenceSource(it.applicationContext)).observeEasToken().observe(viewLifecycleOwner, easTokenObserver)
         }
         refreshEasUserCard()
     }
 
     private fun refreshEasUserCard() {
-        LocalUserRepository.getInstance(requireContext()).getLoggedInUser().let {
+        LocalUserRepository(requireContext()).getLoggedInUser().let {
             if (it.isValid()) { //如果已登录
                 binding?.avatar?.let { it1 ->
                     com.limpu.stupiduser.util.ImageUtils.loadAvatarInto(
@@ -195,7 +197,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
                     )
                 }
             } else {
-                val easToken = activity?.application?.let { app -> EASRepository.getInstance(app).getEasToken() }
+                val easToken = activity?.application?.let { app -> EASRepository(app, EasPreferenceSource(app.applicationContext), TimetablePreferenceSource(app.applicationContext)).getEasToken() }
                 if (easToken?.isLogin() == true) {
                     binding?.username?.text = easToken.name?.ifBlank { easToken.stuId?.ifBlank { easToken.username } }
                         ?: easToken.stuId?.ifBlank { easToken.username }
@@ -244,7 +246,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
 
     override fun onStop() {
         activity?.application?.let {
-            EASRepository.getInstance(it).observeEasToken().removeObserver(easTokenObserver)
+            EASRepository(it, EasPreferenceSource(it.applicationContext), TimetablePreferenceSource(it.applicationContext)).observeEasToken().removeObserver(easTokenObserver)
         }
         super.onStop()
     }
@@ -269,7 +271,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
                 Toast.makeText(context, "无法读取所选 ICS 文件", Toast.LENGTH_SHORT).show()
                 return
             }
-            val timetableRepo = TimetableRepository.getInstance(context.applicationContext as android.app.Application)
+            val timetableRepo = TimetableRepository(context.applicationContext as android.app.Application)
 
             timetableRepo.importFromICSAsNewTimetable(
                 inputStream,
@@ -306,7 +308,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
      * 开启课程提醒
      */
     private fun enableCourseReminder() {
-        val reminderStore = CourseReminderStore.getInstance(requireContext())
+        val reminderStore = CourseReminderStore(requireContext())
         reminderStore.setEnabled(true)
         CourseReminderScheduler.autoSchedule(requireContext())
         Toast.makeText(requireContext(), "课程提醒已开启（上课前10分钟提醒）", Toast.LENGTH_SHORT).show()

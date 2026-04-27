@@ -26,12 +26,12 @@ import java.util.Calendar
 class CourseReminderWorker(appContext: Context, params: WorkerParameters) : Worker(appContext, params) {
 
     override fun doWork(): Result {
-        val store = CourseReminderStore.getInstance(applicationContext)
+        val store = CourseReminderStore(applicationContext)
         if (!store.isEnabled()) return Result.success()
 
         val minutes = store.getReminderMinutes()
         val app = applicationContext as? Application ?: return Result.success()
-        val timetableRepo = TimetableRepository.getInstance(app)
+        val timetableRepo = TimetableRepository(app)
 
         val now = System.currentTimeMillis()
         val windowEnd = now + minutes * 60 * 1000
@@ -72,7 +72,7 @@ class CourseReminderWorker(appContext: Context, params: WorkerParameters) : Work
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val store = CourseReminderStore.getInstance(applicationContext)
+        val store = CourseReminderStore(applicationContext)
         val minutes = store.getReminderMinutes()
 
         val title = "⏰ 即将上课"

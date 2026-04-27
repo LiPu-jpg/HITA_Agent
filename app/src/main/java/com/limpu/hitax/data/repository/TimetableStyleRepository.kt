@@ -8,6 +8,13 @@ import com.limpu.component.data.booleanLiveData
 import com.limpu.component.data.intLiveData
 import com.limpu.hitax.ui.main.timetable.TimetableStyleSheet
 
+private const val SP_NAME = "timetable_style"
+const val KEY_START_DATE = "start_date"
+const val KEY_DRAW_BG_LINE = "draw_bg_line"
+const val KEY_COLOR_ENABLE = "color_enable"
+const val KEY_FADE_ENABLE = "fade_enable"
+const val KEY_LABEL_PERIOD = "label_period"
+
 class TimetableStyleRepository(application: Application) {
     private val timetableStyleSP: SharedPreferences = application.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
     val startTimeLiveData = timetableStyleSP.intLiveData(KEY_START_DATE, 800)
@@ -64,20 +71,5 @@ class TimetableStyleRepository(application: Application) {
             }
         }
         return sheet
-    }
-
-    companion object {
-        private var instance: TimetableStyleRepository? = null
-        fun getInstance(application: Application): TimetableStyleRepository {
-            if (instance == null) instance = TimetableStyleRepository(application)
-            return instance!!
-        }
-
-        const val SP_NAME = "timetable_style"
-        const val KEY_START_DATE = "start_date"
-        const val KEY_DRAW_BG_LINE = "draw_bg_line"
-        const val KEY_COLOR_ENABLE = "color_enable"
-        const val KEY_FADE_ENABLE = "fade_enable"
-        const val KEY_LABEL_PERIOD = "label_period"
     }
 }

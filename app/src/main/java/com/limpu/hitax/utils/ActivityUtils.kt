@@ -13,6 +13,8 @@ import androidx.core.app.ActivityOptionsCompat
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.ui.eas.login.PopUpLoginEAS
 import com.limpu.hitax.ui.myprofile.MyProfileActivity
 import com.limpu.hitax.ui.eas.imp.ImportTimetableActivity
@@ -115,7 +117,7 @@ object ActivityUtils {
         onResponseListener: PopUpLoginEAS.OnResponseListener
     ) {
         if (from is BaseActivity<*, *>) {
-            if (EASRepository.getInstance((from as AppCompatActivity).application).getEasToken()
+            if (EASRepository((from as AppCompatActivity).application, EasPreferenceSource((from as AppCompatActivity).application.applicationContext), TimetablePreferenceSource((from as AppCompatActivity).application.applicationContext)).getEasToken()
                     .isLogin()
             ) {
                 directTo?.let {

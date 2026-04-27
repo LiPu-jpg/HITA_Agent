@@ -5,8 +5,10 @@ import androidx.lifecycle.LiveData
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.source.web.StaticWebSource
 
-class StaticRepository internal constructor(application: Application) {
-    private val staticWebSource = StaticWebSource.getInstance(application)
+class StaticRepository constructor(
+    application: Application,
+    private val staticWebSource: StaticWebSource
+) {
 
     fun getAboutPage(): LiveData<DataState<String?>> {
         return staticWebSource.getAboutPage()
@@ -20,14 +22,4 @@ class StaticRepository internal constructor(application: Application) {
         return staticWebSource.getPrivacyPolicyPage()
     }
 
-    companion object {
-        @Volatile
-        private var instance: StaticRepository? = null
-        fun getInstance(application: Application): StaticRepository {
-            synchronized(StaticRepository::class.java) {
-                if (instance == null) instance = StaticRepository(application)
-                return instance!!
-            }
-        }
-    }
 }

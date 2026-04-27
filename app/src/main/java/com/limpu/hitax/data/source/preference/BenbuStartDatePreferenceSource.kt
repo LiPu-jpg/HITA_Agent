@@ -4,7 +4,13 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 
-class BenbuStartDatePreferenceSource private constructor(context: Context) {
+private const val SP_NAME_BENBU_START_DATE = "benbu_start_date"
+
+private fun startDateKey(termCode: String) = "start_date_$termCode"
+
+private fun confirmKey(termCode: String) = "confirmed_$termCode"
+
+class BenbuStartDatePreferenceSource constructor(context: Context) {
     private val preference: SharedPreferences =
         context.applicationContext.getSharedPreferences(SP_NAME_BENBU_START_DATE, Context.MODE_PRIVATE)
 
@@ -29,24 +35,5 @@ class BenbuStartDatePreferenceSource private constructor(context: Context) {
             .remove(startDateKey(termCode))
             .remove(confirmKey(termCode))
             .apply()
-    }
-
-    companion object {
-        private const val SP_NAME_BENBU_START_DATE = "benbu_start_date"
-
-        @SuppressLint("StaticFieldLeak")
-        private var instance: BenbuStartDatePreferenceSource? = null
-
-        @JvmStatic
-        fun getInstance(context: Context): BenbuStartDatePreferenceSource {
-            if (instance == null) {
-                instance = BenbuStartDatePreferenceSource(context.applicationContext)
-            }
-            return instance!!
-        }
-
-        private fun startDateKey(termCode: String) = "start_date_$termCode"
-
-        private fun confirmKey(termCode: String) = "confirmed_$termCode"
     }
 }

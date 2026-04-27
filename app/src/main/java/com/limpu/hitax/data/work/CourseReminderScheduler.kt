@@ -45,7 +45,7 @@ object CourseReminderScheduler {
      * 根据开关状态自动调度或取消
      */
     fun autoSchedule(context: Context) {
-        val store = com.limpu.hitax.data.source.preference.CourseReminderStore.getInstance(context)
+        val store = com.limpu.hitax.data.source.preference.CourseReminderStore(context.applicationContext)
         if (store.isEnabled()) {
             schedule(context)
         } else {

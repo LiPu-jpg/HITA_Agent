@@ -31,7 +31,7 @@ class TodayWidgetSlim : AppWidgetProvider() {
         appWidgetIds: IntArray
     ) {
         val timetableRepo =
-            TimetableRepository.getInstance(context.applicationContext as Application)
+            TimetableRepository(context.applicationContext as Application)
         goAsync {
             // 确保数据库操作在后台线程执行
             val events = withContext(Dispatchers.IO) {
@@ -60,7 +60,7 @@ class TodayWidgetSlim : AppWidgetProvider() {
                 val cn = ComponentName(context, TodayWidgetSlim::class.java)
                 val mgr = AppWidgetManager.getInstance(context)
                 val timetableRepo =
-                    TimetableRepository.getInstance(context.applicationContext as Application)
+                    TimetableRepository(context.applicationContext as Application)
                 goAsync {
                     // 确保数据库操作在后台线程执行
                     val events = withContext(Dispatchers.IO) {

@@ -38,7 +38,7 @@ class AddTimetableArrangementTool : AgentTool<TimetableAgentInput, TimetableAgen
         thread(start = true) {
             try {
                 LogUtils.d("[DEBUG] Starting tool execution")
-                val repository = TimetableRepository.getInstance(input.application)
+                val repository = TimetableRepository(input.application)
                 LogUtils.d("[DEBUG] Got repository instance")
 
                 val timetable = input.timetableId

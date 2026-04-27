@@ -123,7 +123,7 @@ object CourseResourceLinker {
             )
             return
         }
-        val liveData = HoaRepository.getInstance().searchCourses(query, campus)
+        val liveData = HoaRepository().searchCourses(query, campus)
         val observer = object : Observer<DataState<List<CourseResourceItem>>> {
             override fun onChanged(value: DataState<List<CourseResourceItem>>) {
                 liveData.removeObserver(this)
@@ -173,7 +173,7 @@ object CourseResourceLinker {
             onResolved(rankCandidates(collected, normalizedCode, normalizedName))
             return
         }
-        val liveData = HoaRepository.getInstance().searchCourses(query, campus)
+        val liveData = HoaRepository().searchCourses(query, campus)
         val observer = object : Observer<DataState<List<CourseResourceItem>>> {
             override fun onChanged(value: DataState<List<CourseResourceItem>>) {
                 liveData.removeObserver(this)

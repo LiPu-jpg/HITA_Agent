@@ -13,7 +13,7 @@ class TeacherViewModel(application: Application) : AndroidViewModel(application)
     /**
      * 仓库区
      */
-    private val teacherInfoRepository = TeacherInfoRepository.getInstance(application)
+    private val teacherInfoRepository = TeacherInfoRepository(application)
 
     /**
      * 数据区
