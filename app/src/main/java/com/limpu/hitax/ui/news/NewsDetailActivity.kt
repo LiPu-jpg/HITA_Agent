@@ -5,11 +5,16 @@ import android.graphics.Color
 import android.os.Bundle
 import android.text.Html
 import android.webkit.*
+import androidx.activity.viewModels
 import com.limpu.hitax.databinding.ActivityNewsDetailBinding
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.ui.base.HiltBaseActivity
+import dagger.hilt.android.AndroidEntryPoint
 
-@Suppress("DEPRECATION")
-class NewsDetailActivity : BaseActivity<NewsViewModel, ActivityNewsDetailBinding>() {
+@AndroidEntryPoint
+class NewsDetailActivity : HiltBaseActivity<ActivityNewsDetailBinding>() {
+
+    protected val viewModel: NewsViewModel by viewModels()
+
     override fun initViewBinding(): ActivityNewsDetailBinding {
         return ActivityNewsDetailBinding.inflate(layoutInflater)
     }
@@ -17,10 +22,6 @@ class NewsDetailActivity : BaseActivity<NewsViewModel, ActivityNewsDetailBinding
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setToolbarActionBack(binding.toolbar)
-    }
-
-    override fun getViewModelClass(): Class<NewsViewModel> {
-        return NewsViewModel::class.java
     }
 
     @SuppressLint("SetJavaScriptEnabled")

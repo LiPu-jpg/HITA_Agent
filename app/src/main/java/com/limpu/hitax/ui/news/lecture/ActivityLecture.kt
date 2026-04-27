@@ -2,15 +2,20 @@ package com.limpu.hitax.ui.news.lecture
 
 import android.os.Bundle
 import android.view.View
+import androidx.activity.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.limpu.component.data.DataState
 import com.limpu.hitax.databinding.ActivityLectureBinding
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.utils.ActivityUtils
-import com.limpu.style.base.BaseActivity
 import com.limpu.style.base.BaseListAdapter
+import dagger.hilt.android.AndroidEntryPoint
 
-class ActivityLecture : BaseActivity<LectureViewModel, ActivityLectureBinding>() {
+@AndroidEntryPoint
+class ActivityLecture : HiltBaseActivity<ActivityLectureBinding>() {
+
+    protected val viewModel: LectureViewModel by viewModels()
     private var listAdapter: LectureListAdapter? = null
 
     fun refresh() {
@@ -21,10 +26,6 @@ class ActivityLecture : BaseActivity<LectureViewModel, ActivityLectureBinding>()
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setToolbarActionBack(binding.toolbar)
-    }
-
-    override fun getViewModelClass(): Class<LectureViewModel> {
-        return LectureViewModel::class.java
     }
 
     override fun initViews() {
@@ -53,16 +54,12 @@ class ActivityLecture : BaseActivity<LectureViewModel, ActivityLectureBinding>()
         }
         listAdapter?.setOnItemClickListener(object :BaseListAdapter.OnItemClickListener<Map<String,String>>{
             override fun onItemClick(data: Map<String, String>?, card: View?, position: Int) {
-
-                //ActivityOptionsCompat op = ActivityOptionsCompat.makeSceneTransitionAnimation(FragmentNewsLecture.this.getActivity(),v,"cardview");
                 ActivityUtils.startNewsActivity(
                     this@ActivityLecture,
                     data?.get("link")?:"",
                     data?.get("title")?:""
                 )
-
             }
-
         })
         viewModel.listData.observe(this) {
             binding.pullrefresh.isRefreshing = false
@@ -90,6 +87,4 @@ class ActivityLecture : BaseActivity<LectureViewModel, ActivityLectureBinding>()
     override fun initViewBinding(): ActivityLectureBinding {
         return ActivityLectureBinding.inflate(layoutInflater)
     }
-
-
 }

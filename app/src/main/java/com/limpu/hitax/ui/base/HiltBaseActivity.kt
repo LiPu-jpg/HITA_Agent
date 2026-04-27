@@ -136,4 +136,9 @@ abstract class HiltBaseActivity<V : ViewBinding> : AppCompatActivity() {
         theme.resolveAttribute(R.attr.backgroundColorSecondAsTint, typedValue, true)
         return typedValue.data
     }
+
+    @Suppress("UNCHECKED_CAST")
+    fun <T : HiltBaseActivity<V>> getThis(): T {
+        return this as T
+    }
 }
