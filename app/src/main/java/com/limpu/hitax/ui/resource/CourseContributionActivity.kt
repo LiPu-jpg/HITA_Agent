@@ -14,17 +14,21 @@ import com.limpu.hitax.R
 import com.limpu.hitax.data.model.resource.CourseStructureSummary
 import com.limpu.hitax.data.model.resource.CourseSummary
 import com.limpu.hitax.databinding.ActivityCourseContributionBinding
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.ui.widgets.PopUpCalendarPicker
-import com.limpu.style.base.BaseActivity
 import com.limpu.hitax.utils.LogUtils
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.viewModels
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.Locale
 
+@AndroidEntryPoint
 class CourseContributionActivity :
-    BaseActivity<CourseContributionViewModel, ActivityCourseContributionBinding>() {
+    HiltBaseActivity<ActivityCourseContributionBinding>() {
 
+    protected val viewModel: CourseContributionViewModel by viewModels()
     private enum class ContributionMode {
         NORMAL_TEACHER_REVIEW,
         NORMAL_SECTION_APPEND,
@@ -40,9 +44,6 @@ class CourseContributionActivity :
     private var selectedCourse: CourseSummary? = null
     private val selectedDate: Calendar = Calendar.getInstance()
     private var submitObserverBound = false
-
-    override fun getViewModelClass(): Class<CourseContributionViewModel> =
-        CourseContributionViewModel::class.java
 
     override fun initViewBinding(): ActivityCourseContributionBinding =
         ActivityCourseContributionBinding.inflate(layoutInflater)

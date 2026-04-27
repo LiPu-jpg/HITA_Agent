@@ -31,6 +31,7 @@ import com.limpu.hitax.ui.timetable.detail.TimetableDetailActivity
 import com.limpu.hitax.ui.timetable.manager.TimetableManagerActivity
 import com.limpu.stupiduser.data.model.CheckUpdateResult
 import com.limpu.stupiduser.data.repository.LocalUserRepository
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.style.base.BaseActivity
 import com.limpu.style.widgets.PopUpText
 import com.limpu.style.widgets.PopUpUpdate
@@ -228,7 +229,7 @@ object ActivityUtils {
         }
     }
 
-    fun showUpdateNotificationForce(cr:CheckUpdateResult,activity: BaseActivity<*,*>){
+    fun showUpdateNotificationForce(cr:CheckUpdateResult,activity: AppCompatActivity){
         PopUpText().setText("版本：${cr.latestVersionName}\n更新内容：${cr.updateLog}\n" + "是否前往下载？")
             .setTitle(R.string.new_version_available)
             .setOnConfirmListener(object : PopUpText.OnConfirmListener {
@@ -242,7 +243,7 @@ object ActivityUtils {
     }
 
 
-    fun showUpdateNotification(cr:CheckUpdateResult,activity: BaseActivity<*,*>){
+    fun showUpdateNotification(cr:CheckUpdateResult,activity: AppCompatActivity){
        val preference: SharedPreferences =
             activity.application.getSharedPreferences("update_skip", Context.MODE_PRIVATE)
         if(preference.getBoolean(cr.latestVersionCode.toString(),false)) return

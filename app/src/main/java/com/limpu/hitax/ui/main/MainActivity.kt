@@ -14,6 +14,7 @@ import android.view.View.VISIBLE
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.activity.viewModels
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout.DrawerListener
 import androidx.drawerlayout.widget.DrawerLayout.GONE
@@ -29,6 +30,7 @@ import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.ActivityMainBinding
 import com.limpu.hitax.ui.about.ActivityAbout
 import com.limpu.hitax.ui.about.UserAgreementDialog
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.ui.eas.login.PopUpLoginEAS
 import com.limpu.hitax.ui.event.add.PopupAddEvent
 import com.limpu.hitax.ui.main.agent.AgentChatDialog
@@ -42,16 +44,19 @@ import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.ImageUtils
 import com.limpu.stupiduser.data.repository.LocalUserRepository
 import com.limpu.style.ThemeTools
-import com.limpu.style.base.BaseActivity
 import com.limpu.style.base.BaseTabAdapter
 import com.limpu.style.widgets.PopUpText
+import dagger.hilt.android.AndroidEntryPoint
 import me.ibrahimsn.lib.OnItemSelectedListener
 
 /**
  * 很显然，这是主界面
  */
-class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
+@AndroidEntryPoint
+class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
     TimetableFragment.MainPageController, FragmentTimeLine.MainPageController {
+
+    protected val viewModel: MainViewModel by viewModels()
 
     private val easTokenObserver = Observer<com.limpu.hitax.data.model.eas.EASToken> {
         refreshDrawerEasInfo()
@@ -424,10 +429,6 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
             ThemeTools.MODE.LIGHT -> binding.switchTheme.setImageResource(R.drawable.ic_sun)
             else -> binding.switchTheme.setImageResource(R.drawable.ic_moon_auto)
         }
-    }
-
-    override fun getViewModelClass(): Class<MainViewModel> {
-        return MainViewModel::class.java
     }
 
     override fun initViewBinding(): ActivityMainBinding {

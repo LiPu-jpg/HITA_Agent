@@ -9,10 +9,14 @@ import com.limpu.hitax.data.source.preference.EasPreferenceSource
 import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.ui.eas.login.PopUpLoginEAS
 import com.limpu.hitax.utils.ActivityUtils
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.ui.base.HiltBaseActivity
 
-abstract class EASActivity<T : EASViewModel, V : ViewBinding> : BaseActivity<T, V>() {
+import androidx.activity.viewModels
+import dagger.hilt.android.AndroidEntryPoint
 
+abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity<V>() {
+
+    protected abstract val viewModel: T
     private var reloginInProgress = false
     private var sessionRetryConsumed = false
     private var pendingSessionRetryAction: (() -> Boolean)? = null

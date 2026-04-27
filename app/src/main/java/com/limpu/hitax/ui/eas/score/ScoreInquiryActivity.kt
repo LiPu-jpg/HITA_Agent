@@ -18,9 +18,14 @@ import com.limpu.hitax.ui.eas.EASActivity
 import com.limpu.style.base.BaseListAdapter
 import com.limpu.style.widgets.PopUpCheckableList
 import com.limpu.hitax.utils.TermNameFormatter
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.viewModels
 
+@AndroidEntryPoint
 class ScoreInquiryActivity :
     EASActivity<ScoreInquiryViewModel, ActivityEasScoreFirstBinding>() {
+
+    override val viewModel: ScoreInquiryViewModel by viewModels()
     lateinit var listAdapter: ScoresListAdapter
     private lateinit var scoreReminderStore: ScoreReminderStore
     private var scoreQueryInFlight = false
@@ -236,10 +241,6 @@ class ScoreInquiryActivity :
 
     private fun getDisplayTermName(term: TermItem): String {
         return TermNameFormatter.shortTermName(term.termName, term.name)
-    }
-
-    override fun getViewModelClass(): Class<ScoreInquiryViewModel> {
-        return ScoreInquiryViewModel::class.java
     }
 
     override fun initViewBinding(): ActivityEasScoreFirstBinding {

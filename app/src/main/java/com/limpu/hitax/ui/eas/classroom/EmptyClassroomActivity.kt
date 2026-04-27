@@ -12,10 +12,15 @@ import com.limpu.hitax.ui.eas.EASActivity
 import com.limpu.hitax.ui.eas.classroom.detail.EmptyClassroomDetailFragment
 import com.limpu.style.widgets.PopUpCheckableList
 import com.limpu.hitax.utils.TermNameFormatter
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.viewModels
 import java.util.*
 
+@AndroidEntryPoint
 class EmptyClassroomActivity :
     EASActivity<EmptyClassroomViewModel, ActivityEasClassroomBinding>() {
+
+    override val viewModel: EmptyClassroomViewModel by viewModels()
     lateinit var listAdapter: EmptyClassroomListAdapter
     private var classroomQueryInFlight = false
 
@@ -27,10 +32,6 @@ class EmptyClassroomActivity :
 
     override fun initViewBinding(): ActivityEasClassroomBinding {
         return ActivityEasClassroomBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<EmptyClassroomViewModel> {
-        return EmptyClassroomViewModel::class.java
     }
 
     private fun bindLiveData() {

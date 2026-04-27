@@ -17,8 +17,10 @@ import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.source.preference.EasPreferenceSource
 import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.ActivityEasImportBinding
+import androidx.activity.viewModels
 import com.limpu.hitax.ui.eas.EASActivity
 import com.limpu.hitax.ui.widgets.PopUpCalendarPicker
+import dagger.hilt.android.AndroidEntryPoint
 import com.limpu.hitax.ui.widgets.PopUpTimePeriodPicker
 import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.hitax.utils.ActivityUtils
@@ -29,8 +31,11 @@ import com.limpu.hitax.utils.TextTools
 import com.limpu.style.base.BaseListAdapter
 import com.limpu.style.widgets.PopUpCheckableList
 
+@AndroidEntryPoint
 class ImportTimetableActivity :
     EASActivity<ImportTimetableViewModel, ActivityEasImportBinding>() {
+
+    override val viewModel: ImportTimetableViewModel by viewModels()
 
     override fun shouldRefreshOnStart(): Boolean = false
 
@@ -407,9 +412,5 @@ class ImportTimetableActivity :
 
     override fun initViewBinding(): ActivityEasImportBinding {
         return ActivityEasImportBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<ImportTimetableViewModel> {
-        return ImportTimetableViewModel::class.java
     }
 }

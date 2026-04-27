@@ -12,8 +12,10 @@ import com.google.android.material.snackbar.Snackbar
 import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.databinding.ActivityCourseReadmeBinding
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.utils.ActivityUtils
-import com.limpu.style.base.BaseActivity
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.viewModels
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.strikethrough.StrikethroughPlugin
@@ -28,13 +30,13 @@ import org.jsoup.Jsoup
 import java.net.URI
 // syntax highlight removed (prism4j artifacts not available in current mirrors)
 
-class CourseReadmeActivity : BaseActivity<CourseReadmeViewModel, ActivityCourseReadmeBinding>() {
+@AndroidEntryPoint
+class CourseReadmeActivity : HiltBaseActivity<ActivityCourseReadmeBinding>() {
+    protected val viewModel: CourseReadmeViewModel by viewModels()
     private lateinit var repoName: String
     private lateinit var courseName: String
     private lateinit var courseCode: String
     private lateinit var repoType: String
-
-    override fun getViewModelClass(): Class<CourseReadmeViewModel> = CourseReadmeViewModel::class.java
 
     override fun initViewBinding(): ActivityCourseReadmeBinding =
         ActivityCourseReadmeBinding.inflate(layoutInflater)

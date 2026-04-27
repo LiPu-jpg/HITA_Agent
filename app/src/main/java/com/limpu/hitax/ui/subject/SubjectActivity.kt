@@ -33,6 +33,7 @@ import com.limpu.hitax.data.repository.HoaRepository
 import com.limpu.hitax.data.source.preference.EasPreferenceSource
 import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.ActivitySubjectBinding
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.ui.event.add.PopupAddEvent
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.CourseCodeUtils
@@ -41,9 +42,10 @@ import com.limpu.hitax.utils.CourseResourceLinker
 import com.limpu.hitax.utils.EditModeHelper
 import com.limpu.hitax.utils.EventsUtils
 import com.limpu.hitax.utils.TimeTools
-import com.limpu.style.base.BaseActivity
 import com.limpu.style.base.BaseListAdapter
 import com.limpu.style.widgets.PopUpFloatPicker
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.viewModels
 import io.noties.markwon.AbstractMarkwonPlugin
 import io.noties.markwon.Markwon
 import io.noties.markwon.MarkwonConfiguration
@@ -63,9 +65,11 @@ import java.util.Comparator
 import java.util.regex.Pattern
 import com.limpu.hitax.utils.LogUtils
 
-class SubjectActivity : BaseActivity<SubjectViewModel, ActivitySubjectBinding>(),
+@AndroidEntryPoint
+class SubjectActivity : HiltBaseActivity<ActivitySubjectBinding>(),
     EditModeHelper.EditableContainer<EventItem> {
 
+    protected val viewModel: SubjectViewModel by viewModels()
     var firstEnterCourse = true
     private lateinit var listAdapter: SubjectCoursesListAdapter
     lateinit var editModeHelper: EditModeHelper<EventItem>
@@ -963,10 +967,6 @@ class SubjectActivity : BaseActivity<SubjectViewModel, ActivitySubjectBinding>()
         } else {
             binding.campusSourceHint.visibility = View.GONE
         }
-    }
-
-    override fun getViewModelClass(): Class<SubjectViewModel> {
-        return SubjectViewModel::class.java
     }
 
     override fun onEditClosed() {
