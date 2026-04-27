@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.recyclerview.widget.GridLayoutManager
 import com.google.android.material.appbar.AppBarLayout
@@ -12,6 +13,7 @@ import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.timetable.Timetable
 import com.limpu.hitax.databinding.ActivityTimetableManagerBinding
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.ui.eas.imp.ImportTimetableActivity
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.EditModeHelper
@@ -19,14 +21,16 @@ import com.limpu.hitax.utils.FileProviderUtils
 import com.limpu.hitax.utils.IcsImportUtils
 import com.limpu.hitax.utils.ImageUtils
 import com.limpu.hitax.utils.ShareUtils
-import com.limpu.style.base.BaseActivity
 import com.limpu.style.base.BaseListAdapter
+import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
 
+@AndroidEntryPoint
 class TimetableManagerActivity :
-    BaseActivity<TimetableManagerViewModel, ActivityTimetableManagerBinding>(),
+    HiltBaseActivity<ActivityTimetableManagerBinding>(),
     EditModeHelper.EditableContainer<Timetable> {
 
+    protected val viewModel: TimetableManagerViewModel by viewModels()
     private lateinit var listAdapter: TimetableListAdapter
     private var editModeHelper: EditModeHelper<Timetable>? = null
     
@@ -210,15 +214,11 @@ companion object {
     private const val CHOOSE_FILE_CODE = 0
 }
 
-override fun initViewBinding(): ActivityTimetableManagerBinding {
-    return ActivityTimetableManagerBinding.inflate(layoutInflater)
-}
+    override fun initViewBinding(): ActivityTimetableManagerBinding {
+        return ActivityTimetableManagerBinding.inflate(layoutInflater)
+    }
 
-override fun getViewModelClass(): Class<TimetableManagerViewModel> {
-    return TimetableManagerViewModel::class.java
-}
-
-override fun onEditClosed() {
+    override fun onEditClosed() {
 
 }
 

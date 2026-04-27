@@ -7,17 +7,22 @@ import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.TextView
+import androidx.activity.viewModels
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
 import com.limpu.hitax.R
 import com.limpu.hitax.databinding.ActivitySearchBinding
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.style.base.BaseTabAdapter
 import com.limpu.hitax.ui.search.teacher.FragmentSearchTeacher
 import com.limpu.style.base.FragmentSearchResult
+import dagger.hilt.android.AndroidEntryPoint
 
-class SearchActivity : BaseActivity<SearchViewModel, ActivitySearchBinding>(),
+@AndroidEntryPoint
+class SearchActivity : HiltBaseActivity<ActivitySearchBinding>(),
     BasicFragmentSearchResult.SearchRoot {
+
+    protected val viewModel: SearchViewModel by viewModels()
     var pagerAdapter: SearchPagerAdapter? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -117,10 +122,6 @@ class SearchActivity : BaseActivity<SearchViewModel, ActivitySearchBinding>(),
 
     override fun initViewBinding(): ActivitySearchBinding {
         return ActivitySearchBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<SearchViewModel> {
-        return SearchViewModel::class.java
     }
 
 }

@@ -3,33 +3,33 @@ package com.limpu.hitax.ui.profile
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
+import androidx.activity.viewModels
 import com.google.android.material.appbar.AppBarLayout
 import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.databinding.ActivityProfileBinding
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.stupiduser.data.model.UserLocal
 import com.limpu.stupiduser.data.model.UserProfile
 import com.limpu.stupiduser.data.repository.LocalUserRepository
 import com.limpu.stupiduser.util.ImageUtils
-import com.limpu.style.base.BaseActivity
 import com.limpu.style.widgets.PopUpText
 import com.limpu.sync.StupidSync
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * 其他用户资料页面Activity
  */
-class ProfileActivity : BaseActivity<ProfileViewModel, ActivityProfileBinding>() {
+@AndroidEntryPoint
+class ProfileActivity : HiltBaseActivity<ActivityProfileBinding>() {
+
+    protected val viewModel: ProfileViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setToolbarActionBack(binding.toolbar)
-    }
-
-
-    override fun getViewModelClass(): Class<ProfileViewModel> {
-        return ProfileViewModel::class.java
     }
 
     override fun initViews() {

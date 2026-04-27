@@ -2,23 +2,24 @@ package com.limpu.hitax.ui.myprofile
 
 import android.os.Bundle
 import android.widget.Toast
+import androidx.activity.viewModels
 import com.limpu.hitax.R
 import com.limpu.hitax.databinding.ActivityMyProfileBinding
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.component.data.DataState
 import com.limpu.stupiduser.data.model.UserLocal
 import com.limpu.stupiduser.data.model.UserProfile
 import com.limpu.style.widgets.PopUpEditText
 import com.limpu.style.widgets.PopUpSelectableList
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * 我的个人资料 Activity
  */
-class MyProfileActivity : BaseActivity<MyProfileViewModel, ActivityMyProfileBinding>() {
+@AndroidEntryPoint
+class MyProfileActivity : HiltBaseActivity<ActivityMyProfileBinding>() {
 
-    override fun getViewModelClass(): Class<MyProfileViewModel> {
-        return MyProfileViewModel::class.java
-    }
+    protected val viewModel: MyProfileViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
