@@ -1,19 +1,18 @@
 package com.limpu.hitax.ui.teacher
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.repository.TeacherInfoRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class TeacherViewModel(application: Application) : AndroidViewModel(application) {
-
-    /**
-     * 仓库区
-     */
-    private val teacherInfoRepository = TeacherInfoRepository(application)
+@HiltViewModel
+class TeacherViewModel @Inject constructor(
+    private val teacherInfoRepository: TeacherInfoRepository
+) : ViewModel() {
 
     /**
      * 数据区

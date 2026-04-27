@@ -1,6 +1,5 @@
 package com.limpu.hitax.ui.eas.imp
 
-import android.app.Application
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
@@ -11,20 +10,22 @@ import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.source.preference.BenbuStartDatePreferenceSource
-import com.limpu.hitax.data.source.preference.EasPreferenceSource
-import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.ui.eas.EASViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.Calendar
+import javax.inject.Inject
 
-class ImportTimetableViewModel(application: Application) : EASViewModel(application) {
-    private val easRepository = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext))
-    private val benbuStartDatePreference = BenbuStartDatePreferenceSource(application.applicationContext)
+@HiltViewModel
+class ImportTimetableViewModel @Inject constructor(
+    easRepo: EASRepository,
+    private val benbuStartDatePreference: BenbuStartDatePreferenceSource
+) : EASViewModel(easRepo) {
 
     private val termsController = MutableLiveData<Trigger>()
     private var startDateSource: LiveData<DataState<Calendar>>? = null
 
     val termsLiveData: LiveData<DataState<List<TermItem>>> = termsController.switchMap {
-        easRepository.getAllTerms()
+        easRepo.getAllTerms()
     }
 
     val selectedTermLiveData: MutableLiveData<TermItem?> = MutableLiveData()
@@ -46,7 +47,7 @@ class ImportTimetableViewModel(application: Application) : EASViewModel(applicat
                 benbuCalibrationConfirmedLiveData.value = true
                 return@addSource
             }
-            val source = easRepository.getStartDateOfTerm(term)
+            val source = easRepo.getStartDateOfTerm(term)
             startDateSource = source
             startDateLiveData.addSource(source) { state ->
                 startDateLiveData.value = resolveStartDateState(term, state)
@@ -61,7 +62,7 @@ class ImportTimetableViewModel(application: Application) : EASViewModel(applicat
         scheduleStructureLiveData.addSource(selectedTermLiveData) {
             isUndergraduateLiveData.value?.let { isu ->
                 scheduleStructureLiveData.addSource(
-                    easRepository.getScheduleStructure(
+                    easRepo.getScheduleStructure(
                         it!!,
                         isu
                     )
@@ -73,7 +74,7 @@ class ImportTimetableViewModel(application: Application) : EASViewModel(applicat
         scheduleStructureLiveData.addSource(isUndergraduateLiveData) {
             selectedTermLiveData.value?.let { st ->
                 scheduleStructureLiveData.addSource(
-                    easRepository.getScheduleStructure(
+                    easRepo.getScheduleStructure(
                         st, it
                     )
                 ) { itt ->
@@ -104,7 +105,7 @@ class ImportTimetableViewModel(application: Application) : EASViewModel(applicat
             startDateLiveData.value?.let { date ->
                 scheduleStructureLiveData.value?.let { schedule ->
                     if (schedule.data != null && date.state == DataState.STATE.SUCCESS && date.data != null) {
-                        easRepository.startImportTimetableOfTerm(
+                        easRepo.startImportTimetableOfTerm(
                             term,
                             date.data!!,
                             schedule.data!!,
@@ -151,7 +152,7 @@ class ImportTimetableViewModel(application: Application) : EASViewModel(applicat
     }
 
     fun isBenbuTerm(term: TermItem? = selectedTermLiveData.value): Boolean {
-        return term != null && easRepository.getEasToken().isBenbuCampus()
+        return term != null && easRepo.getEasToken().isBenbuCampus()
     }
 
     private fun resolveStartDateState(term: TermItem, state: DataState<Calendar>): DataState<Calendar> {

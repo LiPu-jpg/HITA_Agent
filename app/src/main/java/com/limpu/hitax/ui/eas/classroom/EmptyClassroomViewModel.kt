@@ -1,29 +1,27 @@
 package com.limpu.hitax.ui.eas.classroom
 
-import android.app.Application
 import androidx.lifecycle.*
 import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.TimetableRepository
-import com.limpu.hitax.data.source.preference.EasPreferenceSource
-import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.component.data.DataState
 import com.limpu.component.data.Trigger
 import com.limpu.hitax.ui.eas.EASViewModel
 import com.limpu.component.data.MTransformations
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class EmptyClassroomViewModel(application: Application) : EASViewModel(application) {
-    /**
-     * 仓库区
-     */
-    private val easRepository = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext))
-    private val timetableRepository = TimetableRepository(application)
+@HiltViewModel
+class EmptyClassroomViewModel @Inject constructor(
+    easRepo: EASRepository,
+    private val timetableRepository: TimetableRepository
+) : EASViewModel(easRepo) {
 
 
     private val pageController = MutableLiveData<Trigger>()
     val termsLiveData: LiveData<DataState<List<TermItem>>> = pageController.switchMap {
-        return@switchMap easRepository.getAllTerms().map { state ->
+        return@switchMap easRepo.getAllTerms().map { state ->
             val data = state.data
             if (state.state != DataState.STATE.SUCCESS || data.isNullOrEmpty()) {
                 return@map state
@@ -37,7 +35,7 @@ class EmptyClassroomViewModel(application: Application) : EASViewModel(applicati
         }
     }
     val buildingsLiveData: LiveData<DataState<List<BuildingItem>>> = pageController.switchMap {
-            return@switchMap easRepository.getTeachingBuildings()
+            return@switchMap easRepo.getTeachingBuildings()
         }
     val selectedTermLiveData = MutableLiveData<TermItem>()
     val selectedBuildingLiveData = MutableLiveData<BuildingItem>()
@@ -46,7 +44,7 @@ class EmptyClassroomViewModel(application: Application) : EASViewModel(applicati
             return@switchMap timetableRepository.getCurrentWeekOfTimetable(term)
         }
     val timetableStructureLiveData: LiveData<DataState<MutableList<TimePeriodInDay>>> = selectedTermLiveData.switchMap {
-        return@switchMap easRepository.getScheduleStructure(it)
+        return@switchMap easRepo.getScheduleStructure(it)
     }
     val classroomLiveData: MediatorLiveData<DataState<List<ClassroomItem>>> =
         MTransformations.switchMap(timetableStructureLiveData) {
@@ -55,7 +53,7 @@ class EmptyClassroomViewModel(application: Application) : EASViewModel(applicati
 
             fun launchClassroomQuery(term: TermItem, building: BuildingItem, week: Int) {
                 currentQuerySource?.let { res.removeSource(it) }
-                val source = easRepository.queryEmptyClassroom(term, building, week)
+                val source = easRepo.queryEmptyClassroom(term, building, week)
                 currentQuerySource = source
                 res.addSource(source) { state ->
                     res.value = state

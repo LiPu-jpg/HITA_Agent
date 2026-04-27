@@ -1,10 +1,9 @@
 package com.limpu.hitax.ui.main.timetable
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.MTransformations
 import com.limpu.component.data.Trigger
@@ -14,12 +13,15 @@ import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.data.repository.TimetableStyleRepository
 import com.limpu.hitax.ui.main.timetable.TimetableFragment.Companion.WEEK_MILLS
 import com.limpu.hitax.ui.main.timetable.TimetableFragment.Companion.WINDOW_SIZE
+import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.Calendar
+import javax.inject.Inject
 
-class TimetableViewModel(application: Application) :
-    AndroidViewModel(application) {
-    private val timetableRepository = TimetableRepository(application)
-    private val timetableStyleRepository = TimetableStyleRepository(application)
+@HiltViewModel
+class TimetableViewModel @Inject constructor(
+    private val timetableRepository: TimetableRepository,
+    private val timetableStyleRepository: TimetableStyleRepository
+) : ViewModel() {
 
     private val timetableController = MutableLiveData<Trigger>()
     val timetableLiveData: LiveData<List<Timetable>> = timetableController.switchMap{

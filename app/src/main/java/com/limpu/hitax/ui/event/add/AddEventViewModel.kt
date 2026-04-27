@@ -1,9 +1,8 @@
 package com.limpu.hitax.ui.event.add
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TermSubject
@@ -12,17 +11,20 @@ import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.model.timetable.Timetable
 import com.limpu.hitax.data.repository.SubjectRepository
 import com.limpu.hitax.data.repository.TimetableRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import java.sql.Timestamp
 import java.util.Calendar
+import javax.inject.Inject
 
-class AddEventViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class AddEventViewModel @Inject constructor(
+    private val eventRepo: TimetableRepository,
+    private val subjectRepo: SubjectRepository
+) : ViewModel() {
     enum class AddMode {
         BATCH_PERIOD,
         FREE_RANGE
     }
-
-    private val eventRepo = TimetableRepository(application)
-    private val subjectRepo = SubjectRepository(application)
 
     val addModeLiveData = MutableLiveData(AddMode.BATCH_PERIOD)
     val timetableLiveData = MutableLiveData<DataState<Timetable>>()

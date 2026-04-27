@@ -1,22 +1,18 @@
 package com.limpu.hitax.ui.eas.login
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
-import com.limpu.hitax.data.source.preference.EasPreferenceSource
-import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
+import com.limpu.hitax.ui.eas.EASViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class LoginEASViewModel(application: Application) : AndroidViewModel(application){
-
-    /**
-     * 仓库区
-     */
-    private val easRepository = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext))
+@HiltViewModel
+class LoginEASViewModel @Inject constructor(easRepo: EASRepository) : EASViewModel(easRepo) {
 
     /**
      * LiveData区
@@ -25,7 +21,7 @@ class LoginEASViewModel(application: Application) : AndroidViewModel(application
     val loginResultLiveData:LiveData<DataState<Boolean>>
         get() {
             return  loginController.switchMap{
-                return@switchMap easRepository.login(it.username, it.password, it.campus)
+                return@switchMap easRepo.login(it.username, it.password, it.campus)
             }
         }
 
