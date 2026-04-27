@@ -15,13 +15,13 @@ import com.limpu.hitax.agent.core.AgentProvider
 import com.limpu.hitax.utils.LogUtils
 import com.limpu.hitax.agent.core.AgentSession
 import com.limpu.hitax.agent.remote.AgentBackendClient
-import com.limpu.hitax.agent.timetable.TimetableAgentFactory
 import com.limpu.hitax.agent.timetable.TimetableAgentInput
 import com.limpu.hitax.agent.timetable.TimetableAgentOutput
 import com.limpu.hitax.data.model.chat.ChatSession
 import com.limpu.hitax.databinding.FragmentAgentChatBinding
 import com.limpu.hitax.ui.base.HiltBaseFragment
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -29,14 +29,12 @@ import java.io.StringWriter
 @AndroidEntryPoint
 class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
 
+    @Inject lateinit var agentProvider: AgentProvider<TimetableAgentInput, TimetableAgentOutput>
+
     protected val viewModel: AgentChatViewModel by viewModels()
 
     override fun initViewBinding(): FragmentAgentChatBinding =
         FragmentAgentChatBinding.inflate(layoutInflater)
-
-    private val agentProvider: AgentProvider<TimetableAgentInput, TimetableAgentOutput> by lazy {
-        TimetableAgentFactory.createProvider()
-    }
     private var agentSession: AgentSession<TimetableAgentInput, TimetableAgentOutput>? = null
     private lateinit var messageAdapter: AgentChatMessageAdapter
     private var sessionList: List<ChatSession> = emptyList()
