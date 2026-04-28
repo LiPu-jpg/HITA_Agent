@@ -85,10 +85,11 @@ object ActivityUtils {
         from.startActivity(i)
     }
 
-    fun startWelcomeActivity(from: Context) {
+    fun startWelcomeActivity(from: Context, easRepository: EASRepository) {
         if (from is BaseActivity<*, *>) {
             showEasVerifyWindow<Activity>(
                 from = from,
+                easRepository = easRepository,
                 directTo = null,
                 onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                     override fun onSuccess(window: PopUpLoginEAS) {
@@ -111,6 +112,7 @@ object ActivityUtils {
      */
     fun <T : Activity> showEasVerifyWindow(
         from: Context,
+        easRepository: EASRepository,
         directTo: Class<T>? = null,
         lock: Boolean = false,
         autoLaunchWebLogin: Boolean = false,
@@ -118,9 +120,7 @@ object ActivityUtils {
         onResponseListener: PopUpLoginEAS.OnResponseListener
     ) {
         if (from is BaseActivity<*, *>) {
-            if (EASRepository((from as AppCompatActivity).application, EasPreferenceSource((from as AppCompatActivity).application.applicationContext), TimetablePreferenceSource((from as AppCompatActivity).application.applicationContext)).getEasToken()
-                    .isLogin()
-            ) {
+            if (easRepository.getEasToken().isLogin()) {
                 directTo?.let {
                     val i = Intent(from, directTo)
                     from.startActivity(i)

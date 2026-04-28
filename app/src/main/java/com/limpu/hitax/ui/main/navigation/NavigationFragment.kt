@@ -110,6 +110,7 @@ class NavigationFragment : HiltBaseFragment<FragmentNavigationBinding>() {
         binding?.cardSubjects?.setOnClickListener {
             ActivityUtils.showEasVerifyWindow(
                 requireContext(),
+                easRepository,
                 directTo = ExamActivity::class.java,
                 onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                     override fun onSuccess(window: PopUpLoginEAS) {
@@ -233,6 +234,7 @@ class NavigationFragment : HiltBaseFragment<FragmentNavigationBinding>() {
                 binding?.userCard?.setOnClickListener {
                     ActivityUtils.showEasVerifyWindow<Activity>(
                         requireContext(),
+                        easRepository,
                         directTo = null,
                         onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                             override fun onSuccess(window: PopUpLoginEAS) {

@@ -14,8 +14,6 @@ import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.repository.EASRepository
-import com.limpu.hitax.data.source.preference.EasPreferenceSource
-import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.ActivityEasImportBinding
 import androidx.activity.viewModels
 import com.limpu.hitax.ui.eas.EASActivity
@@ -80,7 +78,7 @@ class ImportTimetableActivity :
                 (binding.buttonImport.width / 2) * (1 - binding.buttonImport.scaleX)
         })
         binding.cardName.isEnabled = false
-        val token = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken()
+        val token = easRepository.getEasToken()
         val isUndergrad = token.stutype == EASToken.TYPE.UNDERGRAD
         binding.stutype.isChecked = isUndergrad
         viewModel.changeIsUndergraduate(isUndergrad)
@@ -129,7 +127,7 @@ class ImportTimetableActivity :
         }
 
         refreshLocalUiOnly()
-        if (EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken().isLogin()) {
+        if (easRepository.getEasToken().isLogin()) {
             refresh()
         }
         if (autoImportPending) {
@@ -151,7 +149,7 @@ class ImportTimetableActivity :
     }
 
     override fun onLoginCheckSuccess(retry: Boolean) {
-        val token = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken()
+        val token = easRepository.getEasToken()
         binding.stutype.isChecked = (token.stutype == EASToken.TYPE.UNDERGRAD)
         viewModel.changeIsUndergraduate(binding.stutype.isChecked)
         refresh()
@@ -171,12 +169,13 @@ class ImportTimetableActivity :
     }
 
     private fun ensureLoggedInForImport(onSuccess: () -> Unit) {
-        if (EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken().isLogin()) {
+        if (easRepository.getEasToken().isLogin()) {
             onSuccess()
             return
         }
         ActivityUtils.showEasVerifyWindow<android.app.Activity>(
             from = this,
+            easRepository = easRepository,
             directTo = null,
             onResponseListener = object : com.limpu.hitax.ui.eas.login.PopUpLoginEAS.OnResponseListener {
                 override fun onSuccess(window: com.limpu.hitax.ui.eas.login.PopUpLoginEAS) {

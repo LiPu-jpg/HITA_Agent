@@ -396,6 +396,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
         drawerHeader?.setOnClickListener {
             ActivityUtils.showEasVerifyWindow<Activity>(
                 getThis(),
+                easRepository,
                 directTo = null,
                 onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                     override fun onSuccess(window: PopUpLoginEAS) {
