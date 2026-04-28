@@ -1,6 +1,5 @@
 package com.limpu.hitax.data.repository
 
-import android.content.Context
 import androidx.lifecycle.LiveData
 import javax.inject.Inject
 import androidx.lifecycle.map
@@ -11,7 +10,6 @@ import com.limpu.hitauser.data.model.CheckUpdateResult
 import java.util.Locale
 
 class UpdateRepository @Inject constructor(
-    context: Context,
     private val githubWebSource: GitHubWebSource
 ) {
 
