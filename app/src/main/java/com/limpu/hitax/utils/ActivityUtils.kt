@@ -8,7 +8,6 @@ import android.net.Uri
 import android.view.View
 import android.widget.ImageView
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityOptionsCompat
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.EASToken
@@ -31,8 +30,7 @@ import com.limpu.hitax.ui.timetable.detail.TimetableDetailActivity
 import com.limpu.hitax.ui.timetable.manager.TimetableManagerActivity
 import com.limpu.hitauser.data.model.CheckUpdateResult
 import com.limpu.hitauser.data.repository.LocalUserRepository
-import com.limpu.hitax.ui.base.HiltBaseActivity
-import com.limpu.style.base.BaseActivity
+import androidx.appcompat.app.AppCompatActivity
 import com.limpu.style.widgets.PopUpText
 import com.limpu.style.widgets.PopUpUpdate
 import java.net.URLEncoder
@@ -86,7 +84,7 @@ object ActivityUtils {
     }
 
     fun startWelcomeActivity(from: Context, easRepository: EASRepository) {
-        if (from is BaseActivity<*, *>) {
+        if (from is AppCompatActivity) {
             showEasVerifyWindow<Activity>(
                 from = from,
                 easRepository = easRepository,
@@ -119,7 +117,7 @@ object ActivityUtils {
         preferredCampus: EASToken.Campus? = null,
         onResponseListener: PopUpLoginEAS.OnResponseListener
     ) {
-        if (from is BaseActivity<*, *>) {
+        if (from is AppCompatActivity) {
             if (easRepository.getEasToken().isLogin()) {
                 directTo?.let {
                     val i = Intent(from, directTo)
