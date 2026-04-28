@@ -161,7 +161,6 @@ class HApplication : Application() {
                         var registeredCount = 0
                         val keyCMaps = listOf(
                             "Identity-H",
-                            "Identity-V",
                             "Adobe-GB1-UCS2",
                             "Adobe-CNS1-UCS2",
                             "Adobe-Japan1-UCS2",
@@ -182,11 +181,7 @@ class HApplication : Application() {
                                     registeredCount++
                                     LogUtils.d( "✅ 注册成功: $cmapFile")
                                 } catch (e: Exception) {
-                                    if (cmapFile == "Identity-V") {
-                                        LogUtils.d( "ℹ️ Identity-V 注册失败（垂直书写CMap，可选）: ${e::class.simpleName}")
-                                    } else {
-                                        LogUtils.w( "⚠️ 注册失败 $cmapFile: ${e::class.simpleName} - ${e.message}")
-                                    }
+                                    LogUtils.w( "⚠️ 注册失败 $cmapFile: ${e::class.simpleName} - ${e.message}")
                                 }
                             } else {
                                 LogUtils.w( "⚠️ 文件不存在: $cmapFile")
