@@ -117,6 +117,7 @@ object ActivityUtils {
         preferredCampus: EASToken.Campus? = null,
         onResponseListener: PopUpLoginEAS.OnResponseListener
     ) {
+        LogUtils.d("showEasVerifyWindow called, from is AppCompatActivity=${from is AppCompatActivity}")
         if (from is AppCompatActivity) {
             if (easRepository.getEasToken().isLogin()) {
                 directTo?.let {
@@ -125,12 +126,15 @@ object ActivityUtils {
                     return
                 }
             }
+            LogUtils.d("Creating PopUpLoginEAS and showing")
             val window = PopUpLoginEAS()
             window.lock = lock
             window.autoLaunchWebLogin = autoLaunchWebLogin
             window.preferredCampus = preferredCampus
             window.onResponseListener = onResponseListener
             window.show(from.supportFragmentManager, "verify")
+        } else {
+            LogUtils.e("showEasVerifyWindow failed: from is not AppCompatActivity, actual type=${from.javaClass.name}")
         }
     }
 
