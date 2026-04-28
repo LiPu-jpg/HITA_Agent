@@ -1,6 +1,7 @@
 package com.limpu.hitax.data.repository
 
 import androidx.lifecycle.LiveData
+import javax.inject.Inject
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.resource.CourseReadmeData
 import com.limpu.hitax.data.model.resource.CourseResourceItem
@@ -9,7 +10,7 @@ import com.limpu.hitax.data.model.resource.ValidateReadmeResult
 import com.limpu.hitax.data.source.web.HoaResourceSource
 import org.json.JSONArray
 
-class HoaRepository constructor() {
+class HoaRepository @Inject constructor() {
     fun searchCourses(query: String, campus: String? = null): LiveData<DataState<List<CourseResourceItem>>> {
         return HoaResourceSource.searchCourses(query, campus)
     }

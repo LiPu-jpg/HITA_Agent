@@ -2,6 +2,7 @@ package com.limpu.hitax.data.repository
 
 import android.content.Context
 import androidx.lifecycle.LiveData
+import javax.inject.Inject
 import androidx.lifecycle.map
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.GitHubRelease
@@ -9,8 +10,8 @@ import com.limpu.hitax.data.source.web.GitHubWebSource
 import com.limpu.stupiduser.data.model.CheckUpdateResult
 import java.util.Locale
 
-class UpdateRepository constructor(
-    @Suppress("UNUSED_PARAMETER") context: Context,
+class UpdateRepository @Inject constructor(
+    context: Context,
     private val githubWebSource: GitHubWebSource
 ) {
 

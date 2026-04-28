@@ -2,6 +2,7 @@ package com.limpu.hitax.data.repository
 
 import android.app.Application
 import androidx.annotation.WorkerThread
+import javax.inject.Inject
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
@@ -41,7 +42,7 @@ import java.io.FileOutputStream
 import java.io.InputStream
 
 
-class TimetableRepository(val application: Application) {
+class TimetableRepository @Inject constructor(val application: Application) {
     private val historyTag = "timetable"
     private val manualEventFallbackColor by lazy {
         ContextCompat.getColor(application, R.color.subject8)

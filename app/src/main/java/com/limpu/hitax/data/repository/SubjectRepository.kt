@@ -2,6 +2,7 @@ package com.limpu.hitax.data.repository
 
 import android.app.Application
 import androidx.lifecycle.LiveData
+import javax.inject.Inject
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.map
 import com.limpu.hitax.data.AppDatabase
@@ -12,7 +13,7 @@ import com.limpu.sync.StupidSync
 import com.limpu.sync.data.model.History
 import java.util.concurrent.Executors
 
-class SubjectRepository(application: Application) {
+class SubjectRepository @Inject constructor(application: Application) {
     private val historyTag = "subject"
     private val executor = Executors.newSingleThreadScheduledExecutor()
     private val eventItemDao = AppDatabase.getDatabase(application).eventItemDao()

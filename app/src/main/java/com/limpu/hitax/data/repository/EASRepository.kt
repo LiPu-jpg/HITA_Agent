@@ -2,6 +2,7 @@ package com.limpu.hitax.data.repository
 
 import android.app.Application
 import android.os.Handler
+import javax.inject.Inject
 import android.os.Looper
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
@@ -38,7 +39,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import com.limpu.hitax.utils.LogUtils
 
-class EASRepository constructor(
+class EASRepository @Inject constructor(
     application: Application,
     private val easPreferenceSource: EasPreferenceSource,
     private val timetablePreferenceSource: TimetablePreferenceSource

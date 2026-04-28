@@ -3,6 +3,7 @@ package com.limpu.hitax.data.repository
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
+import javax.inject.Inject
 import androidx.lifecycle.MediatorLiveData
 import com.limpu.component.data.booleanLiveData
 import com.limpu.component.data.intLiveData
@@ -15,7 +16,7 @@ const val KEY_COLOR_ENABLE = "color_enable"
 const val KEY_FADE_ENABLE = "fade_enable"
 const val KEY_LABEL_PERIOD = "label_period"
 
-class TimetableStyleRepository(application: Application) {
+class TimetableStyleRepository @Inject constructor(application: Application) {
     private val timetableStyleSP: SharedPreferences = application.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
     val startTimeLiveData = timetableStyleSP.intLiveData(KEY_START_DATE, 800)
     val drawBGLinesLiveData = timetableStyleSP.booleanLiveData(KEY_DRAW_BG_LINE, true)
