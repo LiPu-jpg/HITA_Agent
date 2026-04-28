@@ -19,7 +19,9 @@ import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.databinding.DialogBottomEasVerifyBinding
 import com.limpu.hitax.utils.ImageUtils
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class PopUpLoginEAS :
     TransparentModeledBottomSheetDialog<LoginEASViewModel, DialogBottomEasVerifyBinding>() {
 
