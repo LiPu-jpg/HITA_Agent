@@ -4,12 +4,14 @@ import com.limpu.hitax.utils.LogUtils
 import android.app.Activity
 import android.content.DialogInterface
 import android.content.Intent
+import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.viewModels
 import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.EASToken
@@ -29,8 +31,15 @@ class PopUpLoginEAS :
     private var autoLaunchTriggered = false
     private var silentWebLoginTried = false
 
+    private val hiltViewModel: LoginEASViewModel by viewModels()
+
     override fun getViewModelClass(): Class<LoginEASViewModel> {
         return LoginEASViewModel::class.java
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        viewModel = hiltViewModel
     }
 
     companion object {
