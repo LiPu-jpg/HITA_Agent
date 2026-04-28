@@ -7,7 +7,7 @@ import androidx.lifecycle.map
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.GitHubRelease
 import com.limpu.hitax.data.source.web.GitHubWebSource
-import com.limpu.stupiduser.data.model.CheckUpdateResult
+import com.limpu.hitauser.data.model.CheckUpdateResult
 import java.util.Locale
 
 class UpdateRepository @Inject constructor(

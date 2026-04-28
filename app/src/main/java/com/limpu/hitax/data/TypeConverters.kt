@@ -2,7 +2,7 @@ package com.limpu.hitax.data
 
 import androidx.room.TypeConverter
 import com.google.gson.Gson
-import com.limpu.stupiduser.data.model.UserLocal
+import com.limpu.hitauser.data.model.UserLocal
 import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TermSubject
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay

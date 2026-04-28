@@ -1,31 +1,29 @@
 package com.limpu.hitax.ui.main
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.DataState
 import com.limpu.component.data.Trigger
 import com.limpu.hitax.BuildConfig
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.UpdateRepository
-import com.limpu.hitax.data.source.preference.EasPreferenceSource
-import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
-import com.limpu.hitax.data.source.web.GitHubWebSource
 import com.limpu.hitax.utils.LiveDataUtils
-import com.limpu.stupiduser.data.model.CheckUpdateResult
-import com.limpu.stupiduser.data.model.UserLocal
-import com.limpu.stupiduser.data.repository.LocalUserRepository
-import com.limpu.stupiduser.data.repository.ManagerRepository
+import com.limpu.hitauser.data.model.CheckUpdateResult
+import com.limpu.hitauser.data.model.UserLocal
+import com.limpu.hitauser.data.repository.LocalUserRepository
+import com.limpu.hitauser.data.repository.ManagerRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
-    /**
-     * 仓库区
-     */
-    private val localUserRepository = LocalUserRepository(application)
-    private val managerRepository = ManagerRepository(application)
-    private val updateRepository = UpdateRepository(application.applicationContext, GitHubWebSource(application.applicationContext))
+@HiltViewModel
+class MainViewModel @Inject constructor(
+    private val localUserRepository: LocalUserRepository,
+    private val managerRepository: ManagerRepository,
+    private val updateRepository: UpdateRepository,
+    private val easRepository: EASRepository
+) : ViewModel() {
 
     /**
      * LiveData
@@ -53,7 +51,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return@switchMap managerRepository.checkUpdate(
                 localUserRepository.getLoggedInUser().token!!,
                 it,
-                EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken().stuId
+                easRepository.getEasToken().stuId
             )
         } else {
             return@switchMap LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))

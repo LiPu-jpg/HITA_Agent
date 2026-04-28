@@ -29,8 +29,8 @@ import com.limpu.hitax.ui.subject.SubjectActivity
 import com.limpu.hitax.ui.teacher.ActivityTeacherOfficial
 import com.limpu.hitax.ui.timetable.detail.TimetableDetailActivity
 import com.limpu.hitax.ui.timetable.manager.TimetableManagerActivity
-import com.limpu.stupiduser.data.model.CheckUpdateResult
-import com.limpu.stupiduser.data.repository.LocalUserRepository
+import com.limpu.hitauser.data.model.CheckUpdateResult
+import com.limpu.hitauser.data.repository.LocalUserRepository
 import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.style.base.BaseActivity
 import com.limpu.style.widgets.PopUpText

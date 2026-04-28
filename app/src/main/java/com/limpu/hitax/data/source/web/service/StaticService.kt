@@ -1,9 +1,9 @@
 package com.limpu.hitax.data.source.web.service
 
 import androidx.lifecycle.LiveData
-import com.limpu.stupiduser.data.model.ApiResponse
-import com.limpu.stupiduser.data.model.CheckUpdateResult
-import com.limpu.stupiduser.data.model.UserLocal
+import com.limpu.hitauser.data.model.ApiResponse
+import com.limpu.hitauser.data.model.CheckUpdateResult
+import com.limpu.hitauser.data.model.UserLocal
 import okhttp3.ResponseBody
 import retrofit2.http.*
 

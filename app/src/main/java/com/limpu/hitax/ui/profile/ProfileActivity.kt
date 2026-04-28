@@ -11,10 +11,9 @@ import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.databinding.ActivityProfileBinding
 import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.utils.ActivityUtils
-import com.limpu.stupiduser.data.model.UserLocal
-import com.limpu.stupiduser.data.model.UserProfile
-import com.limpu.stupiduser.data.repository.LocalUserRepository
-import com.limpu.stupiduser.util.ImageUtils
+import com.limpu.hitauser.data.model.UserLocal
+import com.limpu.hitauser.data.model.UserProfile
+import com.limpu.hitauser.util.ImageUtils
 import com.limpu.style.widgets.PopUpText
 import com.limpu.sync.StupidSync
 import dagger.hilt.android.AndroidEntryPoint
@@ -70,9 +69,7 @@ class ProfileActivity : HiltBaseActivity<ActivityProfileBinding>() {
             binding.refresh.isRefreshing = false
             if (userProfileDataState?.state === DataState.STATE.SUCCESS) {
                 setProfileView(userProfileDataState.data)
-                if (userProfileDataState.data?.id == LocalUserRepository.getInstance(application)
-                        .getLoggedInUser().id
-                ) {
+                if (viewModel.isCurrentUser(userProfileDataState.data?.id)) {
                     binding.logout.visibility = View.VISIBLE
                 } else {
                     binding.logout.visibility = View.GONE

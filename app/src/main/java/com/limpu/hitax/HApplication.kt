@@ -12,8 +12,9 @@ import com.limpu.hitax.data.model.GsonBuilderUtil
 import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TermSubject
 import com.limpu.hitax.data.model.timetable.Timetable
-import com.limpu.stupiduser.data.repository.LocalUserRepository
+import com.limpu.hitauser.data.repository.LocalUserRepository
 import com.limpu.sync.StupidSync
+import javax.inject.Inject
 import com.limpu.hitax.agent.remote.AgentBackendClient
 import com.limpu.hitax.data.work.CourseReminderScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +30,9 @@ import javax.net.ssl.X509TrustManager
 
 @HiltAndroidApp
 class HApplication : Application() {
+
+    @Inject
+    lateinit var localUserRepository: LocalUserRepository
 
     // 应用级别的协程作用域，生命周期与应用一致
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -152,7 +156,7 @@ class HApplication : Application() {
             }
 
         })
-        StupidSync.setUID(LocalUserRepository.getInstance(this).getLoggedInUser().id)
+        StupidSync.setUID(localUserRepository.getLoggedInUser().id)
         // 注意：在生产环境中应该移除或修改SSL设置
         // handleSSLHandshake()
 

@@ -13,7 +13,7 @@ import com.limpu.hitax.databinding.FragmentLoginBinding
 import com.limpu.hitax.ui.about.UserAgreementDialog
 import com.limpu.hitax.ui.base.HiltBaseFragment
 import com.limpu.hitax.utils.AnimationUtils
-import com.limpu.stupiduser.data.model.LoginResult
+import com.limpu.hitauser.data.model.LoginResult
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -51,13 +51,13 @@ class LoginFragment : HiltBaseFragment<FragmentLoginBinding>() {
             }
             if (loginResult != null) {
                 when (loginResult.state) {
-                    com.limpu.stupiduser.data.model.LoginResult.STATES.SUCCESS -> {
+                    com.limpu.hitauser.data.model.LoginResult.STATES.SUCCESS -> {
                         requireActivity().finish()
                     }
-                    com.limpu.stupiduser.data.model.LoginResult.STATES.WRONG_USERNAME -> {
+                    com.limpu.hitauser.data.model.LoginResult.STATES.WRONG_USERNAME -> {
                         binding?.username?.error = getString(loginResult.message)
                     }
-                    com.limpu.stupiduser.data.model.LoginResult.STATES.WRONG_PASSWORD -> {
+                    com.limpu.hitauser.data.model.LoginResult.STATES.WRONG_PASSWORD -> {
                         binding?.password?.error = getString(loginResult.message)
                     }
                     else -> {

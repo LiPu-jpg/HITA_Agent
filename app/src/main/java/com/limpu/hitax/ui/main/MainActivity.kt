@@ -25,8 +25,6 @@ import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.data.repository.EasSettingsRepository
 import com.limpu.hitax.data.repository.EASRepository
-import com.limpu.hitax.data.source.preference.EasPreferenceSource
-import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.ActivityMainBinding
 import com.limpu.hitax.ui.about.ActivityAbout
 import com.limpu.hitax.ui.about.UserAgreementDialog
@@ -42,12 +40,13 @@ import com.limpu.hitax.ui.main.timetable.panel.FragmentTimetablePanel
 import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.ImageUtils
-import com.limpu.stupiduser.data.repository.LocalUserRepository
+import com.limpu.hitauser.data.repository.LocalUserRepository
 import com.limpu.style.ThemeTools
 import com.limpu.style.base.BaseTabAdapter
 import com.limpu.style.widgets.PopUpText
 import dagger.hilt.android.AndroidEntryPoint
 import me.ibrahimsn.lib.OnItemSelectedListener
+import javax.inject.Inject
 
 /**
  * 很显然，这是主界面
@@ -55,6 +54,12 @@ import me.ibrahimsn.lib.OnItemSelectedListener
 @AndroidEntryPoint
 class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
     TimetableFragment.MainPageController, FragmentTimeLine.MainPageController {
+
+    @Inject
+    lateinit var localUserRepository: LocalUserRepository
+
+    @Inject
+    lateinit var easRepository: EASRepository
 
     protected val viewModel: MainViewModel by viewModels()
 
@@ -198,7 +203,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
         viewModel.startRefreshUser()
         refreshTheme()
         refreshDrawerEasInfo()
-        EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).observeEasToken().observe(this, easTokenObserver)
+        easRepository.observeEasToken().observe(this, easTokenObserver)
         maybeAutoReimportTimetable()
         try {
             val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -214,7 +219,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
             }
             if (System.currentTimeMillis() - lastCheckTs > 5 * 60 * 1000) checkedUpdate = false
             if (!checkedUpdate) {
-                if (LocalUserRepository(this).getLoggedInUser().isValid()) {
+                if (localUserRepository.getLoggedInUser().isValid()) {
                     checkedUpdate = true
                     lastCheckTs = System.currentTimeMillis()
                 }
@@ -229,7 +234,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
     private fun maybeAutoReimportTimetable() {
         val settings = EasSettingsRepository(application)
         if (!settings.isAutoReimportEnabled()) return
-        val token = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken()
+        val token = easRepository.getEasToken()
         if (!token.isLogin()) return
         if (autoReimportAttempted) return
         val now = System.currentTimeMillis()
@@ -237,7 +242,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
         if (now - last < autoReimportIntervalMs) return
         autoReimportAttempted = true
         val isUndergrad = token.stutype == com.limpu.hitax.data.model.eas.EASToken.TYPE.UNDERGRAD
-        EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).startAutoImportCurrentTimetable(isUndergrad) { success ->
+        easRepository.startAutoImportCurrentTimetable(isUndergrad) { success ->
             if (success) {
                 settings.setLastAutoReimportTs(System.currentTimeMillis())
             }
@@ -343,9 +348,9 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
 
 
     private fun refreshDrawerEasInfo() {
-        val localUser = LocalUserRepository(applicationContext).getLoggedInUser()
+        val localUser = localUserRepository.getLoggedInUser()
         if (localUser.isValid()) {
-            com.limpu.stupiduser.util.ImageUtils.loadAvatarInto(
+            com.limpu.hitauser.util.ImageUtils.loadAvatarInto(
                 this,
                 localUser.avatar,
                 drawerAvatar!!
@@ -362,7 +367,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
             return
         }
 
-        val easToken = EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).getEasToken()
+        val easToken = easRepository.getEasToken()
         if (easToken.isLogin()) {
             drawerUsername?.text = easToken.name?.ifBlank { easToken.stuId?.ifBlank { easToken.username } }
                 ?: easToken.stuId?.ifBlank { easToken.username }
@@ -418,7 +423,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
     }
 
     override fun onStop() {
-        EASRepository(application, EasPreferenceSource(application.applicationContext), TimetablePreferenceSource(application.applicationContext)).observeEasToken().removeObserver(easTokenObserver)
+        easRepository.observeEasToken().removeObserver(easTokenObserver)
         super.onStop()
     }
 

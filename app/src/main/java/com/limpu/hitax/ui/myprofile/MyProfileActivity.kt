@@ -7,8 +7,8 @@ import com.limpu.hitax.R
 import com.limpu.hitax.databinding.ActivityMyProfileBinding
 import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.component.data.DataState
-import com.limpu.stupiduser.data.model.UserLocal
-import com.limpu.stupiduser.data.model.UserProfile
+import com.limpu.hitauser.data.model.UserLocal
+import com.limpu.hitauser.data.model.UserProfile
 import com.limpu.style.widgets.PopUpEditText
 import com.limpu.style.widgets.PopUpSelectableList
 import dagger.hilt.android.AndroidEntryPoint
@@ -111,7 +111,7 @@ class MyProfileActivity : HiltBaseActivity<ActivityMyProfileBinding>() {
     }
 
     private fun setUserProfile(profile: UserProfile) {
-        com.limpu.stupiduser.util.ImageUtils.loadAvatarInto(getThis(), profile.avatar, binding.avatar)
+        com.limpu.hitauser.util.ImageUtils.loadAvatarInto(getThis(), profile.avatar, binding.avatar)
         binding.nickname.text = profile.nickname
         if (!profile.signature.isNullOrEmpty()) {
             binding.signature.text = profile.signature

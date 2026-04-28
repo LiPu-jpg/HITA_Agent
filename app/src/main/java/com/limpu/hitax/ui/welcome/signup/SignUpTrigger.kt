@@ -1,7 +1,7 @@
 package com.limpu.hitax.ui.welcome.signup
 
 
-import com.limpu.stupiduser.data.model.UserLocal
+import com.limpu.hitauser.data.model.UserLocal
 import com.limpu.component.data.Trigger
 
 class SignUpTrigger : Trigger() {

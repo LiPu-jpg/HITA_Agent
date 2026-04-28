@@ -7,7 +7,7 @@ import android.view.View
 import android.widget.Toast
 import androidx.fragment.app.viewModels
 import com.limpu.hitax.R
-import com.limpu.stupiduser.data.model.UserLocal
+import com.limpu.hitauser.data.model.UserLocal
 import com.limpu.hitax.databinding.FragmentSignUpBinding
 import com.limpu.hitax.ui.about.UserAgreementDialog
 import com.limpu.hitax.ui.base.HiltBaseFragment
@@ -48,19 +48,19 @@ class SignUpFragment : HiltBaseFragment<FragmentSignUpBinding>() {
         })
         viewModel.signUpResult.observe(
             this,
-            { signUpResult: com.limpu.stupiduser.data.model.SignUpResult? ->
+            { signUpResult: com.limpu.hitauser.data.model.SignUpResult? ->
                 AnimationUtils.loadingButtonDone(
                     binding?.signUp,
-                    signUpResult?.state === com.limpu.stupiduser.data.model.SignUpResult.STATES.SUCCESS,
+                    signUpResult?.state === com.limpu.hitauser.data.model.SignUpResult.STATES.SUCCESS,
                     toast = false
                 )
                 if (signUpResult != null) {
                     Toast.makeText(context, signUpResult.message, Toast.LENGTH_SHORT).show()
                 }
                 if (signUpResult != null) {
-                    if (signUpResult.state === com.limpu.stupiduser.data.model.SignUpResult.STATES.SUCCESS) {
+                    if (signUpResult.state === com.limpu.hitauser.data.model.SignUpResult.STATES.SUCCESS) {
                         requireActivity().finish()
-                    } else if (signUpResult.state === com.limpu.stupiduser.data.model.SignUpResult.STATES.USER_EXISTS) {
+                    } else if (signUpResult.state === com.limpu.hitauser.data.model.SignUpResult.STATES.USER_EXISTS) {
                         binding?.username?.error = getString(signUpResult.message)
                     }
                 }
