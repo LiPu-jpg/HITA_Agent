@@ -159,16 +159,15 @@ class HApplication : Application() {
                         parseMethod.isAccessible = true
 
                         var registeredCount = 0
-                        // 扩展常用CMap列表：覆盖中文、日文、韩文
                         val keyCMaps = listOf(
-                            "Identity-H",           // 最常用：水平书写
-                            "Identity-V",           // 垂直书写
-                            "Adobe-GB1-UCS2",       // 简体中文
-                            "Adobe-CNS1-UCS2",      // 繁体中文
-                            "Adobe-Japan1-UCS2",    // 日文
-                            "Adobe-Korea1-UCS2",    // 韩文
-                            "GBK-EUC-H",            // 中文编码
-                            "UniGB-UTF16-H"         // Unicode中文
+                            "Identity-H",
+                            "Identity-V",
+                            "Adobe-GB1-UCS2",
+                            "Adobe-CNS1-UCS2",
+                            "Adobe-Japan1-UCS2",
+                            "Adobe-Korea1-UCS2",
+                            "GBK-EUC-H",
+                            "UniGB-UTF16-H"
                         )
 
                         for (cmapFile in keyCMaps) {
@@ -183,7 +182,11 @@ class HApplication : Application() {
                                     registeredCount++
                                     LogUtils.d( "✅ 注册成功: $cmapFile")
                                 } catch (e: Exception) {
-                                    LogUtils.w( "⚠️ 注册失败 $cmapFile: ${e::class.simpleName} - ${e.message}")
+                                    if (cmapFile == "Identity-V") {
+                                        LogUtils.d( "ℹ️ Identity-V 注册失败（垂直书写CMap，可选）: ${e::class.simpleName}")
+                                    } else {
+                                        LogUtils.w( "⚠️ 注册失败 $cmapFile: ${e::class.simpleName} - ${e.message}")
+                                    }
                                 }
                             } else {
                                 LogUtils.w( "⚠️ 文件不存在: $cmapFile")
