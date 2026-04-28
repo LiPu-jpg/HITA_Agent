@@ -9,7 +9,7 @@ import com.limpu.component.data.Trigger
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.utils.LiveDataUtils
 
-abstract class EASViewModel(protected val easRepo: EASRepository) : ViewModel() {
+abstract class EASViewModel(val easRepo: EASRepository) : ViewModel() {
 
 
     private val loginCheckController = MutableLiveData<Trigger>()
