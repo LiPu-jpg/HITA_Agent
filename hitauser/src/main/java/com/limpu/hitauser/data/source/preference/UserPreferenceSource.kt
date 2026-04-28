@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.SharedPreferences
 import com.limpu.hitauser.data.model.UserLocal
-import com.limpu.sync.StupidSync
 import java.util.*
 
 /**
@@ -18,7 +17,6 @@ class UserPreferenceSource(private val context: Context) {
         context.getSharedPreferences(SP_NAME_LOCAL_USER, Context.MODE_PRIVATE)
 
     fun saveLocalUser(user: UserLocal) {
-        StupidSync.setUID(user.id)
         preference.edit()
             .putString("id", user.id)
             .putString("username", user.username)

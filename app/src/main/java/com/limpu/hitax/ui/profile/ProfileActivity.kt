@@ -15,7 +15,6 @@ import com.limpu.hitauser.data.model.UserLocal
 import com.limpu.hitauser.data.model.UserProfile
 import com.limpu.hitauser.util.ImageUtils
 import com.limpu.style.widgets.PopUpText
-import com.limpu.sync.StupidSync
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -55,7 +54,6 @@ class ProfileActivity : HiltBaseActivity<ActivityProfileBinding>() {
                     override fun OnConfirm() {
                         viewModel.logout(getThis())
                         TimetableRepository(application).actionClearData()
-                        StupidSync.clearData()
                         finish()
                     }
                 }

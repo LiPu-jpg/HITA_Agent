@@ -6,8 +6,6 @@ import com.limpu.hitauser.data.source.preference.UserPreferenceSource
 import com.limpu.hitauser.data.source.web.UserWebSource
 import com.limpu.hitauser.data.model.LoginResult
 import com.limpu.hitauser.data.model.SignUpResult
-import com.limpu.sync.StupidSync
-import java.lang.Exception
 import javax.inject.Inject
 
 /**
@@ -29,16 +27,6 @@ class UserRepository @Inject constructor(
 
             if (input.state === LoginResult.STATES.SUCCESS) {
                 userPreferenceSource.saveLocalUser(input.userLocal!!)
-                StupidSync.sync(object : StupidSync.SyncCallback {
-                    override fun onSuccess() {
-
-                    }
-
-                    override fun onFailed(e: Exception) {
-
-                    }
-
-                })
             }
             input
         }

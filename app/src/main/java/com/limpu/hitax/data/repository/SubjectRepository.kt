@@ -9,12 +9,9 @@ import com.limpu.hitax.data.AppDatabase
 import com.limpu.hitax.data.model.timetable.TermSubject
 import com.limpu.hitax.ui.timetable.detail.TeacherInfo
 import com.limpu.hitax.utils.ColorTools
-import com.limpu.sync.StupidSync
-import com.limpu.sync.data.model.History
 import java.util.concurrent.Executors
 
 class SubjectRepository @Inject constructor(application: Application) {
-    private val historyTag = "subject"
     private val executor = Executors.newSingleThreadScheduledExecutor()
     private val eventItemDao = AppDatabase.getDatabase(application).eventItemDao()
     private val subjectDao = AppDatabase.getDatabase(application).subjectDao()
@@ -113,7 +110,6 @@ class SubjectRepository @Inject constructor(application: Application) {
     fun actionSaveSubjectInfo(subject: TermSubject) {
         executor.execute {
             subjectDao.saveSubjectSync(subject)
-            StupidSync.putHistorySync(historyTag, History.ACTION.REQUIRE, listOf(subject.id))
         }
     }
 
@@ -127,7 +123,6 @@ class SubjectRepository @Inject constructor(application: Application) {
                     s.color = ColorTools.randomColorMaterial()
                 }
                 subjectDao.saveSubjectsSync(subjects)
-                StupidSync.putHistorySync(historyTag, History.ACTION.REQUIRE, subjects.getIds())
             }
 
         }
@@ -140,7 +135,6 @@ class SubjectRepository @Inject constructor(application: Application) {
                 s.color = ColorTools.randomColorMaterial()
             }
             subjectDao.saveSubjectsSync(subjects)
-            StupidSync.putHistorySync(historyTag, History.ACTION.REQUIRE, subjects.getIds())
         }
     }
 
@@ -152,7 +146,6 @@ class SubjectRepository @Inject constructor(application: Application) {
         executor.execute {
             subjectDao.deleteSubjectsSync(subjects)
             val ids = subjects.getIds()
-            StupidSync.putHistorySync(historyTag, History.ACTION.REMOVE, ids)
             eventItemDao.deleteEventsFromSubjectsSync(ids)
         }
     }

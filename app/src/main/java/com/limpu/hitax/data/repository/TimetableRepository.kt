@@ -17,8 +17,6 @@ import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.model.timetable.Timetable
 import com.limpu.hitax.ui.main.timetable.TimetableFragment.Companion.WEEK_MILLS
 import com.limpu.hitax.utils.TimeTools
-import com.limpu.sync.StupidSync
-import com.limpu.sync.data.model.History
 import java.lang.NumberFormatException
 import java.util.*
 import java.util.concurrent.Executors
@@ -44,7 +42,6 @@ import java.io.InputStream
 
 
 class TimetableRepository @Inject constructor(val application: Application) {
-    private val historyTag = "timetable"
     private val manualEventFallbackColor by lazy {
         ContextCompat.getColor(application, R.color.subject8)
     }
@@ -196,15 +193,9 @@ class TimetableRepository @Inject constructor(val application: Application) {
             ids.add(tt.id)
         }
         executor.execute {
-            val eventIds = eventItemDao.getEventIdsFromTimetablesSync(ids)
-            StupidSync.putHistorySync("event", History.ACTION.REMOVE, eventIds)
-            val subjectIds = subjectDao.getSubjectIdsOfTimetablesSync(ids)
-            StupidSync.putHistorySync("subject", History.ACTION.REMOVE, subjectIds)
-
             timetableDao.deleteTimetablesSync(timetables)
             eventItemDao.deleteEventsFromTimetablesSync(ids)
             subjectDao.deleteSubjectsFromTimetablesSync(ids)
-            StupidSync.putHistorySync(historyTag, History.ACTION.REMOVE, ids)
         }
 
     }
@@ -215,8 +206,6 @@ class TimetableRepository @Inject constructor(val application: Application) {
             ids.add(tt.id)
         }
         executor.execute {
-            val eventIds = eventItemDao.getEventIdsFromTimetablesSync(ids)
-            StupidSync.putHistorySync("event", History.ACTION.REMOVE, eventIds)
             eventItemDao.deleteEventsInIdsSync(ids)
         }
     }
@@ -225,7 +214,6 @@ class TimetableRepository @Inject constructor(val application: Application) {
         executor.execute {
             val newTable = buildNextDefaultTimetableSync()
             timetableDao.saveTimetableSync(newTable)
-            StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(newTable.id))
         }
     }
 
@@ -242,7 +230,6 @@ class TimetableRepository @Inject constructor(val application: Application) {
 
         val newTable = buildNextDefaultTimetableSync()
         timetableDao.saveTimetableSync(newTable)
-        StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(newTable.id))
         return newTable
     }
 
@@ -272,14 +259,12 @@ class TimetableRepository @Inject constructor(val application: Application) {
     fun actionSaveTimetable(timetable: Timetable) {
         executor.execute {
             timetableDao.saveTimetableSync(timetable)
-            StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(timetable.id))
         }
     }
 
     @WorkerThread
     fun saveTimetableSync(timetable: Timetable) {
         timetableDao.saveTimetableSync(timetable)
-        StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(timetable.id))
     }
 
     fun actionChangeTimetableStartDate(timetable: Timetable, startTime: Long) {
@@ -290,7 +275,6 @@ class TimetableRepository @Inject constructor(val application: Application) {
         executor.execute {
             timetableDao.saveTimetableSync(timetable)
             eventItemDao.updateClassesAddOffset(timetableId = timetable.id, offset)
-            StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(timetable.id))
         }
     }
 
@@ -298,7 +282,6 @@ class TimetableRepository @Inject constructor(val application: Application) {
         timetable.setScheduleStructure(tp, position)
         executor.execute {
             timetableDao.saveTimetableSync(timetable)
-            StupidSync.putHistorySync("timetable", History.ACTION.REQUIRE, listOf(timetable.id))
             val fromToChange = eventItemDao.getClassAtFromNumberSync(timetable.id, position + 1)
             val tmp = Calendar.getInstance()
             val ids = mutableListOf<String>()
@@ -319,29 +302,18 @@ class TimetableRepository @Inject constructor(val application: Application) {
                 e.to.time = tmp.timeInMillis
             }
             eventItemDao.saveEvents(endToChange)
-            StupidSync.putHistorySync("event", History.ACTION.REQUIRE, ids)
         }
     }
 
     fun actionAddEvents(data:List<EventItem>) {
         executor.execute {
             eventItemDao.addEvents(data)
-            val ids = mutableListOf<String>()
-            for (e in data) {
-                ids.add(e.id)
-            }
-            StupidSync.putHistorySync("event", History.ACTION.REQUIRE, ids)
         }
     }
 
     @WorkerThread
     fun addEventsSync(data: List<EventItem>) {
         eventItemDao.addEvents(data)
-        val ids = mutableListOf<String>()
-        for (e in data) {
-            ids.add(e.id)
-        }
-        StupidSync.putHistorySync("event", History.ACTION.REQUIRE, ids)
     }
 
 
@@ -430,12 +402,6 @@ class TimetableRepository @Inject constructor(val application: Application) {
                     importedCount++
                 }
                 
-                // 同步到云端
-                if (importedCount > 0) {
-                    val eventIds = eventItemDao.getEventIdsOfTimetableSync(timetableId)
-                    StupidSync.putHistorySync("event", History.ACTION.REQUIRE, eventIds)
-                }
-                
                 res.postValue(DataState(importedCount))
             } catch (e: Exception) {
                 LogUtils.e("Failed to import events from ICS", e)
@@ -460,22 +426,6 @@ class TimetableRepository @Inject constructor(val application: Application) {
                 timetableDao.saveTimetableSync(bundle.timetable)
                 subjectDao.saveSubjectsSync(bundle.subjects)
                 eventItemDao.saveEvents(bundle.events)
-
-                StupidSync.putHistorySync(
-                    historyTag,
-                    History.ACTION.REQUIRE,
-                    listOf(bundle.timetable.id)
-                )
-                StupidSync.putHistorySync(
-                    "subject",
-                    History.ACTION.REQUIRE,
-                    bundle.subjects.map { it.id }
-                )
-                StupidSync.putHistorySync(
-                    "event",
-                    History.ACTION.REQUIRE,
-                    bundle.events.map { it.id }
-                )
 
                 res.postValue(
                     DataState(

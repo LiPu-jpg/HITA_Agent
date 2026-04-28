@@ -1,6 +1,5 @@
 include ':app',':hitauser','component','style'
 rootProject.name = "HITA"
-include ':sync'
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {

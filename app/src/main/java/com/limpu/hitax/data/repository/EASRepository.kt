@@ -30,8 +30,6 @@ import com.limpu.hitax.utils.TimeTools.getDateAtWOT
 import com.limpu.hitax.utils.TermNameFormatter
 import com.limpu.hitax.utils.CourseCodeUtils
 import com.limpu.hitax.utils.CourseNameUtils
-import com.limpu.sync.StupidSync
-import com.limpu.sync.data.model.History
 import java.sql.Timestamp
 import java.util.*
 import java.util.concurrent.CountDownLatch
@@ -316,16 +314,8 @@ class EASRepository @Inject constructor(
                                     timetable = Timetable()
                                 } else {
                                     //若存在，则先清空原有课表课程
-                                    val eventIds =
-                                        eventItemDao.getEventIdsFromTimetablesSync(listOf(timetable.id))
-                                    StupidSync.putHistorySync("event", History.ACTION.REMOVE, eventIds)
                                     eventItemDao.deleteCourseFromTimetable(timetable.id)
                                 }
-                                StupidSync.putHistorySync(
-                                    "timetable",
-                                    History.ACTION.REQUIRE,
-                                    listOf(timetable.id)
-                                )
                                 //记录最后的时间戳，作为学期结束的标志
                                 var maxTs: Long = 0
                                 //添加时间表
@@ -354,9 +344,9 @@ class EASRepository @Inject constructor(
                                         // 科目已存在，总是尝试更新为更完整的名称
                                         // 优先选择包含更多信息（括号、方括号）的名称
                                         val oldHasBrackets = subject.name.contains("（") || subject.name.contains("(") ||
-                                                               subject.name.contains("[") || subject.name.contains("【")
+                                                                       subject.name.contains("[") || subject.name.contains("【")
                                         val newHasBrackets = rawName.contains("（") || rawName.contains("(") ||
-                                                               rawName.contains("[") || rawName.contains("【")
+                                                                       rawName.contains("[") || rawName.contains("【")
 
                                         // 如果新名称包含括号信息（通常更完整），或者新名称明显更长，则更新
                                         if (newHasBrackets && !oldHasBrackets) {
@@ -405,11 +395,6 @@ class EASRepository @Inject constructor(
                                     subjectDao.saveSubjectSync(subject)
                                     if (requireSubjects[subject.id] == null) {
                                         requireSubjects[subject.id] = subject.id
-                                        StupidSync.putHistorySync(
-                                            "subject",
-                                            History.ACTION.REQUIRE,
-                                            listOf(subject.id)
-                                        )
                                     }
 
                                     for (week in item.weeks) {
@@ -468,7 +453,6 @@ class EASRepository @Inject constructor(
                                 }
                                 LogUtils.d( "import saving ${events.size} events for term=${term.getCode()}")
                                 eventItemDao.saveEvents(events)
-                                StupidSync.putHistorySync("event", History.ACTION.REQUIRE, events.getIds())
 
                                 //更新timetable对象
                                 timetable.name = buildTimetableName(term)

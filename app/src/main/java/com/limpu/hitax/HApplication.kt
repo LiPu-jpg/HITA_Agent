@@ -13,7 +13,6 @@ import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TermSubject
 import com.limpu.hitax.data.model.timetable.Timetable
 import com.limpu.hitauser.data.repository.LocalUserRepository
-import com.limpu.sync.StupidSync
 import javax.inject.Inject
 import com.limpu.hitax.agent.remote.AgentBackendClient
 import com.limpu.hitax.data.work.CourseReminderScheduler
@@ -45,118 +44,6 @@ class HApplication : Application() {
         val timetableDao = database.timetableDao()
         val subjectDao = database.subjectDao()
         val eventDao = database.eventItemDao()
-        StupidSync.init(this, object : StupidSync.PushDelegate {
-
-            @WorkerThread
-            override fun getDataForIds(key: String, ids: List<String>): List<JsonObject> {
-                return when (key) {
-                    "timetable" -> {
-                        val list = mutableListOf<JsonObject>()
-                        for (tt in timetableDao.getTimetablesInIdsSync(ids)) {
-                            val jo = Gson().toJsonTree(tt).asJsonObject
-                            jo.addProperty("startTime", tt.startTime.time)
-                            jo.addProperty("endTime", tt.endTime.time)
-                            list.add(jo)
-                        }
-                        list
-                    }
-                    "subject" -> {
-                        val list = mutableListOf<JsonObject>()
-                        for (tt in subjectDao.getSubjectsInIdsSync(ids)) {
-                            val jo = Gson().toJsonTree(tt).asJsonObject
-                            list.add(jo)
-                        }
-                        return list
-                    }
-                    "event" -> {
-                        val list = mutableListOf<JsonObject>()
-                        for (tt in eventDao.getEventInIdsSync(ids)) {
-                            val jo = Gson().toJsonTree(tt).asJsonObject
-                            jo.addProperty("from", tt.from.time)
-                            jo.addProperty("to", tt.to.time)
-                            list.add(jo)
-                        }
-                        return list
-
-                    }
-                    else -> listOf()
-                }
-            }
-
-            override fun saveData(key: String, ids: List<String>, data: List<String>) {
-                when (key) {
-                    "timetable" -> saveAndInsertData<Timetable>(data, ids) { timetableDao.saveTimetablesSync(it) }
-                    "subject" -> saveAndInsertData<TermSubject>(data, ids) { subjectDao.saveSubjectsSync(it) }
-                    "event" -> saveAndInsertData<EventItem>(data, ids) { eventDao.saveEvents(it) }
-                }
-            }
-
-            /**
-             * 通用的数据保存和插入方法
-             */
-            private inline fun <reified T : Any> saveAndInsertData(
-                data: List<String>,
-                ids: List<String>,
-                saveAction: (List<T>) -> Unit
-            ) {
-                val gson = GsonBuilderUtil.create()
-                val dataMap = mutableMapOf<String, T>()
-
-                // 解析JSON数据
-                for (item in data) {
-                    try {
-                        val obj = gson.fromJson(item, T::class.java)
-                        // 假设所有实体都有id字段
-                        val idField = T::class.java.getDeclaredField("id")
-                        idField.isAccessible = true
-                        val id = idField.get(obj) as? String ?: continue
-                        dataMap[id] = obj
-                    } catch (e: Exception) {
-                        LogUtils.e( "解析数据失败: ${e.message}")
-                    }
-                }
-
-                // 按ID顺序插入数据
-                val toAdd = mutableListOf<T>()
-                for (id in ids) {
-                    dataMap[id]?.let { toAdd.add(it) }
-                }
-
-                if (toAdd.isNotEmpty()) {
-                    saveAction(toAdd)
-                }
-            }
-
-            override fun deleteData(key: String, ids: List<String>) {
-                when (key) {
-                    "timetable" -> {
-                        timetableDao.deleteTimetablesInIdsSync(ids)
-                    }
-                    "event" -> {
-                        eventDao.deleteEventsInIdsSync(ids)
-                    }
-                    "subject" -> {
-                        subjectDao.deleteSubjectsInIdsSync(ids)
-                    }
-                }
-            }
-
-            override fun clearData(key: String) {
-                when (key) {
-                    "timetable" -> {
-                        timetableDao.clear()
-                    }
-                    "event" -> {
-                        eventDao.clear()
-                    }
-                    "subject" -> {
-                        subjectDao.clear()
-                    }
-                }
-            }
-
-        })
-        StupidSync.setUID(localUserRepository.getLoggedInUser().id)
         // 注意：在生产环境中应该移除或修改SSL设置
         // handleSSLHandshake()
 

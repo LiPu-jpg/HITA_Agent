@@ -93,7 +93,6 @@ dependencies {
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.4'
     implementation project(path: ':component')
     implementation project(path: ':hitauser')
-    implementation project(path: ':sync')
     implementation project(path: ':style')
 
     testImplementation 'junit:junit:4.13.2'
