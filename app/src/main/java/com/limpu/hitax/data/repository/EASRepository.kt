@@ -484,7 +484,6 @@ class EASRepository @Inject constructor(
                                     importTimetableLiveData.postValue(DataState(true, DataState.STATE.SUCCESS))
                                 }
                             } catch (e: Exception) {
-                                e.printStackTrace()
                                 LogUtils.e( "import failed term=${term.getCode()}: ${e.message}", e)
                                 if (finished.compareAndSet(false, true)) {
                                     timeoutHandler.removeCallbacks(timeoutRunnable)

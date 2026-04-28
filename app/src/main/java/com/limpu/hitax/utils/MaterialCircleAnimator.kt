@@ -26,7 +26,7 @@ object MaterialCircleAnimator {
             anim.duration = duration.toLong()
             anim.start()
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Material circle reveal animation failed to show view", e)
         }
     }
 
@@ -53,7 +53,7 @@ object MaterialCircleAnimator {
             })
             anim.start()
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Material circle reveal animation with delay failed to show view", e)
         }
     }
 
@@ -74,7 +74,7 @@ object MaterialCircleAnimator {
             anim.duration = duration.toLong()
             anim.start()
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Material circle reveal animation at position failed to show view", e)
         }
     }
 
@@ -95,7 +95,7 @@ object MaterialCircleAnimator {
             })
             anim.start()
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Material circle reveal animation failed to hide view", e)
         }
     }
 
@@ -120,7 +120,7 @@ object MaterialCircleAnimator {
             anim.duration = duration.toLong()
             anim.start()
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Material circle reveal animation at position failed to hide view", e)
         }
     }
 

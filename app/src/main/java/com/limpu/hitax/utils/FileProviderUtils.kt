@@ -62,7 +62,7 @@ object FileProviderUtils {
             val runtime = Runtime.getRuntime()
             runtime.exec(command)
         } catch (e: IOException) {
-            e.printStackTrace()
+            LogUtils.e("Failed to chmod file permissions: $path", e)
         }
     }
 

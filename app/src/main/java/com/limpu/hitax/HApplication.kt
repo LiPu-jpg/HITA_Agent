@@ -309,8 +309,7 @@ class HApplication : Application() {
 
             LogUtils.d( "✅ PDFBox CMap 资源初始化完成")
         } catch (e: Exception) {
-            LogUtils.e( "❌ 初始化 CMap 资源失败: ${e.message}")
-            e.printStackTrace()
+            LogUtils.e( "❌ 初始化 CMap 资源失败: ${e.message}", e)
         }
     }
 

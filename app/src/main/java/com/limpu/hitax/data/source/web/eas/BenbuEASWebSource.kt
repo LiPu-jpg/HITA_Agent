@@ -95,7 +95,7 @@ class BenbuEASWebSource : EASService {
                 }
             } catch (e: Exception) {
                 LogUtils.e( "❌ Benbu login EXCEPTION: ${e.javaClass.simpleName} ${e.message}")
-                e.printStackTrace()
+                LogUtils.e("Failed to login to Benbu EAS", e)
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "登录失败"))
             }
         }

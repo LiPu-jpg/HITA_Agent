@@ -367,7 +367,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 res.postValue(DataState(token, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to login to EAS", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -471,9 +471,9 @@ class EASWebSource internal constructor() : EASService {
                     terms.add(term)
                 }
                 res.postValue(DataState(terms, DataState.STATE.SUCCESS))
-            } catch (e: Exception) {
-                e.printStackTrace()
-                res.postValue(DataState(DataState.STATE.FETCH_FAILED))
+} catch (e: Exception) {
+                LogUtils.e("Failed to fetch scores with summary", e)
+                res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
         return res
@@ -508,7 +508,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 res.postValue(DataState(calendar))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to get term start date", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -591,7 +591,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 res.postValue(DataState(result))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to fetch selected courses", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -692,7 +692,7 @@ class EASWebSource internal constructor() : EASService {
                     res.postValue(DataState(mergedAdjacent, DataState.STATE.SUCCESS))
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to fetch timetable", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -1478,7 +1478,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 res.postValue(DataState(result))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to build schedule structure", e)
                 res.postValue(DataState(defaultScheduleStructure()))
             }
         }.start()
@@ -1546,7 +1546,7 @@ class EASWebSource internal constructor() : EASService {
                     res.postValue(DataState(DataState.STATE.FETCH_FAILED))
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to fetch scores", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -1596,7 +1596,7 @@ class EASWebSource internal constructor() : EASService {
                     res.postValue(DataState(DataState.STATE.FETCH_FAILED))
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to fetch scores with summary", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -1728,7 +1728,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 result.postValue(DataState(resMap.values.toList()))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to query empty classroom", e)
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED))
             }
         }.start()

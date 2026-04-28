@@ -42,7 +42,7 @@ internal constructor(private val responseType: Type) : CallAdapter<Any,LiveData<
             }
 
             override fun onFailure(call: Call<Any>, t: Throwable) {
-                Log.e("request failed", t.toString())
+                Log.e("LiveDataCallAdapter", "Network request failed", t)
                 result.postValue(null)
             }
         })

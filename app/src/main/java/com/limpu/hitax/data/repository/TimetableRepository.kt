@@ -9,6 +9,7 @@ import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.MutableLiveData
 import com.limpu.component.data.DataState
 import com.limpu.hitax.R
+import com.limpu.hitax.utils.LogUtils
 import com.limpu.hitax.data.AppDatabase
 import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.model.timetable.EventItem
@@ -401,7 +402,7 @@ class TimetableRepository @Inject constructor(val application: Application) {
                 outputter.output(calendar, fos)
                 res.postValue(DataState(path))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to export timetable to ICS", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED))
             }
         }
@@ -437,7 +438,7 @@ class TimetableRepository @Inject constructor(val application: Application) {
                 
                 res.postValue(DataState(importedCount))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to import events from ICS", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }
@@ -486,7 +487,7 @@ class TimetableRepository @Inject constructor(val application: Application) {
                     )
                 )
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to import ICS as new timetable", e)
                 val message = if (e is IllegalArgumentException) e.message else e.message
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, message))
             }

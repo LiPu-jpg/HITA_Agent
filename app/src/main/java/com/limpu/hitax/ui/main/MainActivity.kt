@@ -226,7 +226,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
                 viewModel.checkForUpdate(code)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Failed to get package info for update check", e)
         }
 
     }

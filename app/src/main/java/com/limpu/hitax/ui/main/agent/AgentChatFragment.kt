@@ -731,8 +731,7 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
 
             LogUtils.d( "[PDF-CMap] ✅ CMap 资源加载完成")
         } catch (e: Exception) {
-            LogUtils.e( "[PDF-CMap] ❌ 加载 CMap 资源时出错: ${e::class.simpleName} - ${e.message}")
-            e.printStackTrace()
+            LogUtils.e( "[PDF-CMap] ❌ 加载 CMap 资源时出错: ${e::class.simpleName} - ${e.message}", e)
         }
     }
 
