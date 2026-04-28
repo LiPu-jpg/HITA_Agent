@@ -395,7 +395,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
         drawerAvatar?.setImageResource(R.drawable.place_holder_avatar)
         drawerHeader?.setOnClickListener {
             ActivityUtils.showEasVerifyWindow<Activity>(
-                getThis(),
+                this,
                 easRepository,
                 directTo = null,
                 onResponseListener = object : PopUpLoginEAS.OnResponseListener {

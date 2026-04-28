@@ -233,7 +233,7 @@ class NavigationFragment : HiltBaseFragment<FragmentNavigationBinding>() {
                 binding?.avatar?.setImageResource(R.drawable.place_holder_avatar)
                 binding?.userCard?.setOnClickListener {
                     ActivityUtils.showEasVerifyWindow<Activity>(
-                        requireContext(),
+                        requireActivity(),
                         easRepository,
                         directTo = null,
                         onResponseListener = object : PopUpLoginEAS.OnResponseListener {
