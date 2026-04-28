@@ -30,14 +30,36 @@ abstract class TransparentModeledBottomSheetDialog<T : ViewModel, V : ViewBindin
     protected abstract fun initViews(view: View)
 
     fun getColorPrimary(): Int {
-        return (activity as BaseActivity<*, *>).getColorPrimary()
+        val act = activity
+        return if (act is BaseActivity<*, *>) {
+            act.getColorPrimary()
+        } else {
+            val typedValue = android.util.TypedValue()
+            act?.theme?.resolveAttribute(R.attr.colorPrimary, typedValue, true)
+            typedValue.data
+        }
     }
 
     fun getColorControlNormal(): Int {
-        return (activity as BaseActivity<*, *>).getColorControlNormal()
+        val act = activity
+        return if (act is BaseActivity<*, *>) {
+            act.getColorControlNormal()
+        } else {
+            val typedValue = android.util.TypedValue()
+            act?.theme?.resolveAttribute(R.attr.colorControlNormal, typedValue, true)
+            typedValue.data
+        }
     }
+
     fun getTextColorSecondary(): Int {
-        return (activity as BaseActivity<*, *>).getTextColorSecondary()
+        val act = activity
+        return if (act is BaseActivity<*, *>) {
+            act.getTextColorSecondary()
+        } else {
+            val typedValue = android.util.TypedValue()
+            act?.theme?.resolveAttribute(R.attr.textColorSecondary, typedValue, true)
+            typedValue.data
+        }
     }
 
     override fun onDestroyView() {
