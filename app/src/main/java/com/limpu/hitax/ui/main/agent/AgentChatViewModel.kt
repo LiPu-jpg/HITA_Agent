@@ -2,9 +2,9 @@ package com.limpu.hitax.ui.main.agent
 
 import android.app.Application
 import android.net.Uri
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.limpu.hitax.agent.core.AgentProvider
 import com.limpu.hitax.agent.core.AgentTraceEvent
@@ -17,8 +17,10 @@ import com.limpu.hitax.agent.timetable.TimetableAgentOutput
 import com.limpu.hitax.data.AppDatabase
 import com.limpu.hitax.data.model.chat.ChatMessageEntity
 import com.limpu.hitax.data.model.chat.ChatSession
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
+import javax.inject.Inject
 
 internal fun nextSessionIdAfterDeletion(
     deletedSessionId: String,
@@ -28,7 +30,10 @@ internal fun nextSessionIdAfterDeletion(
     return if (deletedSessionId == currentSessionId) remainingLatestSessionId else currentSessionId
 }
 
-class AgentChatViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class AgentChatViewModel @Inject constructor(
+    private val application: Application,
+) : ViewModel() {
 
     private val db = AppDatabase.getDatabase(application)
     private val sessionDao = db.chatSessionDao()
@@ -234,7 +239,7 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
             LlmChatService.chat(
                 history = synchronized(this) { chatHistory.toList() },
                 timetableId = null,
-                application = getApplication(),
+                application = application,
                 agentProvider = agentProvider,
                 onTrace = { trace ->
                     val statusText = when (trace.stage) {
@@ -310,7 +315,7 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
                 attachmentBase64 = base64Content,
                 attachmentMimeType = mimeType,
                 timetableId = null,
-                application = getApplication(),
+                application = application,
                 agentProvider = agentProvider,
                 onTrace = { trace: AgentTraceEvent ->
                     val statusText = when (trace.stage) {
