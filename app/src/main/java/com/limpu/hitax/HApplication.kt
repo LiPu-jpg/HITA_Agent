@@ -38,8 +38,11 @@ class HApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // 初始化 PDFBox CMap 资源
-        initPdfCMapResources()
+
+        applicationScope.launch(Dispatchers.IO) {
+            initPdfCMapResources()
+        }
+
         val database = AppDatabase.getDatabase(this@HApplication)
         val timetableDao = database.timetableDao()
         val subjectDao = database.subjectDao()
