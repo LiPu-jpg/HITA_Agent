@@ -43,7 +43,9 @@ class EASRepository @Inject constructor(
     private val timetablePreferenceSource: TimetablePreferenceSource
 ) {
     private val appContext = application.applicationContext
-    private val shenzhenService: EASWebSource = EASWebSource()
+    private val shenzhenService: EASWebSource = EASWebSource { token ->
+        saveEasToken(token)
+    }
     private val benbuService: EASService = BenbuEASWebSource()
     private val weihaiService: EASService = WeihaiEASWebSource()
     private var eventItemDao = AppDatabase.getDatabase(application).eventItemDao()

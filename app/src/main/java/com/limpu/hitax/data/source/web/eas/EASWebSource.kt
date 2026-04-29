@@ -42,7 +42,9 @@ import javax.crypto.Cipher
  *  - 登录成功后所有请求用 Authorization: bearer <access_token>
  *  - route / JSESSIONID cookie 由 Jsoup session 维护；每次新建请求时手动注入已保存的 cookies
  */
-class EASWebSource internal constructor() : EASService {
+class EASWebSource internal constructor(
+    private val onTokenRefreshed: ((EASToken) -> Unit)? = null
+) : EASService {
 
     private val hostName = "https://mjw.hitsz.edu.cn/incoSpringBoot"
     private val jwHostName = "https://jw.hitsz.edu.cn"
@@ -240,6 +242,7 @@ class EASWebSource internal constructor() : EASService {
         token.refreshToken = refreshed.refreshToken
         token.cookies.clear()
         token.cookies.putAll(refreshed.cookies)
+        onTokenRefreshed?.invoke(token)
         return true
     }
 
