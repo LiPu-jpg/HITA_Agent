@@ -1,27 +1,25 @@
 package com.limpu.hitax.utils
 
 import android.content.Context
+import androidx.appcompat.app.AppCompatActivity
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.timetable.EventItem
-import com.limpu.style.base.BaseActivity
 import com.limpu.hitax.ui.event.FragmentTimeInfoSheet
 import java.util.*
 
 object EventsUtils {
     fun showEventItem(context: Context, eventItem: EventItem) {
-        if (context is BaseActivity<*, *>) {
-            val list: ArrayList<EventItem> = ArrayList<EventItem>()
-            list.add(eventItem)
-            FragmentTimeInfoSheet.newInstance(list).show(context.supportFragmentManager, "event")
-        }
+        val activity = context as? AppCompatActivity ?: return
+        val list: ArrayList<EventItem> = ArrayList<EventItem>()
+        list.add(eventItem)
+        FragmentTimeInfoSheet.newInstance(list).show(activity.supportFragmentManager, "event")
     }
 
     fun showEventItem(context: Context, eventItems: List<EventItem>) {
-        if (context is BaseActivity<*, *>) {
-            val list: ArrayList<EventItem> = ArrayList<EventItem>(eventItems)
-            FragmentTimeInfoSheet.newInstance(list)
-                .show(context.supportFragmentManager, "event")
-        }
+        val activity = context as? AppCompatActivity ?: return
+        val list: ArrayList<EventItem> = ArrayList<EventItem>(eventItems)
+        FragmentTimeInfoSheet.newInstance(list)
+            .show(activity.supportFragmentManager, "event")
     }
 
     /**
