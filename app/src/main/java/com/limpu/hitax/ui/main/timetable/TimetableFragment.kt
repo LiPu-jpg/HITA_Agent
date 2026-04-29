@@ -269,10 +269,15 @@ class TimetableFragment : HiltBaseFragment<FragmentTimetableBinding>() {
                 }
                 views[pos]?.setOnCardClickListener(object : TimeTableView.OnCardClickListener {
                     override fun onEventClick(v: View, eventItem: EventItem) {
-                        context?.let { EventsUtils.showEventItem(it, eventItem) }
+                        android.util.Log.d("TimetableFragment", "🎫 Clicked event: ${eventItem.name}")
+                        context?.let {
+                            android.util.Log.d("TimetableFragment", "📲 Calling EventsUtils.showEventItem")
+                            EventsUtils.showEventItem(it, eventItem)
+                        } ?: android.util.Log.w("TimetableFragment", "⚠️ Context is null!")
                     }
 
                     override fun onDuplicateEventClick(v: View, eventItems: List<EventItem>) {
+                        android.util.Log.d("TimetableFragment", "🎫 Clicked duplicate events: ${eventItems.size}")
                         context?.let { EventsUtils.showEventItem(it,eventItems) }
                     }
 

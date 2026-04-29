@@ -59,11 +59,14 @@ abstract class TransparentBottomSheetDialog<V:ViewBinding> : BottomSheetDialogFr
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
+        android.util.Log.d("TransparentBottomSheet", "🎭 onCreateView called")
         val contextThemeWrapper = ContextThemeWrapper(context,R.style.AppTheme)
         val v = inflater.cloneInContext(contextThemeWrapper)
             .inflate(getLayoutId(), container, false)
         binding = initViewBinding(v)
+        android.util.Log.d("TransparentBottomSheet", "🎭 Binding initialized, calling initViews")
         initViews(binding.root)
+        android.util.Log.d("TransparentBottomSheet", "🎭 initViews done")
         return binding.root
     }
 
