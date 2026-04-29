@@ -29,6 +29,7 @@ import com.limpu.hitax.ui.subject.SubjectAgentTraceListAdapter
 import com.limpu.hitax.ui.widgets.PopUpCalendarPicker
 import com.limpu.hitax.ui.widgets.PopUpPickCourseTime
 import com.limpu.hitax.ui.widgets.PopUpTimePeriodPicker
+import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.style.widgets.DialogAutoEditText
 import com.limpu.style.widgets.DialogSelectableLiveList
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
@@ -388,6 +389,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
             when (viewModel.addModeLiveData.value ?: AddEventViewModel.AddMode.BATCH_PERIOD) {
                 AddEventViewModel.AddMode.BATCH_PERIOD -> {
                     viewModel.createEvent()
+                    activity?.let { WidgetUtils.sendRefreshToAll(it) }
                     dismiss()
                 }
 
@@ -531,6 +533,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                     submittingByAgent = false
                     binding?.adeBtDone?.isEnabled = true
                     if (result.ok) {
+                        activity?.let { WidgetUtils.sendRefreshToAll(it) }
                         dismiss()
                     } else {
                         showAgentTraceStatus(result.error ?: getString(R.string.operation_failed))

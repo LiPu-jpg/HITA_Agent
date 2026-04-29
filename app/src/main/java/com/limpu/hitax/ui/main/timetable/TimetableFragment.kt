@@ -25,6 +25,7 @@ import com.limpu.hitax.ui.event.add.PopupAddEvent
 import com.limpu.hitax.ui.main.timetable.views.TimeTableView
 import com.limpu.hitax.ui.main.timetable.views.TimetableWeekView
 import com.limpu.hitax.ui.main.timetable.views.LeftLabelView
+import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.EventsUtils
 import com.limpu.hitax.utils.TimeTools
@@ -298,6 +299,7 @@ class TimetableFragment : HiltBaseFragment<FragmentTimetableBinding>() {
                                                 TimetableRepository(it).actionDeleteEvents(
                                                     listOf(eventItem)
                                                 )
+                                                activity?.let { act -> WidgetUtils.sendRefreshToAll(act) }
                                             }
                                         }.start()
                                     }.create()
@@ -330,13 +332,14 @@ class TimetableFragment : HiltBaseFragment<FragmentTimetableBinding>() {
                                                 ExplosionField.attach2Window(requireActivity())
                                             ef.explode(v)
                                             v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                            Thread{
-                                                activity?.application?.let {
-                                                    TimetableRepository(it).actionDeleteEvents(
-                                                        eventItems
-                                                    )
-                                                }
-                                            }.start()
+                                        Thread{
+                                            activity?.application?.let {
+                                                TimetableRepository(it).actionDeleteEvents(
+                                                    eventItems
+                                                )
+                                                activity?.let { act -> WidgetUtils.sendRefreshToAll(act) }
+                                            }
+                                        }.start()
                                         }.create()
                                     ad.setTitle(R.string.dialog_title_sure_delete)
                                     ad.show()
@@ -359,6 +362,7 @@ class TimetableFragment : HiltBaseFragment<FragmentTimetableBinding>() {
                                                             TimetableRepository(it).actionDeleteEvents(
                                                                 listOf(selectedEvent)
                                                             )
+                                                            activity?.let { act -> WidgetUtils.sendRefreshToAll(act) }
                                                         }
                                                     }.start()
                                                 }.create()
