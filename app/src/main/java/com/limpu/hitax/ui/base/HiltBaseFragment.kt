@@ -26,15 +26,36 @@ abstract class HiltBaseFragment<V : ViewBinding> : Fragment() {
     }
 
     fun getColorPrimary(): Int {
-        return (activity as BaseActivity<*, *>).getColorPrimary()
+        val act = activity ?: return 0
+        return if (act is BaseActivity<*, *>) {
+            act.getColorPrimary()
+        } else {
+            val typedValue = android.util.TypedValue()
+            act.theme.resolveAttribute(com.limpu.style.R.attr.colorPrimary, typedValue, true)
+            typedValue.data
+        }
     }
 
     fun getColorPrimaryDisabled(): Int {
-        return (activity as BaseActivity<*, *>).getColorPrimaryDisabled()
+        val act = activity ?: return 0
+        return if (act is BaseActivity<*, *>) {
+            act.getColorPrimaryDisabled()
+        } else {
+            val typedValue = android.util.TypedValue()
+            act.theme.resolveAttribute(com.limpu.style.R.attr.colorPrimaryDisabled, typedValue, true)
+            typedValue.data
+        }
     }
 
     fun getTextColorSecondary(): Int {
-        return (activity as BaseActivity<*, *>).getTextColorSecondary()
+        val act = activity ?: return 0
+        return if (act is BaseActivity<*, *>) {
+            act.getTextColorSecondary()
+        } else {
+            val typedValue = android.util.TypedValue()
+            act.theme.resolveAttribute(com.limpu.style.R.attr.textColorSecondary, typedValue, true)
+            typedValue.data
+        }
     }
 
     override fun onDestroyView() {
