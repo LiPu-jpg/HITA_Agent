@@ -17,14 +17,39 @@ import com.limpu.style.base.BaseActivity
 abstract class TransparentBottomSheetDialog<V:ViewBinding> : BottomSheetDialogFragment() {
     lateinit var binding:V
     fun getColorPrimary(): Int {
-        return (activity as BaseActivity<*, *>).getColorPrimary()
+        val act = activity ?: return 0
+        return when (act) {
+            is BaseActivity<*, *> -> act.getColorPrimary()
+            else -> {
+                val typedValue = android.util.TypedValue()
+                act.theme.resolveAttribute(com.limpu.style.R.attr.colorPrimary, typedValue, true)
+                typedValue.data
+            }
+        }
     }
 
     fun getColorControlNormal(): Int {
-        return (activity as BaseActivity<*, *>).getColorControlNormal()
+        val act = activity ?: return 0
+        return when (act) {
+            is BaseActivity<*, *> -> act.getColorControlNormal()
+            else -> {
+                val typedValue = android.util.TypedValue()
+                act.theme.resolveAttribute(com.limpu.style.R.attr.colorControlNormal, typedValue, true)
+                typedValue.data
+            }
+        }
     }
+
     fun getTextColorSecondary(): Int {
-        return (activity as BaseActivity<*, *>).getTextColorSecondary()
+        val act = activity ?: return 0
+        return when (act) {
+            is BaseActivity<*, *> -> act.getTextColorSecondary()
+            else -> {
+                val typedValue = android.util.TypedValue()
+                act.theme.resolveAttribute(com.limpu.style.R.attr.textColorSecondary, typedValue, true)
+                typedValue.data
+            }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
