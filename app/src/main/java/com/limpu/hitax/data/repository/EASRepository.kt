@@ -117,14 +117,19 @@ class EASRepository @Inject constructor(
      */
     fun loginCheck(): LiveData<DataState<Boolean>> {
         val token = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "🔐 loginCheck: isLogin=${token.isLogin()}, campus=${token.campus}, token=${token.accessToken?.take(8)}...")
         if (!token.isLogin()) {
+            LogUtils.w("EASRepository", "⚠️ loginCheck: not logged in")
             return LiveDataUtils.getMutableLiveData(DataState(false))
         }
         return getService(token.campus).loginCheck(token).switchMap {
+            LogUtils.d("EASRepository", "🔐 loginCheck result: state=${it.state}, valid=${it.data?.first}")
             if (it.state == DataState.STATE.SUCCESS && it.data != null) {
                 if (!it.data!!.first) {
+                    LogUtils.w("EASRepository", "⚠️ loginCheck: token invalid, clearing")
                     clearEasToken()
                 } else {
+                    LogUtils.d("EASRepository", "✅ loginCheck: token valid, saving")
                     saveEasToken(it.data!!.second)
                 }
             }
@@ -137,9 +142,11 @@ class EASRepository @Inject constructor(
      */
     fun getStartDateOfTerm(term: TermItem): LiveData<DataState<Calendar>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📅 getStartDateOfTerm: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getStartDate(easToken, term)
         }
+        LogUtils.w("EASRepository", "⚠️ getStartDateOfTerm: not logged in")
         return LiveDataUtils.getMutableLiveData<DataState<Calendar>>(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -149,9 +156,11 @@ class EASRepository @Inject constructor(
      */
     fun getAllTerms(): LiveData<DataState<List<TermItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📚 getAllTerms: isLogin=${easToken.isLogin()}, campus=${easToken.campus}, token=${easToken.accessToken?.take(8)}...")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getAllTerms(easToken)
         }
+        LogUtils.w("EASRepository", "⚠️ getAllTerms: not logged in")
         return LiveDataUtils.getMutableLiveData<DataState<List<TermItem>>>(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -163,9 +172,11 @@ class EASRepository @Inject constructor(
         isUndergraduate: Boolean? = null
     ): LiveData<DataState<MutableList<TimePeriodInDay>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "🏗️ getScheduleStructure: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getScheduleStructure(term, isUndergraduate, easToken)
         }
+        LogUtils.w("EASRepository", "⚠️ getScheduleStructure: not logged in")
         return LiveDataUtils.getMutableLiveData<DataState<MutableList<TimePeriodInDay>>>(
             DataState(
                 DataState.STATE.NOT_LOGGED_IN
@@ -179,9 +190,11 @@ class EASRepository @Inject constructor(
      */
     fun getTeachingBuildings(): LiveData<DataState<List<BuildingItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "🏢 getTeachingBuildings: isLogin=${easToken.isLogin()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getTeachingBuildings(easToken)
         }
+        LogUtils.w("EASRepository", "⚠️ getTeachingBuildings: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
 
     }
@@ -195,6 +208,7 @@ class EASRepository @Inject constructor(
         week: Int
     ): LiveData<DataState<List<ClassroomItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "🏫 queryEmptyClassroom: isLogin=${easToken.isLogin()}, term=${term.getCode()}, building=${buildingItem.name}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).queryEmptyClassroom(
                 easToken,
@@ -203,6 +217,7 @@ class EASRepository @Inject constructor(
                 listOf(week.toString())
             )
         }
+        LogUtils.w("EASRepository", "⚠️ queryEmptyClassroom: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -214,9 +229,11 @@ class EASRepository @Inject constructor(
         testType: EASService.TestType
     ): LiveData<DataState<List<CourseScoreItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📊 getPersonalScores: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getPersonalScores(term, easToken, testType)
         }
+        LogUtils.w("EASRepository", "⚠️ getPersonalScores: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -225,6 +242,7 @@ class EASRepository @Inject constructor(
         testType: EASService.TestType
     ): LiveData<DataState<ScoreQueryResult>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📊 getPersonalScoresWithSummary: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (!easToken.isLogin()) {
             return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
         }
@@ -248,9 +266,11 @@ class EASRepository @Inject constructor(
      */
     fun getExamInfo(): LiveData<DataState<List<ExamItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📝 getExamInfo: isLogin=${easToken.isLogin()}, campus=${easToken.campus}, token=${easToken.accessToken?.take(8)}...")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getExamItems(easToken)
         }
+        LogUtils.w("EASRepository", "⚠️ getExamInfo: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -269,9 +289,7 @@ class EASRepository @Inject constructor(
         startDate.firstDayOfWeek = Calendar.MONDAY
         startDate.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d(
-            "startImportTimetableOfTerm term=${term.getCode()} campus=${easToken.campus} start=${startDate.time} scheduleSize=${schedule.size} loggedIn=${easToken.isLogin()}"
-        )
+        LogUtils.d("EASRepository", "📥 startImportTimetableOfTerm: term=${term.getCode()}, campus=${easToken.campus}, isLogin=${easToken.isLogin()}, token=${easToken.accessToken?.take(8)}...")
         if (easToken.isLogin()) {
             val finished = AtomicBoolean(false)
             val timeoutHandler = Handler(Looper.getMainLooper())
@@ -492,6 +510,7 @@ class EASRepository @Inject constructor(
                 }
             }
         } else {
+            LogUtils.e("❌ startImportTimetableOfTerm: not logged in, cannot import")
             importTimetableLiveData.value = DataState(DataState.STATE.NOT_LOGGED_IN)
         }
     }

@@ -119,6 +119,7 @@ class EASWebSource internal constructor(
         data: Map<String, String> = emptyMap()
     ): Connection.Response {
         fun executeOnce(): Connection.Response {
+            LogUtils.d("EASWebSource", "🌐 authedFormPost: path=$path, token=${token.accessToken?.take(8)}..., cookies=${token.cookies.size}")
             val req = Jsoup.newSession()
                 .url("$hostName$path")
                 .headers(baseHeaders("bearer ${token.accessToken}"))
@@ -130,12 +131,19 @@ class EASWebSource internal constructor(
             data.forEach { (k, v) -> req.data(k, v) }
             val resp = req.execute()
             token.cookies.putAll(resp.cookies())
+            LogUtils.d("EASWebSource", "🌐 authedFormPost response: status=${resp.statusCode()}, cookies=${resp.cookies().size}")
             return resp
         }
 
         var resp = executeOnce()
-        if (isAuthExpiredResponse(resp) && tryRelogin(token)) {
-            resp = executeOnce()
+        if (isAuthExpiredResponse(resp)) {
+            LogUtils.w("EASWebSource", "⚠️ Auth expired for path=$path, attempting relogin...")
+            if (tryRelogin(token)) {
+                LogUtils.d("EASWebSource", "✅ Relogin successful, retrying path=$path")
+                resp = executeOnce()
+            } else {
+                LogUtils.e("❌ Relogin failed for path=$path")
+            }
         }
         return resp
     }
@@ -189,12 +197,15 @@ class EASWebSource internal constructor(
     }
 
     private fun isAuthExpiredResponse(resp: Connection.Response): Boolean {
+        val body = resp.body()
         if (resp.statusCode() == 401 || resp.statusCode() == 403) {
+            LogUtils.w("EASWebSource", "⚠️ Auth expired by status code: ${resp.statusCode()}, body=${body.take(200)}")
             return true
         }
-        val jo = JsonUtils.getJsonObject(resp.body()) ?: return false
+        val jo = JsonUtils.getJsonObject(body) ?: return false
         val code = jo.optInt("code", Int.MIN_VALUE)
         if (code in setOf(401, 403, 2005)) {
+            LogUtils.w("EASWebSource", "⚠️ Auth expired by JSON code: $code, body=${body.take(200)}")
             return true
         }
         val msg = listOf(
@@ -203,13 +214,17 @@ class EASWebSource internal constructor(
             jo.optString("error_description", "")
         ).joinToString(" ").lowercase()
         if (msg.isBlank()) return false
-        return msg.contains("token") ||
+        val expired = msg.contains("token") ||
             msg.contains("expired") ||
             msg.contains("not logged") ||
             msg.contains("登录") ||
             msg.contains("未登录") ||
             msg.contains("失效") ||
             msg.contains("过期")
+        if (expired) {
+            LogUtils.w("EASWebSource", "⚠️ Auth expired by JSON message: '$msg', body=${body.take(200)}")
+        }
+        return expired
     }
 
     private fun isAuthExpiredJson(jo: JSONObject?): Boolean {
@@ -236,13 +251,23 @@ class EASWebSource internal constructor(
     private fun tryRelogin(token: EASToken): Boolean {
         val username = token.username?.trim().orEmpty()
         val password = token.password.orEmpty()
-        if (username.isBlank() || password.isBlank()) return false
-        val refreshed = loginCore(username, password) ?: return false
+        LogUtils.d("EASWebSource", "🔄 tryRelogin: username=$username, hasPassword=${password.isNotBlank()}")
+        if (username.isBlank() || password.isBlank()) {
+            LogUtils.e("❌ tryRelogin failed: username or password blank")
+            return false
+        }
+        val refreshed = loginCore(username, password)
+        if (refreshed == null) {
+            LogUtils.e("❌ tryRelogin failed: loginCore returned null")
+            return false
+        }
+        LogUtils.d("EASWebSource", "✅ tryRelogin success: newToken=${refreshed.accessToken?.take(8)}..., cookies=${refreshed.cookies.size}")
         token.accessToken = refreshed.accessToken
         token.refreshToken = refreshed.refreshToken
         token.cookies.clear()
         token.cookies.putAll(refreshed.cookies)
         onTokenRefreshed?.invoke(token)
+        LogUtils.d("EASWebSource", "💾 Token refreshed callback invoked")
         return true
     }
 
