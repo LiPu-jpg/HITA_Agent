@@ -654,26 +654,31 @@ class EASWebSource internal constructor(
                 data class WeekData(val week: Int, val kcxxList: org.json.JSONArray, val weekDates: List<String>)
                 val allWeekData = mutableListOf<WeekData>()
 
-                var emptyWeeks = 0
-                for (week in 1..25) {
-                    val kbBody = """{"xn":"${term.yearCode}","xq":"${term.termCode}","zc":"$week","type":"json"}"""
-                    val kbResp = jsonPost(token, "/app/Kbcx/query", kbBody)
-                    val kbJo = JsonUtils.getJsonObject(kbResp.body()) ?: continue
-                    if (kbJo.optInt("code", -1) != 200) continue
+                // 并行获取所有周数据
+                val weekFutures = (1..25).map { week ->
+                    pool.submit(java.util.concurrent.Callable<WeekData?> {
+                        val kbBody = """{"xn":"${term.yearCode}","xq":"${term.termCode}","zc":"$week","type":"json"}"""
+                        val kbResp = jsonPost(token, "/app/Kbcx/query", kbBody)
+                        val kbJo = JsonUtils.getJsonObject(kbResp.body()) ?: return@Callable null
+                        if (kbJo.optInt("code", -1) != 200) return@Callable null
 
-                    val contentArr = kbJo.optJSONArray("content") ?: continue
-                    val kcxxList = extractKcxxListFromKbcxContent(contentArr)
-                    if (kcxxList.length() == 0) {
-                        emptyWeeks += 1
-                        if (week > 8 && emptyWeeks >= 4) break
-                        continue
-                    }
-                    emptyWeeks = 0
-                    val weekDates = extractWeekDatesFromKbcx(contentArr)
+                        val contentArr = kbJo.optJSONArray("content") ?: return@Callable null
+                        val kcxxList = extractKcxxListFromKbcxContent(contentArr)
+                        val weekDates = extractWeekDatesFromKbcx(contentArr)
+                        if (kcxxList.length() == 0) {
+                            return@Callable null
+                        }
+                        WeekData(week, kcxxList, weekDates)
+                    })
+                }
 
-                    // 第一遍：收集需要富化的日期
-                    for (i in 0 until kcxxList.length()) {
-                        val kc = kcxxList.optJSONObject(i) ?: continue
+                val fetchedWeekData = weekFutures.mapNotNull { it.get() }.sortedBy { it.week }
+
+                // 第一遍：收集需要富化的日期
+                for (wd in fetchedWeekData) {
+                    val weekDates = wd.weekDates
+                    for (i in 0 until wd.kcxxList.length()) {
+                        val kc = wd.kcxxList.optJSONObject(i) ?: continue
                         val kbxx = kc.optString("KBXX", "")
                         if (kbxx.contains("...") || kbxx.contains("[") || kbxx.contains("【实验】")) {
                             val dow = kc.optInt("XQJ", -1)
@@ -683,7 +688,7 @@ class EASWebSource internal constructor(
                             }
                         }
                     }
-                    allWeekData.add(WeekData(week, kcxxList, weekDates))
+                    allWeekData.add(wd)
                 }
 
                 // 并行请求所有需要富化的日期
