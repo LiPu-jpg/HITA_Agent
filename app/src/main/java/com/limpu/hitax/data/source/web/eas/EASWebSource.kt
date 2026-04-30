@@ -646,12 +646,16 @@ class EASWebSource internal constructor(
                 LogUtils.d("EASWebSource", "🔄 Overview empty, falling back to week schedule path")
                 val merged = linkedMapOf<String, CourseItem>()
                 val selectedCourseNameByCode = fetchSelectedCourseNameByCodeSync(token, term)
-                // 预取日课表数据用于富化课程名
-                val dayScheduleCache = mutableMapOf<String, List<DayScheduleItem>>()
+                val dayScheduleCache = java.util.concurrent.ConcurrentHashMap<String, List<DayScheduleItem>>()
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
+
+                // 收集所有需要富化的日期，然后并行请求
+                val enrichmentNeeded = java.util.concurrent.ConcurrentLinkedQueue<String>()
+                data class WeekData(val week: Int, val kcxxList: org.json.JSONArray, val weekDates: List<String>)
+                val allWeekData = mutableListOf<WeekData>()
 
                 var emptyWeeks = 0
                 for (week in 1..25) {
-                    val debugWeekRows = mutableListOf<CourseItem>()
                     val kbBody = """{"xn":"${term.yearCode}","xq":"${term.termCode}","zc":"$week","type":"json"}"""
                     val kbResp = jsonPost(token, "/app/Kbcx/query", kbBody)
                     val kbJo = JsonUtils.getJsonObject(kbResp.body()) ?: continue
@@ -665,10 +669,40 @@ class EASWebSource internal constructor(
                         continue
                     }
                     emptyWeeks = 0
-
-                    // 获取本周的日期列表，用于查询日课表
                     val weekDates = extractWeekDatesFromKbcx(contentArr)
 
+                    // 第一遍：收集需要富化的日期
+                    for (i in 0 until kcxxList.length()) {
+                        val kc = kcxxList.optJSONObject(i) ?: continue
+                        val kbxx = kc.optString("KBXX", "")
+                        if (kbxx.contains("...") || kbxx.contains("[") || kbxx.contains("【实验】")) {
+                            val dow = kc.optInt("XQJ", -1)
+                            val dateForDow = weekDates.getOrNull(dow - 1)
+                            if (!dateForDow.isNullOrBlank() && !dayScheduleCache.containsKey(dateForDow)) {
+                                enrichmentNeeded.add(dateForDow)
+                            }
+                        }
+                    }
+                    allWeekData.add(WeekData(week, kcxxList, weekDates))
+                }
+
+                // 并行请求所有需要富化的日期
+                if (enrichmentNeeded.isNotEmpty()) {
+                    LogUtils.d("EASWebSource", "🚀 Fetching ${enrichmentNeeded.size} day schedules in parallel")
+                    val futures = enrichmentNeeded.distinct().map { date ->
+                        pool.submit(java.util.concurrent.Callable<Unit> {
+                            dayScheduleCache[date] = fetchDaySchedule(token, date)
+                        })
+                    }
+                    futures.forEach { it.get() }
+                }
+
+                // 第二遍：解析课程数据（日课表已在缓存中）
+                for (wd in allWeekData) {
+                    val week = wd.week
+                    val kcxxList = wd.kcxxList
+                    val weekDates = wd.weekDates
+                    val debugWeekRows = mutableListOf<CourseItem>()
                     for (i in 0 until kcxxList.length()) {
                         val kc = kcxxList.optJSONObject(i) ?: continue
                         val dow = kc.optInt("XQJ", -1)
@@ -685,13 +719,12 @@ class EASWebSource internal constructor(
                         val classroom = extractClassroomFromKbxx(kbxx) ?: ""
                         val sessionHint = extractSessionHint(kbxx)
 
-                        // 尝试从日课表获取更完整的 KCMC
+                        // 只在 KBXX 包含 ... 或 [] 时才查日课表
+                        val needsEnrichment = kbxx.contains("...") || kbxx.contains("[")
                         val dateForDow = weekDates.getOrNull(dow - 1)
-                        val canonicalName = if (!dateForDow.isNullOrBlank()) {
-                            val daySchedules = dayScheduleCache.getOrPut(dateForDow) {
-                                fetchDaySchedule(token, dateForDow)
-                            }
-                            bestDayScheduleRawName(daySchedules, dow, ksjc, jsjc, classroom)
+                        val canonicalName = if (needsEnrichment && !dateForDow.isNullOrBlank()) {
+                            val daySchedules = dayScheduleCache[dateForDow]
+                            if (daySchedules != null) bestDayScheduleRawName(daySchedules, dow, ksjc, jsjc, classroom) else null
                         } else null
 
                         val displayName = composeCourseDisplayName(canonicalName, fallbackName, sessionHint)
@@ -722,6 +755,7 @@ class EASWebSource internal constructor(
                         LogUtils.d("raw week=$week dow=$DEBUG_DOW rows=${debugWeekRows.size} term=${term.getCode()} -> $summary")
                     }
                 }
+                pool.shutdown()
 
                 val result = merged.values.toMutableList()
                 result.forEach { it.weeks = it.weeks.distinct().sorted().toMutableList() }
