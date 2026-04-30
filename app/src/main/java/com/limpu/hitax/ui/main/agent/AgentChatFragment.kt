@@ -324,34 +324,27 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
 
                 val tempFile = File(cacheDir, fileName)
 
-                @Suppress("UNUSED_VARIABLE") val copyStart = System.currentTimeMillis()
-                var bytesCopied = 0L
                 requireContext().contentResolver.openInputStream(uri)?.use { input ->
                     tempFile.outputStream().use { output ->
                         val buffer = ByteArray(8192)
                         var bytesRead: Int
                         while (input.read(buffer).also { bytesRead = it } > 0) {
                             output.write(buffer, 0, bytesRead)
-                            bytesCopied += bytesRead
                         }
                     }
                 }
-                @Suppress("UNUSED_VARIABLE") val copyEnd = System.currentTimeMillis()
 
                 // 智能分流策略
 
-                val parseStart = System.currentTimeMillis()
                 val result = when {
                     // 1. 小文本文件 - 本地直接读取
                     fileSize < 100 * 1024 && isTextFile(fileName) -> {
                         val fileText = tempFile.readText(Charsets.UTF_8)
-                        LogUtils.d( "✅ 文本读取完成，长度: ${fileText.length}")
                         LocalParseResult.Success("【文本文件】\n$fileText")
                     }
 
                     // 2. PDF/Office文档 - 本地解析
                     fileName.endsWith(".pdf", ignoreCase = true) -> {
-                        LogUtils.d( "📄 解析方式: PDF文档")
                         parsePdfFile(tempFile)
                     }
                     fileName.endsWith(".docx", ignoreCase = true) -> {
@@ -375,60 +368,12 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
                         LocalParseResult.Error("不支持的文件类型")
                     }
                 }
-                val parseEnd = System.currentTimeMillis()
-                LogUtils.d( "⏱️ 解析耗时: ${parseEnd - parseStart}ms")
 
                 // 只在需要云端AI时才读取文件并编码
                 val base64Content = if (result == null && needCloudAI) {
                     try {
-                        LogUtils.d( "========== 开始图片/视频处理 ==========")
-                        LogUtils.d( "📁 文件路径: ${tempFile.absolutePath}")
-                        LogUtils.d( "📏 文件大小: ${tempFile.length()} bytes (${tempFile.length() / 1024}KB)")
-
-                        // 读取文件字节
-                        LogUtils.d( "📖 开始读取文件到内存...")
                         val fileBytes = tempFile.readBytes()
-                        LogUtils.d( "✅ 文件读取完成: ${fileBytes.size} bytes")
-                        LogUtils.d( "🔢 前32字节(hex): ${fileBytes.take(32).joinToString(" ") { "%02X".format(it) }}")
-                        LogUtils.d( "🔢 前32字节(char): ${fileBytes.take(32).joinToString("") { if(it in 32..126) it.toChar().toString() else "." }}")
-
-                        // Base64编码
-                        LogUtils.d( "🔄 开始Base64编码...")
-                        val startTime = System.currentTimeMillis()
-                        val base64Encoded = Base64.encodeToString(fileBytes, Base64.NO_WRAP)
-                        val endTime = System.currentTimeMillis()
-                        LogUtils.d( "✅ Base64编码完成")
-                        LogUtils.d( "⏱️ 编码耗时: ${endTime - startTime}ms")
-                        LogUtils.d( "📊 Base64长度: ${base64Encoded.length} 字符")
-                        LogUtils.d( "📊 Base64前128字符: ${base64Encoded.take(128)}...")
-                        LogUtils.d( "📊 Base64后32字符: ...${base64Encoded.takeLast(32)}")
-
-                        // 文件头检测（验证图片格式）
-                        LogUtils.d( "🔍 文件头检测:")
-                        when {
-                            fileBytes.size >= 4 && fileBytes[0].toInt() == 0xFF && fileBytes[1].toInt() == 0xD8 && fileBytes[2].toInt() == 0xFF -> {
-                                LogUtils.d( "   ✅ 检测到JPEG格式")
-                            }
-                            fileBytes.size >= 8 && String(fileBytes.take(8).toByteArray()) == "\u0089PNG\r\n\u001A\n" -> {
-                                LogUtils.d( "   ✅ 检测到PNG格式")
-                            }
-                            fileBytes.size >= 4 && String(fileBytes.take(4).toByteArray()) == "RIFF" -> {
-                                LogUtils.d( "   ✅ 检测到WEBP格式")
-                            }
-                            fileBytes.size >= 4 && fileBytes[0].toInt() == 0x47 && fileBytes[1].toInt() == 0x49 && fileBytes[2].toInt() == 0x46 -> {
-                                LogUtils.d( "   ✅ 检测到GIF格式")
-                            }
-                            fileBytes.size >= 12 && String(fileBytes.take(4).toByteArray()) == "\u0000\u0000\u0000\u0014" && String(fileBytes.take(4).toByteArray()) == "ftypmp42" -> {
-                                LogUtils.d( "   ✅ 检测到MP4格式")
-                            }
-                            else -> {
-                                LogUtils.w( "   ⚠️ 未知文件格式")
-                                LogUtils.d( "   文件头(hex): ${fileBytes.take(16).joinToString(" ") { "%02X".format(it) }}")
-                            }
-                        }
-
-                        LogUtils.d( "========== 图片/视频处理完成 ==========")
-                        base64Encoded
+                        Base64.encodeToString(fileBytes, Base64.NO_WRAP)
                     } catch (e: OutOfMemoryError) {
                         LogUtils.e( "❌ Base64编码内存不足", e)
                         LogUtils.e( "可用内存: ${android.app.ActivityManager.MemoryInfo()}")
@@ -469,7 +414,6 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
                             LogUtils.e( "📋 错误详情: ${result.error}")
 
                             if (needCloudAI && base64Content != null) {
-                                LogUtils.d( "📤 降级到云端AI处理")
                                 doSendWithAttachment(text, fileName, base64Content, mimeType)
                             } else {
                                 LogUtils.e( "❌ 无法降级，显示错误消息")
@@ -483,11 +427,7 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
                         }
                         null -> {
                             // 需要使用智谱多模态（图片/视频）
-                            LogUtils.d( "📤 使用智谱多模态AI处理")
-                            LogUtils.d( "📦 Base64编码长度: ${base64Content?.length ?: 0}")
-
                             if (base64Content != null) {
-                                LogUtils.d( "✅ Base64内容有效，调用多模态API")
                                 doSendWithAttachment(text, fileName, base64Content, mimeType)
                             } else {
                                 LogUtils.e( "❌ Base64内容为空")
@@ -558,8 +498,6 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
     }
 
     private fun getMimeType(fileName: String): String {
-        LogUtils.d( "判断MIME类型，文件名: $fileName")
-
         // 统一使用 endsWith 方法，更可靠
         val mimeTypeFromFile = when {
             fileName.endsWith(".pdf", ignoreCase = true) -> "application/pdf"
@@ -580,11 +518,9 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
         }
 
         if (mimeTypeFromFile != null) {
-            LogUtils.d( "从文件名识别MIME: $mimeTypeFromFile")
             return mimeTypeFromFile
         }
 
-        LogUtils.d( "无法从文件名识别，使用默认类型: application/octet-stream")
         return "application/octet-stream"
     }
 
@@ -596,16 +532,12 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
     private fun parsePdfFile(file: File): LocalParseResult {
         var parser: com.tom_roush.pdfbox.pdmodel.PDDocument? = null
         return try {
-            LogUtils.d( "文件大小: ${file.length() / 1024}KB")
-
             parser = com.tom_roush.pdfbox.pdmodel.PDDocument.load(file)
             val totalPages = parser.numberOfPages
-            LogUtils.d( "总页数: $totalPages")
 
             // 限制页数，避免解析超大PDF导致内存问题
             val maxPages = 10
             val pagesToParse = minOf(totalPages, maxPages)
-            LogUtils.d( "将解析前 $pagesToParse 页")
 
             val text = StringBuilder()
             text.append("【PDF文档】\n")
@@ -616,19 +548,16 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
             }
 
             // 使用更宽松的文本提取模式
-            LogUtils.d( "开始提取文本...")
             val stripper = com.tom_roush.pdfbox.text.PDFTextStripper()
             stripper.startPage = 1
             stripper.endPage = pagesToParse
             stripper.setSortByPosition(true)
 
             val pdfText = stripper.getText(parser)
-            LogUtils.d( "✅ 提取完成，文本长度: ${pdfText.length}")
 
             // 限制文本长度
             val maxLength = 5000
             if (pdfText.length > maxLength) {
-                LogUtils.d( "⚠️ 文本过长，截取到 $maxLength 字")
                 text.append(pdfText.take(maxLength))
                 text.append("\n\n...(内容过长，仅显示前${maxLength}字)")
             } else {
@@ -649,7 +578,6 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
     }
 
     private fun loadCMapResources() {
-        LogUtils.d( "[PDF-CMap] 📚 开始加载 CMap 资源...")
         val cmapDir = "com/tom_roush/pdfbox/resources/cmap/"
 
         val assets = context?.assets
@@ -664,14 +592,9 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
             return
         }
 
-        LogUtils.d( "[PDF-CMap] 📂 找到 ${cmapFiles.size} 个 CMap 文件")
-
         try {
             val cMapManagerClass = Class.forName("com.tom_roush.pdfbox.pdmodel.font.CMapManager")
-            LogUtils.d( "[PDF-CMap] ✅ 获取 CMapManager 类")
-
             val cMapParserClass = Class.forName("com.tom_roush.fontbox.cmap.CMapParser")
-            LogUtils.d( "[PDF-CMap] ✅ 获取 CMapParser 类")
 
             // 尝试访问 CMapManager 的预定义 CMap 缓存
             // 查找所有可能的字段名
@@ -686,7 +609,6 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
             for (fieldName in possibleFieldNames) {
                 try {
                     cacheField = cMapManagerClass.getDeclaredField(fieldName)
-                    LogUtils.d( "[PDF-CMap] 🔍 找到字段: $fieldName")
                     break
                 } catch (e: NoSuchFieldException) {
                     // 继续尝试下一个字段名
@@ -695,20 +617,14 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
 
             if (cacheField != null) {
                 cacheField.isAccessible = true
-                val cache = cacheField.get(null)
-                LogUtils.d( "[PDF-CMap] ✅ 缓存字段类型: ${cache?.javaClass?.name}")
-                LogUtils.d( "[PDF-CMap] ✅ 缓存字段值: $cache")
-            } else {
-                LogUtils.w( "[PDF-CMap] ⚠️ 未找到缓存字段")
+                cacheField.get(null)
             }
 
             // 尝试直接解析 CMap 并注册
             val parseMethod = cMapParserClass.getDeclaredMethod("parse", java.io.InputStream::class.java)
             parseMethod.isAccessible = true
-            LogUtils.d( "[PDF-CMap] ✅ 找到 parse 方法")
 
             // 尝试创建 CMap 对象并注册
-            var registeredCount = 0
             for (cmapFile in cmapFiles) {
                 try {
                     // 只注册关键的 CMap
@@ -716,20 +632,12 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
                         continue
                     }
 
-                    LogUtils.d( "[PDF-CMap] 📖 尝试注册: $cmapFile")
                     val inputStream = assets.open("$cmapDir$cmapFile")
-                    val cmap = parseMethod.invoke(null, inputStream)
-                    LogUtils.d( "[PDF-CMap] ✅ 解析成功: $cmapFile -> $cmap")
+                    parseMethod.invoke(null, inputStream)
                     inputStream.close()
-                    registeredCount++
                 } catch (e: Exception) {
-                    LogUtils.w( "[PDF-CMap] ⚠️ 注册失败 $cmapFile: ${e::class.simpleName} - ${e.message}")
                 }
             }
-
-            LogUtils.d( "[PDF-CMap] 📊 注册统计: 成功 $registeredCount")
-
-            LogUtils.d( "[PDF-CMap] ✅ CMap 资源加载完成")
         } catch (e: Exception) {
             LogUtils.e( "[PDF-CMap] ❌ 加载 CMap 资源时出错: ${e::class.simpleName} - ${e.message}", e)
         }
@@ -745,7 +653,6 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
 
             // 直接使用 File 对象，不通过 Uri
             val text = extractDocxTextDirectly(file)
-            LogUtils.d( "📝 文本预览: ${text.take(200)}")
 
             LocalParseResult.Success("【Word文档】\n$text")
         } catch (e: OutOfMemoryError) {
@@ -945,22 +852,13 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
     }
 
     private fun doSendWithAttachment(userText: String, fileName: String, base64Content: String, mimeType: String) {
-        LogUtils.d( "========== 发送到多模态API ==========")
-        LogUtils.d( "📝 用户文本: ${userText.take(100)}${if(userText.length>100)"..." else ""}")
-        LogUtils.d( "📁 文件名: $fileName")
-        LogUtils.d( "📋 MIME类型: $mimeType")
-        LogUtils.d( "📊 Base64长度: ${base64Content.length}")
-        LogUtils.d( "🔧 AgentProvider: ${agentProvider::class.simpleName}")
-
         // 发送用户消息，包含文件信息
         val messageWithFile = "$userText\n\n[附件: $fileName]"
-        LogUtils.d( "💬 显示消息: $messageWithFile")
         viewModel.addMessage(AgentChatMessage(role = AgentChatMessage.Role.USER, text = messageWithFile))
 
         agentSession?.dispose()
         agentSession = null
 
-        LogUtils.d( "🚀 调用 sendToLlmWithAttachment...")
         // 使用多模态API发送（仅图片/视频）
         viewModel.sendToLlmWithAttachment(
             text = userText,
@@ -969,7 +867,6 @@ class AgentChatFragment : HiltBaseFragment<FragmentAgentChatBinding>() {
             mimeType = mimeType,
             agentProvider = agentProvider
         )
-        LogUtils.d( "========== 发送完成 ==========")
     }
 
     private fun doSend(text: String) {
