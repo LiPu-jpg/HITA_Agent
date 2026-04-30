@@ -1,10 +1,10 @@
 package com.limpu.hitax.data.source.web.eas
 
 import android.annotation.SuppressLint
-import android.util.Log
 import android.util.Base64
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import com.limpu.hitax.utils.LogUtils
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.eas.CourseItem
 import com.limpu.hitax.data.model.eas.CourseScoreItem
@@ -42,13 +42,14 @@ import javax.crypto.Cipher
  *  - 登录成功后所有请求用 Authorization: bearer <access_token>
  *  - route / JSESSIONID cookie 由 Jsoup session 维护；每次新建请求时手动注入已保存的 cookies
  */
-class EASWebSource internal constructor() : EASService {
+class EASWebSource internal constructor(
+    private val onTokenRefreshed: ((EASToken) -> Unit)? = null
+) : EASService {
 
     private val hostName = "https://mjw.hitsz.edu.cn/incoSpringBoot"
     private val jwHostName = "https://jw.hitsz.edu.cn"
     private val basicAuth = "Basic aW5jb246MTIzNDU="
     private val timeout = 15000
-    private val TAG = "EASource"
     private val DEBUG_WEEK = 6
     private val DEBUG_DOW = 1
 
@@ -118,6 +119,7 @@ class EASWebSource internal constructor() : EASService {
         data: Map<String, String> = emptyMap()
     ): Connection.Response {
         fun executeOnce(): Connection.Response {
+            LogUtils.d("EASWebSource", "🌐 authedFormPost: path=$path, token=${token.accessToken?.take(8)}..., cookies=${token.cookies.size}")
             val req = Jsoup.newSession()
                 .url("$hostName$path")
                 .headers(baseHeaders("bearer ${token.accessToken}"))
@@ -129,12 +131,19 @@ class EASWebSource internal constructor() : EASService {
             data.forEach { (k, v) -> req.data(k, v) }
             val resp = req.execute()
             token.cookies.putAll(resp.cookies())
+            LogUtils.d("EASWebSource", "🌐 authedFormPost response: status=${resp.statusCode()}, cookies=${resp.cookies().size}")
             return resp
         }
 
         var resp = executeOnce()
-        if (isAuthExpiredResponse(resp) && tryRelogin(token)) {
-            resp = executeOnce()
+        if (isAuthExpiredResponse(resp)) {
+            LogUtils.w("EASWebSource", "⚠️ Auth expired for path=$path, attempting relogin...")
+            if (tryRelogin(token)) {
+                LogUtils.d("EASWebSource", "✅ Relogin successful, retrying path=$path")
+                resp = executeOnce()
+            } else {
+                LogUtils.e("❌ Relogin failed for path=$path")
+            }
         }
         return resp
     }
@@ -188,12 +197,15 @@ class EASWebSource internal constructor() : EASService {
     }
 
     private fun isAuthExpiredResponse(resp: Connection.Response): Boolean {
+        val body = resp.body()
         if (resp.statusCode() == 401 || resp.statusCode() == 403) {
+            LogUtils.w("EASWebSource", "⚠️ Auth expired by status code: ${resp.statusCode()}, body=${body.take(200)}")
             return true
         }
-        val jo = JsonUtils.getJsonObject(resp.body()) ?: return false
+        val jo = JsonUtils.getJsonObject(body) ?: return false
         val code = jo.optInt("code", Int.MIN_VALUE)
         if (code in setOf(401, 403, 2005)) {
+            LogUtils.w("EASWebSource", "⚠️ Auth expired by JSON code: $code, body=${body.take(200)}")
             return true
         }
         val msg = listOf(
@@ -202,13 +214,17 @@ class EASWebSource internal constructor() : EASService {
             jo.optString("error_description", "")
         ).joinToString(" ").lowercase()
         if (msg.isBlank()) return false
-        return msg.contains("token") ||
+        val expired = msg.contains("token") ||
             msg.contains("expired") ||
             msg.contains("not logged") ||
             msg.contains("登录") ||
             msg.contains("未登录") ||
             msg.contains("失效") ||
             msg.contains("过期")
+        if (expired) {
+            LogUtils.w("EASWebSource", "⚠️ Auth expired by JSON message: '$msg', body=${body.take(200)}")
+        }
+        return expired
     }
 
     private fun isAuthExpiredJson(jo: JSONObject?): Boolean {
@@ -235,12 +251,23 @@ class EASWebSource internal constructor() : EASService {
     private fun tryRelogin(token: EASToken): Boolean {
         val username = token.username?.trim().orEmpty()
         val password = token.password.orEmpty()
-        if (username.isBlank() || password.isBlank()) return false
-        val refreshed = loginCore(username, password) ?: return false
+        LogUtils.d("EASWebSource", "🔄 tryRelogin: username=$username, hasPassword=${password.isNotBlank()}")
+        if (username.isBlank() || password.isBlank()) {
+            LogUtils.e("❌ tryRelogin failed: username or password blank")
+            return false
+        }
+        val refreshed = loginCore(username, password)
+        if (refreshed == null) {
+            LogUtils.e("❌ tryRelogin failed: loginCore returned null")
+            return false
+        }
+        LogUtils.d("EASWebSource", "✅ tryRelogin success: newToken=${refreshed.accessToken?.take(8)}..., cookies=${refreshed.cookies.size}")
         token.accessToken = refreshed.accessToken
         token.refreshToken = refreshed.refreshToken
         token.cookies.clear()
         token.cookies.putAll(refreshed.cookies)
+        onTokenRefreshed?.invoke(token)
+        LogUtils.d("EASWebSource", "💾 Token refreshed callback invoked")
         return true
     }
 
@@ -368,7 +395,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 res.postValue(DataState(token, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to login to EAS", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -472,9 +499,9 @@ class EASWebSource internal constructor() : EASService {
                     terms.add(term)
                 }
                 res.postValue(DataState(terms, DataState.STATE.SUCCESS))
-            } catch (e: Exception) {
-                e.printStackTrace()
-                res.postValue(DataState(DataState.STATE.FETCH_FAILED))
+} catch (e: Exception) {
+                LogUtils.e("Failed to fetch scores with summary", e)
+                res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
         return res
@@ -509,7 +536,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 res.postValue(DataState(calendar))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to get term start date", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -592,7 +619,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 res.postValue(DataState(result))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to fetch selected courses", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -607,26 +634,80 @@ class EASWebSource internal constructor() : EASService {
         val res = MutableLiveData<DataState<List<CourseItem>>>()
         Thread {
             try {
+                // 策略1：先尝试 querykbrczong 总览接口
+                val zongResult = fetchTimetableFromOverview(token, term)
+                if (!zongResult.isNullOrEmpty()) {
+                    LogUtils.d("EASWebSource", "✅ Using overview (querykbrczong) result: ${zongResult.size} courses")
+                    res.postValue(DataState(zongResult, DataState.STATE.SUCCESS))
+                    return@Thread
+                }
+
+                // 策略2：总览没结果，走 Kbcx/query + querykbrcbyday 周表路径
+                LogUtils.d("EASWebSource", "🔄 Overview empty, falling back to week schedule path")
                 val merged = linkedMapOf<String, CourseItem>()
                 val selectedCourseNameByCode = fetchSelectedCourseNameByCodeSync(token, term)
+                val dayScheduleCache = java.util.concurrent.ConcurrentHashMap<String, List<DayScheduleItem>>()
+                val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
 
-                var emptyWeeks = 0
-                for (week in 1..25) {
-                    val debugWeekRows = mutableListOf<CourseItem>()
-                    val kbBody = """{"xn":"${term.yearCode}","xq":"${term.termCode}","zc":"$week","type":"json"}"""
-                    val kbResp = jsonPost(token, "/app/Kbcx/query", kbBody)
-                    val kbJo = JsonUtils.getJsonObject(kbResp.body()) ?: continue
-                    if (kbJo.optInt("code", -1) != 200) continue
+                // 收集所有需要富化的日期，然后并行请求
+                val enrichmentNeeded = java.util.concurrent.ConcurrentLinkedQueue<String>()
+                data class WeekData(val week: Int, val kcxxList: org.json.JSONArray, val weekDates: List<String>)
+                val allWeekData = mutableListOf<WeekData>()
 
-                    val contentArr = kbJo.optJSONArray("content") ?: continue
-                    val kcxxList = extractKcxxListFromKbcxContent(contentArr)
-                    if (kcxxList.length() == 0) {
-                        emptyWeeks += 1
-                        if (week > 8 && emptyWeeks >= 4) break
-                        continue
+                // 并行获取所有周数据
+                val weekFutures = (1..25).map { week ->
+                    pool.submit(java.util.concurrent.Callable<WeekData?> {
+                        val kbBody = """{"xn":"${term.yearCode}","xq":"${term.termCode}","zc":"$week","type":"json"}"""
+                        val kbResp = jsonPost(token, "/app/Kbcx/query", kbBody)
+                        val kbJo = JsonUtils.getJsonObject(kbResp.body()) ?: return@Callable null
+                        if (kbJo.optInt("code", -1) != 200) return@Callable null
+
+                        val contentArr = kbJo.optJSONArray("content") ?: return@Callable null
+                        val kcxxList = extractKcxxListFromKbcxContent(contentArr)
+                        val weekDates = extractWeekDatesFromKbcx(contentArr)
+                        if (kcxxList.length() == 0) {
+                            return@Callable null
+                        }
+                        WeekData(week, kcxxList, weekDates)
+                    })
+                }
+
+                val fetchedWeekData = weekFutures.mapNotNull { it.get() }.sortedBy { it.week }
+
+                // 第一遍：收集需要富化的日期
+                for (wd in fetchedWeekData) {
+                    val weekDates = wd.weekDates
+                    for (i in 0 until wd.kcxxList.length()) {
+                        val kc = wd.kcxxList.optJSONObject(i) ?: continue
+                        val kbxx = kc.optString("KBXX", "")
+                        if (kbxx.contains("...") || kbxx.contains("[") || kbxx.contains("【实验】")) {
+                            val dow = kc.optInt("XQJ", -1)
+                            val dateForDow = weekDates.getOrNull(dow - 1)
+                            if (!dateForDow.isNullOrBlank() && !dayScheduleCache.containsKey(dateForDow)) {
+                                enrichmentNeeded.add(dateForDow)
+                            }
+                        }
                     }
-                    emptyWeeks = 0
+                    allWeekData.add(wd)
+                }
 
+                // 并行请求所有需要富化的日期
+                if (enrichmentNeeded.isNotEmpty()) {
+                    LogUtils.d("EASWebSource", "🚀 Fetching ${enrichmentNeeded.size} day schedules in parallel")
+                    val futures = enrichmentNeeded.distinct().map { date ->
+                        pool.submit(java.util.concurrent.Callable<Unit> {
+                            dayScheduleCache[date] = fetchDaySchedule(token, date)
+                        })
+                    }
+                    futures.forEach { it.get() }
+                }
+
+                // 第二遍：解析课程数据（日课表已在缓存中）
+                for (wd in allWeekData) {
+                    val week = wd.week
+                    val kcxxList = wd.kcxxList
+                    val weekDates = wd.weekDates
+                    val debugWeekRows = mutableListOf<CourseItem>()
                     for (i in 0 until kcxxList.length()) {
                         val kc = kcxxList.optJSONObject(i) ?: continue
                         val dow = kc.optInt("XQJ", -1)
@@ -637,17 +718,29 @@ class EASWebSource internal constructor() : EASService {
                         val kbxx = kc.optString("KBXX", "")
                         val rawCode = kc.optString("KCDM", "")
                         val code = CourseCodeUtils.normalize(rawCode) ?: rawCode
-                        val rawName = extractCourseNameFromKbxx(kbxx)
-                        if (rawName.isBlank()) continue
-                        val name = resolveTimetableCourseName(rawName, code, selectedCourseNameByCode)
+                        val fallbackName = normalizedCourseName(kbxx)
+                        if (fallbackName.isBlank()) continue
 
                         val classroom = extractClassroomFromKbxx(kbxx) ?: ""
-                        val teacher = extractTeacher(kc, name, kbxx)
+                        val sessionHint = extractSessionHint(kbxx)
+
+                        // 只在 KBXX 包含 ... 或 [] 时才查日课表
+                        val needsEnrichment = kbxx.contains("...") || kbxx.contains("[")
+                        val dateForDow = weekDates.getOrNull(dow - 1)
+                        val canonicalName = if (needsEnrichment && !dateForDow.isNullOrBlank()) {
+                            val daySchedules = dayScheduleCache[dateForDow]
+                            if (daySchedules != null) bestDayScheduleRawName(daySchedules, dow, ksjc, jsjc, classroom) else null
+                        } else null
+
+                        val displayName = composeCourseDisplayName(canonicalName, fallbackName, sessionHint)
+
+                        val teacher = extractTeacher(kc, displayName, kbxx)
                         val last = if (jsjc >= ksjc) jsjc - ksjc + 1 else 1
 
                         val course = CourseItem().apply {
                             this.code = code
-                            this.name = name
+                            this.name = displayName
+                            this.rawName = displayName
                             this.teacher = teacher
                             this.classroom = classroom
                             this.dow = dow
@@ -664,9 +757,10 @@ class EASWebSource internal constructor() : EASService {
                         val summary = debugWeekRows
                             .sortedWith(compareBy<CourseItem> { it.dow }.thenBy { it.begin })
                             .joinToString(" || ") { debugCourseIdentity(it) }
-                        Log.d(TAG, "raw week=$week dow=$DEBUG_DOW rows=${debugWeekRows.size} term=${term.getCode()} -> $summary")
+                        LogUtils.d("raw week=$week dow=$DEBUG_DOW rows=${debugWeekRows.size} term=${term.getCode()} -> $summary")
                     }
                 }
+                pool.shutdown()
 
                 val result = merged.values.toMutableList()
                 result.forEach { it.weeks = it.weeks.distinct().sorted().toMutableList() }
@@ -674,8 +768,7 @@ class EASWebSource internal constructor() : EASService {
                 val debugBeforeMerge = result
                     .filter { it.dow == DEBUG_DOW && it.weeks.contains(DEBUG_WEEK) }
                     .sortedWith(compareBy<CourseItem> { it.begin }.thenBy { it.name })
-                Log.d(
-                    TAG,
+                LogUtils.d(
                     "dedup week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugBeforeMerge.size} term=${term.getCode()} -> " +
                         debugBeforeMerge.joinToString(" || ") { debugCourseIdentity(it) }
                 )
@@ -683,8 +776,7 @@ class EASWebSource internal constructor() : EASService {
                 val debugAfterMerge = mergedAdjacent
                     .filter { it.dow == DEBUG_DOW && it.weeks.contains(DEBUG_WEEK) }
                     .sortedWith(compareBy<CourseItem> { it.begin }.thenBy { it.name })
-                Log.d(
-                    TAG,
+                LogUtils.d(
                     "merged week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugAfterMerge.size} term=${term.getCode()} -> " +
                         debugAfterMerge.joinToString(" || ") { debugCourseIdentity(it) }
                 )
@@ -695,7 +787,7 @@ class EASWebSource internal constructor() : EASService {
                     res.postValue(DataState(mergedAdjacent, DataState.STATE.SUCCESS))
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to fetch timetable", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -709,6 +801,19 @@ class EASWebSource internal constructor() : EASService {
             return arr
         }
         return org.json.JSONArray()
+    }
+
+    private fun extractWeekDatesFromKbcx(contentArr: org.json.JSONArray): List<String> {
+        val dates = mutableListOf<String>()
+        for (i in 0 until contentArr.length()) {
+            val obj = contentArr.optJSONObject(i) ?: continue
+            val rqList = obj.optJSONArray("rqList") ?: continue
+            for (j in 0 until rqList.length()) {
+                val rq = rqList.optJSONObject(j)?.optString("RQ")?.trim().orEmpty()
+                if (rq.isNotBlank()) dates.add(rq)
+            }
+        }
+        return dates
     }
 
     private fun fetchSelectedCourseNameByCodeSync(
@@ -986,8 +1091,7 @@ class EASWebSource internal constructor() : EASService {
                     }
 
                     if (shouldDebugPair(base, candidate)) {
-                        Log.d(
-                            TAG,
+                        LogUtils.d(
                             "no-merge week=$DEBUG_WEEK dow=$DEBUG_DOW reason=${mergeBlockReason(base, candidate)} left=${debugCourseIdentity(base)} right=${debugCourseIdentity(candidate)}"
                         )
                     }
@@ -1048,8 +1152,7 @@ class EASWebSource internal constructor() : EASService {
         }
 
         if (shouldDebugPair(left, right)) {
-            Log.d(
-                TAG,
+            LogUtils.d(
                 "week-split-merge shared=$sharedWeeks leftOnly=$leftOnlyWeeks rightOnly=$rightOnlyWeeks left=${debugCourseIdentity(left)} right=${debugCourseIdentity(right)}"
             )
         }
@@ -1483,7 +1586,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 res.postValue(DataState(result))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to build schedule structure", e)
                 res.postValue(DataState(defaultScheduleStructure()))
             }
         }.start()
@@ -1551,7 +1654,7 @@ class EASWebSource internal constructor() : EASService {
                     res.postValue(DataState(DataState.STATE.FETCH_FAILED))
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to fetch scores", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -1601,7 +1704,7 @@ class EASWebSource internal constructor() : EASService {
                     res.postValue(DataState(DataState.STATE.FETCH_FAILED))
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to fetch scores with summary", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -1733,7 +1836,7 @@ class EASWebSource internal constructor() : EASService {
                 }
                 result.postValue(DataState(resMap.values.toList()))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to query empty classroom", e)
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED))
             }
         }.start()
@@ -1777,5 +1880,183 @@ class EASWebSource internal constructor() : EASService {
         return MutableLiveData(DataState(token, DataState.STATE.SUCCESS))
     }
 
+    // ================================================================ 课程名合成（iOS 策略移植）
+
+    /**
+     * 判断 token 是否像教室编号（纯 ASCII 字母+数字+_-）
+     */
+    private fun isLikelyClassroomToken(token: String): Boolean {
+        val trimmed = token.trim()
+        if (trimmed.isBlank()) return false
+        // 必须同时包含字母和数字
+        val hasLetter = trimmed.any { it.isLetter() && it in '\u0000'..'\u007F' }
+        val hasDigit = trimmed.any { it.isDigit() }
+        if (!hasLetter || !hasDigit) return false
+        // 全部字符必须是 ASCII 字母、数字、-、_
+        return trimmed.all { it.isLetterOrDigit() || it == '-' || it == '_' }
+    }
+
+    /**
+     * 从 KBXX 第一行提取 sessionHint（非教室的 [] 内容）
+     */
+    private fun extractSessionHint(kbxx: String): String? {
+        if (kbxx.isBlank()) return null
+        val firstLine = kbxx.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() } ?: return null
+        val bracket = Regex("\\[([^\\]]+)]")
+        for (match in bracket.findAll(firstLine)) {
+            val content = match.groupValues.getOrNull(1)?.trim() ?: continue
+            val cleaned = content.removeSuffix(".").removeSuffix("．").trim()
+            if (cleaned.isBlank()) continue
+            if (!isLikelyClassroomToken(cleaned)) {
+                return cleaned
+            }
+        }
+        return null
+    }
+
+    /**
+     * 合成课程显示名
+     */
+    private fun composeCourseDisplayName(
+        canonicalName: String?,
+        fallbackName: String,
+        sessionHint: String?
+    ): String {
+        val baseName = if (!canonicalName.isNullOrBlank()) canonicalName else fallbackName
+        if (sessionHint.isNullOrBlank()) return baseName
+        // 如果 baseName 已经包含 sessionHint，不再重复拼接
+        if (baseName.contains(sessionHint)) return baseName
+        return "$baseName [$sessionHint]"
+    }
+
+    /**
+     * 从 KBXX 提取课程名（去掉 [] 和教室）
+     */
+    private fun normalizedCourseName(kbxx: String): String {
+        if (kbxx.isBlank()) return ""
+        val firstLine = kbxx.lineSequence().map { it.trim() }.firstOrNull { it.isNotBlank() } ?: return ""
+        // 去掉所有 []
+        return firstLine.replace(Regex("\\[[^\\]]*]"), "").trim()
+    }
+
+    /**
+     * 调用 querykbrczong 总览接口
+     */
+    private fun fetchTimetableFromOverview(
+        token: EASToken,
+        term: TermItem
+    ): List<CourseItem>? {
+        return try {
+            val body = """{"xn":"${term.yearCode}","xq":"${term.termCode}","type":"json"}"""
+            val resp = jsonPost(token, "/app/kbrcbyapp/querykbrczong", body)
+            val jo = JsonUtils.getJsonObject(resp.body())
+            val content = jo?.optJSONArray("content") ?: return null
+            val result = mutableListOf<CourseItem>()
+            for (i in 0 until content.length()) {
+                val course = content.optJSONObject(i) ?: continue
+                val kbxx = course.optString("KBXX", "")
+                val rawCode = course.optString("KCDM", "")
+                val code = CourseCodeUtils.normalize(rawCode) ?: rawCode
+                val xqj = course.optInt("XQJ", -1)
+                val dj = course.optInt("DJ", -1)
+                val ksjc = course.optInt("KSJC", -1)
+                val jsjc = course.optInt("JSJC", -1)
+                if (xqj !in 1..7 || dj <= 0) continue
+
+                // 优先 KCMC，其次 KBXX
+                val kcmc = course.optString("KCMC", "").trim()
+                val kcmcEn = course.optString("KCMC_EN", "").trim()
+                val canonicalName = kcmc.takeIf { it.isNotBlank() } ?: kcmcEn.takeIf { it.isNotBlank() }
+                val fallbackName = normalizedCourseName(kbxx)
+                val sessionHint = extractSessionHint(kbxx)
+                val displayName = composeCourseDisplayName(canonicalName, fallbackName, sessionHint)
+
+                val classroom = extractClassroomFromKbxx(kbxx) ?: ""
+                val teacher = course.optString("JSXM", "").trim()
+                val begin = if (ksjc > 0) ksjc else (dj - 1) * 2 + 1
+                val end = if (jsjc >= ksjc) jsjc else begin + 1
+                val last = end - begin + 1
+
+                result.add(CourseItem().apply {
+                    this.code = code
+                    this.name = displayName
+                    this.rawName = displayName
+                    this.teacher = teacher
+                    this.classroom = classroom
+                    this.dow = xqj
+                    this.begin = begin
+                    this.last = last
+                    this.weeks = mutableListOf() // 总览接口没有周次信息，需要后续补充
+                })
+            }
+            result.takeIf { it.isNotEmpty() }
+        } catch (e: Exception) {
+            LogUtils.e("fetchTimetableFromOverview failed", e)
+            null
+        }
+    }
+
+    /**
+     * 调用 querykbrcbyday 日课表接口，获取指定日期的课程详情
+     */
+    private fun fetchDaySchedule(
+        token: EASToken,
+        date: String
+    ): List<DayScheduleItem> {
+        return try {
+            val body = """{"nyr":"$date"}"""
+            val resp = jsonPost(token, "/app/kbrcbyapp/querykbrcbyday", body)
+            val jo = JsonUtils.getJsonObject(resp.body())
+            val content = jo?.optJSONArray("content") ?: return emptyList()
+            val result = mutableListOf<DayScheduleItem>()
+            for (i in 0 until content.length()) {
+                val item = content.optJSONObject(i) ?: continue
+                result.add(DayScheduleItem(
+                    kcmc = item.optString("KCMC", "").trim(),
+                    cdmc = item.optString("CDMC", "").trim(),
+                    ksjc = item.optInt("KSJC", -1),
+                    jsjc = item.optInt("JSJC", -1),
+                    dj = item.optInt("DJ", -1),
+                    xqj = item.optInt("XQJ", -1)
+                ))
+            }
+            result
+        } catch (e: Exception) {
+            LogUtils.e("fetchDaySchedule failed", e)
+            emptyList()
+        }
+    }
+
+    /**
+     * 日课表数据项
+     */
+    private data class DayScheduleItem(
+        val kcmc: String,
+        val cdmc: String,
+        val ksjc: Int,
+        val jsjc: Int,
+        val dj: Int,
+        val xqj: Int
+    )
+
+    /**
+     * 从日课表列表中匹配最佳 KCMC
+     */
+    private fun bestDayScheduleRawName(
+        daySchedules: List<DayScheduleItem>,
+        dow: Int,
+        begin: Int,
+        end: Int,
+        classroom: String
+    ): String? {
+        val candidates = daySchedules.filter {
+            it.xqj == dow && it.ksjc == begin && it.jsjc == end
+        }
+        if (candidates.isEmpty()) return null
+        // 优先匹配教室
+        val withClassroom = candidates.find { it.cdmc == classroom }
+        return withClassroom?.kcmc?.takeIf { it.isNotBlank() }
+            ?: candidates.firstOrNull { it.kcmc.isNotBlank() }?.kcmc
+    }
 
 }

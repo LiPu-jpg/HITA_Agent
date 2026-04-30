@@ -6,6 +6,7 @@ import android.text.Html
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.activity.viewModels
 import androidx.viewpager.widget.PagerAdapter
 import com.bumptech.glide.Glide
 import com.bumptech.glide.request.RequestOptions
@@ -13,12 +14,16 @@ import com.google.android.material.appbar.AppBarLayout
 import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.databinding.ActivityTeacherOfficialBinding
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.ui.base.HiltBaseActivity
+import dagger.hilt.android.AndroidEntryPoint
 
 
 @Suppress("DEPRECATION")
+@AndroidEntryPoint
 open class ActivityTeacherOfficial :
-    BaseActivity<TeacherViewModel, ActivityTeacherOfficialBinding>() {
+    HiltBaseActivity<ActivityTeacherOfficialBinding>() {
+
+    protected val viewModel: TeacherViewModel by viewModels()
     var tabTitles: MutableList<String> = mutableListOf()
     var pagerAdapter: PagerAdapter? = null
 
@@ -185,9 +190,5 @@ open class ActivityTeacherOfficial :
 
     override fun initViewBinding(): ActivityTeacherOfficialBinding {
         return ActivityTeacherOfficialBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<TeacherViewModel> {
-        return TeacherViewModel::class.java
     }
 }

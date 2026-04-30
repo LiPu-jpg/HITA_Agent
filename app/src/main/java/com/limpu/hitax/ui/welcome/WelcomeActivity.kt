@@ -2,20 +2,25 @@ package com.limpu.hitax.ui.welcome
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import androidx.activity.viewModels
 import androidx.fragment.app.Fragment
 import com.limpu.hitax.R
 import com.limpu.hitax.databinding.ActivityWelcomeBinding
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.style.base.BaseTabAdapter
 import com.limpu.hitax.ui.welcome.login.LoginFragment
 import com.limpu.hitax.ui.welcome.signup.SignUpFragment
 import com.limpu.hitax.utils.AnimationUtils
+import dagger.hilt.android.AndroidEntryPoint
 
 /**
  * 用户注册/登录页面
  */
 @SuppressLint("NonConstantResourceId")
-class WelcomeActivity : BaseActivity<WelcomeViewModel,ActivityWelcomeBinding>() {
+@AndroidEntryPoint
+class WelcomeActivity : HiltBaseActivity<ActivityWelcomeBinding>() {
+
+    protected val viewModel: WelcomeViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,9 +59,4 @@ class WelcomeActivity : BaseActivity<WelcomeViewModel,ActivityWelcomeBinding>() 
     override fun initViewBinding(): ActivityWelcomeBinding {
         return ActivityWelcomeBinding.inflate(layoutInflater)
     }
-
-    override fun getViewModelClass(): Class<WelcomeViewModel> {
-        return WelcomeViewModel::class.java
-    }
-
 }

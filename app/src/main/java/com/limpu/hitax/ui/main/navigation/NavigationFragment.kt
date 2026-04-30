@@ -14,7 +14,9 @@ import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.data.source.preference.CourseReminderStore
 import com.limpu.hitax.data.work.CourseReminderScheduler
+import androidx.fragment.app.viewModels
 import com.limpu.hitax.databinding.FragmentNavigationBinding
+import com.limpu.hitax.ui.base.HiltBaseFragment
 import com.limpu.hitax.ui.eas.classroom.EmptyClassroomActivity
 import com.limpu.hitax.ui.eas.exam.ExamActivity
 import com.limpu.hitax.ui.eas.imp.ImportTimetableActivity
@@ -23,10 +25,23 @@ import com.limpu.hitax.ui.eas.score.ScoreInquiryActivity
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.ActivityUtils.CourseResourceMode
 import com.limpu.hitax.utils.IcsImportUtils
-import com.limpu.stupiduser.data.repository.LocalUserRepository
-import com.limpu.style.base.BaseFragment
+import com.limpu.hitauser.data.repository.LocalUserRepository
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
-class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationBinding>() {
+@AndroidEntryPoint
+class NavigationFragment : HiltBaseFragment<FragmentNavigationBinding>() {
+
+    @Inject
+    lateinit var localUserRepository: LocalUserRepository
+
+    @Inject
+    lateinit var easRepository: EASRepository
+
+    @Inject
+    lateinit var timetableRepository: TimetableRepository
+
+    protected val viewModel: NavigationViewModel by viewModels()
     private val easTokenObserver = Observer<com.limpu.hitax.data.model.eas.EASToken> {
         refreshEasUserCard()
     }
@@ -50,10 +65,6 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
         }
     }
     
-    override fun getViewModelClass(): Class<NavigationViewModel> {
-        return NavigationViewModel::class.java
-    }
-
     override fun initViews(view: View) {
         viewModel.recentTimetableLiveData.observe(this) {
             if (it == null) {
@@ -99,6 +110,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
         binding?.cardSubjects?.setOnClickListener {
             ActivityUtils.showEasVerifyWindow(
                 requireContext(),
+                easRepository,
                 directTo = ExamActivity::class.java,
                 onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                     override fun onSuccess(window: PopUpLoginEAS) {
@@ -123,7 +135,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
         }
         
         // 课程提醒开关
-        val reminderStore = CourseReminderStore.getInstance(requireContext())
+        val reminderStore = CourseReminderStore(requireContext())
         binding?.switchCourseReminder?.isChecked = reminderStore.isEnabled()
         binding?.switchCourseReminder?.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
@@ -162,24 +174,22 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
     override fun onStart() {
         super.onStart()
         viewModel.startRefresh()
-        activity?.application?.let {
-            EASRepository.getInstance(it).observeEasToken().observe(viewLifecycleOwner, easTokenObserver)
-        }
+        easRepository.observeEasToken().observe(viewLifecycleOwner, easTokenObserver)
         refreshEasUserCard()
     }
 
     private fun refreshEasUserCard() {
-        LocalUserRepository.getInstance(requireContext()).getLoggedInUser().let {
+        localUserRepository.getLoggedInUser().let {
             if (it.isValid()) { //如果已登录
                 binding?.avatar?.let { it1 ->
-                    com.limpu.stupiduser.util.ImageUtils.loadAvatarInto(
+                    com.limpu.hitauser.util.ImageUtils.loadAvatarInto(
                         requireContext(),
                         it.avatar,
                         it1
                     )
                 }
                 binding?.avatar?.let { it1 ->
-                    com.limpu.stupiduser.util.ImageUtils.loadAvatarInto(
+                    com.limpu.hitauser.util.ImageUtils.loadAvatarInto(
                         requireContext(),
                         it.avatar,
                         it1
@@ -195,8 +205,8 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
                     )
                 }
             } else {
-                val easToken = activity?.application?.let { app -> EASRepository.getInstance(app).getEasToken() }
-                if (easToken?.isLogin() == true) {
+                val easToken = easRepository.getEasToken()
+                if (easToken.isLogin()) {
                     binding?.username?.text = easToken.name?.ifBlank { easToken.stuId?.ifBlank { easToken.username } }
                         ?: easToken.stuId?.ifBlank { easToken.username }
                         ?: easToken.username
@@ -223,7 +233,8 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
                 binding?.avatar?.setImageResource(R.drawable.place_holder_avatar)
                 binding?.userCard?.setOnClickListener {
                     ActivityUtils.showEasVerifyWindow<Activity>(
-                        requireContext(),
+                        requireActivity(),
+                        easRepository,
                         directTo = null,
                         onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                             override fun onSuccess(window: PopUpLoginEAS) {
@@ -243,9 +254,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
     }
 
     override fun onStop() {
-        activity?.application?.let {
-            EASRepository.getInstance(it).observeEasToken().removeObserver(easTokenObserver)
-        }
+        easRepository.observeEasToken().removeObserver(easTokenObserver)
         super.onStop()
     }
 
@@ -269,9 +278,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
                 Toast.makeText(context, "无法读取所选 ICS 文件", Toast.LENGTH_SHORT).show()
                 return
             }
-            val timetableRepo = TimetableRepository.getInstance(context.applicationContext as android.app.Application)
-
-            timetableRepo.importFromICSAsNewTimetable(
+            timetableRepository.importFromICSAsNewTimetable(
                 inputStream,
                 IcsImportUtils.getDisplayName(context, uri)
             )
@@ -306,7 +313,7 @@ class NavigationFragment : BaseFragment<NavigationViewModel, FragmentNavigationB
      * 开启课程提醒
      */
     private fun enableCourseReminder() {
-        val reminderStore = CourseReminderStore.getInstance(requireContext())
+        val reminderStore = CourseReminderStore(requireContext())
         reminderStore.setEnabled(true)
         CourseReminderScheduler.autoSchedule(requireContext())
         Toast.makeText(requireContext(), "课程提醒已开启（上课前10分钟提醒）", Toast.LENGTH_SHORT).show()

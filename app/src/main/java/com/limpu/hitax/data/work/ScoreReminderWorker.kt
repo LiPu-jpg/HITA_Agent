@@ -17,7 +17,9 @@ import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.CourseScoreItem
 import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
 import com.limpu.hitax.data.source.preference.ScoreReminderStore
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.data.source.web.service.EASService
 import com.limpu.hitax.ui.eas.score.ScoreInquiryActivity
 import java.util.concurrent.CountDownLatch
@@ -26,10 +28,10 @@ import java.util.concurrent.TimeUnit
 class ScoreReminderWorker(appContext: Context, params: WorkerParameters) : Worker(appContext, params) {
 
     override fun doWork(): Result {
-        val store = ScoreReminderStore.getInstance(applicationContext)
+        val store = ScoreReminderStore(applicationContext)
         if (!store.isEnabled()) return Result.success()
         val app = applicationContext as? Application ?: return Result.failure()
-        val repository = EASRepository.getInstance(app)
+        val repository = EASRepository(app, EasPreferenceSource(applicationContext), TimetablePreferenceSource(applicationContext))
         if (!repository.getEasToken().isLogin()) return Result.success()
 
         val termsState = awaitLiveData(repository.getAllTerms(), 6)

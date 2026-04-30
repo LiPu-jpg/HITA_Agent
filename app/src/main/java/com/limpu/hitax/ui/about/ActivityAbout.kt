@@ -12,14 +12,20 @@ import android.view.HapticFeedbackConstants
 import android.widget.Toast
 import com.limpu.component.data.DataState
 import com.limpu.hitax.R
+import androidx.activity.viewModels
 import com.limpu.hitax.databinding.ActivityAboutBinding
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.ImageUtils
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.utils.LogUtils
 import com.limpu.style.widgets.PopUpText
+import dagger.hilt.android.AndroidEntryPoint
 
 @Suppress("DEPRECATION")
-class ActivityAbout: BaseActivity<AboutViewModel,ActivityAboutBinding>() {
+@AndroidEntryPoint
+class ActivityAbout: HiltBaseActivity<ActivityAboutBinding>() {
+
+    protected val viewModel: AboutViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,7 +99,7 @@ class ActivityAbout: BaseActivity<AboutViewModel,ActivityAboutBinding>() {
             packageInfo = packageManager
                 .getPackageInfo(packageName, 0)
         } catch (e: PackageManager.NameNotFoundException) {
-            e.printStackTrace()
+            LogUtils.e("Failed to get package info for version", e)
         }
         //获取APP版本versionName
         //获取APP版本versionName
@@ -108,9 +114,5 @@ class ActivityAbout: BaseActivity<AboutViewModel,ActivityAboutBinding>() {
     }
     override fun initViewBinding(): ActivityAboutBinding {
         return ActivityAboutBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<AboutViewModel> {
-        return AboutViewModel::class.java
     }
 }

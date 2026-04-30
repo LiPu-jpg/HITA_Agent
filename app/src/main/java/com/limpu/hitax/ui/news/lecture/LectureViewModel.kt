@@ -1,17 +1,20 @@
 package com.limpu.hitax.ui.news.lecture
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.map
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.repository.AdditionalRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class LectureViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class LectureViewModel @Inject constructor(
+    private val additionalRepo: AdditionalRepository
+) : ViewModel() {
 
     val pageSize = 10
-    val additionalRepo = AdditionalRepository.getInstance(application)
 
     val pageOffset = MutableLiveData<Pair<Int, Boolean>>()
     val listData = pageOffset.switchMap{ trigger ->

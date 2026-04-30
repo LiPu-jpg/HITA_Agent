@@ -1,11 +1,10 @@
 package com.limpu.hitax.data.source.web.eas
 
-import android.util.Log
+import com.limpu.hitax.utils.LogUtils
 import com.limpu.hitax.data.model.eas.CourseItem
 import org.jsoup.Jsoup
 
 object BenbuScheduleParser {
-    private const val TAG = "BenbuScheduleParser"
     private const val DEBUG_WEEK = 7
     private val DEBUG_DOW = setOf(5, 6)
 
@@ -35,7 +34,7 @@ object BenbuScheduleParser {
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "parseScheduleHtml failed", e)
+            LogUtils.e("parseScheduleHtml failed", e)
             throw e
         }
         return result
@@ -283,6 +282,6 @@ object BenbuScheduleParser {
 
     private fun maybeLogDebug(dow: Int, weeks: List<Int>, message: String) {
         if (!shouldDebug(dow, weeks)) return
-        Log.d(TAG, "[DBG_W7_D56] dow=$dow weeks=$weeks $message")
+        LogUtils.d("[DBG_W7_D56] dow=$dow weeks=$weeks $message")
     }
 }

@@ -1,21 +1,20 @@
 package com.limpu.hitax.ui.main.timeline
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.Trigger
 import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.repository.TimetableRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.Calendar
+import javax.inject.Inject
 
-class FragmentTimelineViewModel(application: Application) : AndroidViewModel(application){
-
-    /**
-     * 仓库区
-     */
-    private val timetableRepository = TimetableRepository.getInstance(application)
+@HiltViewModel
+class FragmentTimelineViewModel @Inject constructor(
+    private val timetableRepository: TimetableRepository
+) : ViewModel() {
 
     /**
      * 数据区

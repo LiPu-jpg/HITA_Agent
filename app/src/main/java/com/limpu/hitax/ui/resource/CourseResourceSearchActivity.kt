@@ -19,19 +19,20 @@ import com.limpu.hitax.R
 import com.limpu.hitax.data.model.resource.CourseResourceItem
 import com.limpu.hitax.databinding.ActivityCourseResourceSearchBinding
 import com.limpu.hitax.databinding.DynamicTeacherSearchResultItemBinding
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.CourseCodeUtils
-import com.limpu.style.base.BaseActivity
 import com.limpu.style.base.BaseListAdapter
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.viewModels
 
+@AndroidEntryPoint
 class CourseResourceSearchActivity :
-    BaseActivity<CourseResourceSearchViewModel, ActivityCourseResourceSearchBinding>() {
+    HiltBaseActivity<ActivityCourseResourceSearchBinding>() {
 
+    protected val viewModel: CourseResourceSearchViewModel by viewModels()
     private lateinit var adapter: CourseResourceAdapter
     private var mode: ActivityUtils.CourseResourceMode = ActivityUtils.CourseResourceMode.VIEW
-
-    override fun getViewModelClass(): Class<CourseResourceSearchViewModel> =
-        CourseResourceSearchViewModel::class.java
 
     override fun initViewBinding(): ActivityCourseResourceSearchBinding =
         ActivityCourseResourceSearchBinding.inflate(layoutInflater)

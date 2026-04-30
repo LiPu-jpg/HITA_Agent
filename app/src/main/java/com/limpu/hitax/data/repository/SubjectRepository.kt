@@ -2,18 +2,16 @@ package com.limpu.hitax.data.repository
 
 import android.app.Application
 import androidx.lifecycle.LiveData
+import javax.inject.Inject
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.map
 import com.limpu.hitax.data.AppDatabase
 import com.limpu.hitax.data.model.timetable.TermSubject
 import com.limpu.hitax.ui.timetable.detail.TeacherInfo
 import com.limpu.hitax.utils.ColorTools
-import com.limpu.sync.StupidSync
-import com.limpu.sync.data.model.History
 import java.util.concurrent.Executors
 
-class SubjectRepository(application: Application) {
-    private val historyTag = "subject"
+class SubjectRepository @Inject constructor(application: Application) {
     private val executor = Executors.newSingleThreadScheduledExecutor()
     private val eventItemDao = AppDatabase.getDatabase(application).eventItemDao()
     private val subjectDao = AppDatabase.getDatabase(application).subjectDao()
@@ -112,7 +110,6 @@ class SubjectRepository(application: Application) {
     fun actionSaveSubjectInfo(subject: TermSubject) {
         executor.execute {
             subjectDao.saveSubjectSync(subject)
-            StupidSync.putHistorySync(historyTag, History.ACTION.REQUIRE, listOf(subject.id))
         }
     }
 
@@ -126,7 +123,6 @@ class SubjectRepository(application: Application) {
                     s.color = ColorTools.randomColorMaterial()
                 }
                 subjectDao.saveSubjectsSync(subjects)
-                StupidSync.putHistorySync(historyTag, History.ACTION.REQUIRE, subjects.getIds())
             }
 
         }
@@ -139,7 +135,6 @@ class SubjectRepository(application: Application) {
                 s.color = ColorTools.randomColorMaterial()
             }
             subjectDao.saveSubjectsSync(subjects)
-            StupidSync.putHistorySync(historyTag, History.ACTION.REQUIRE, subjects.getIds())
         }
     }
 
@@ -151,7 +146,6 @@ class SubjectRepository(application: Application) {
         executor.execute {
             subjectDao.deleteSubjectsSync(subjects)
             val ids = subjects.getIds()
-            StupidSync.putHistorySync(historyTag, History.ACTION.REMOVE, ids)
             eventItemDao.deleteEventsFromSubjectsSync(ids)
         }
     }
@@ -176,19 +170,12 @@ class SubjectRepository(application: Application) {
         return res
     }
 
-    companion object {
-        private var instance: SubjectRepository? = null
-        fun getInstance(application: Application): SubjectRepository {
-            if (instance == null) instance = SubjectRepository(application)
-            return instance!!
-        }
-    }
+}
 
-    fun List<TermSubject>.getIds(): List<String> {
-        val ids = mutableListOf<String>()
-        for (s in this) {
-            ids.add(s.id)
-        }
-        return ids
+fun List<TermSubject>.getIds(): List<String> {
+    val ids = mutableListOf<String>()
+    for (s in this) {
+        ids.add(s.id)
     }
+    return ids
 }

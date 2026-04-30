@@ -2,7 +2,10 @@ package com.limpu.hitax.ui.eas.score
 
 import android.os.Bundle
 import android.view.View
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.recyclerview.widget.LinearLayoutManager
+import android.os.Build
 import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.CourseScoreItem
@@ -15,12 +18,30 @@ import com.limpu.hitax.ui.eas.EASActivity
 import com.limpu.style.base.BaseListAdapter
 import com.limpu.style.widgets.PopUpCheckableList
 import com.limpu.hitax.utils.TermNameFormatter
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.activity.viewModels
 
+@AndroidEntryPoint
 class ScoreInquiryActivity :
     EASActivity<ScoreInquiryViewModel, ActivityEasScoreFirstBinding>() {
+
+    override val viewModel: ScoreInquiryViewModel by viewModels()
     lateinit var listAdapter: ScoresListAdapter
     private lateinit var scoreReminderStore: ScoreReminderStore
     private var scoreQueryInFlight = false
+
+    // 通知权限请求 launcher
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            enableScoreReminder()
+        } else {
+            binding.scoreReminderSwitch.isChecked = false
+            scoreReminderStore.setEnabled(false)
+            Toast.makeText(this, "需要通知权限才能发送成绩提醒", Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -130,13 +151,23 @@ class ScoreInquiryActivity :
     override fun initViews() {
         super.initViews()
         bindLiveData()
-        scoreReminderStore = ScoreReminderStore.getInstance(applicationContext)
+        scoreReminderStore = ScoreReminderStore(applicationContext)
         binding.scoreReminderSwitch.isChecked = scoreReminderStore.isEnabled()
         binding.scoreReminderSwitch.setOnCheckedChangeListener { _, isChecked ->
-            scoreReminderStore.setEnabled(isChecked)
             if (isChecked) {
-                ScoreReminderScheduler.schedule(this)
+                // 开启时检查通知权限（仅Android 13+需要）
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                        == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        enableScoreReminder()
+                    } else {
+                        notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                } else {
+                    enableScoreReminder()
+                }
             } else {
+                scoreReminderStore.setEnabled(false)
                 ScoreReminderScheduler.cancel(this)
             }
         }
@@ -212,10 +243,6 @@ class ScoreInquiryActivity :
         return TermNameFormatter.shortTermName(term.termName, term.name)
     }
 
-    override fun getViewModelClass(): Class<ScoreInquiryViewModel> {
-        return ScoreInquiryViewModel::class.java
-    }
-
     override fun initViewBinding(): ActivityEasScoreFirstBinding {
         return ActivityEasScoreFirstBinding.inflate(layoutInflater)
     }
@@ -224,5 +251,14 @@ class ScoreInquiryActivity :
         binding.refresh.isRefreshing = true
         scoreQueryInFlight = true
         viewModel.startRefresh()
+    }
+
+    /**
+     * 开启成绩提醒
+     */
+    private fun enableScoreReminder() {
+        scoreReminderStore.setEnabled(true)
+        ScoreReminderScheduler.schedule(this)
+        Toast.makeText(this, "成绩提醒已开启", Toast.LENGTH_SHORT).show()
     }
 }

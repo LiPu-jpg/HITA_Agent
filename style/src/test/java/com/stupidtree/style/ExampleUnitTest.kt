@@ -1,4 +1,4 @@
-package com.stupidtree.style
+package com.limpu.style
 
 import org.junit.Test
 

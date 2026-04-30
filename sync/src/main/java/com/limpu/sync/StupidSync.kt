@@ -60,9 +60,7 @@ object StupidSync {
                 })
             }
 
-        } ?: kotlin.run {
-            Log.e("SSYNC", "NOT INITIALIZED")
-        }
+        } ?: Unit
     }
 
 

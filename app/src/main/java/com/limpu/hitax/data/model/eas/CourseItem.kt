@@ -11,6 +11,8 @@ class CourseItem {
     var weeks: MutableList<Int> = mutableListOf()
     var teacher: String? = null
     var classroom: String? = null
+    var rawName: String? = null
+    var notes: String? = null
     var dow = -1
     var begin = -1
     var last = -1

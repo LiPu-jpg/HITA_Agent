@@ -29,6 +29,7 @@ import com.limpu.hitax.ui.subject.SubjectAgentTraceListAdapter
 import com.limpu.hitax.ui.widgets.PopUpCalendarPicker
 import com.limpu.hitax.ui.widgets.PopUpPickCourseTime
 import com.limpu.hitax.ui.widgets.PopUpTimePeriodPicker
+import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.style.widgets.DialogAutoEditText
 import com.limpu.style.widgets.DialogSelectableLiveList
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
@@ -249,7 +250,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                 .setInitValue(viewModel.timetableLiveData.value?.data)
                 .setDataLoader(object : DialogSelectableLiveList.DataLoader<Timetable> {
                     override fun loadData(): LiveData<List<DialogSelectableLiveList.ItemData<Timetable>>> {
-                        return TimetableRepository.getInstance(activity!!.application).getTimetables()
+                        return TimetableRepository(activity!!.application).getTimetables()
                             .switchMap {
                                 val res = mutableListOf<DialogSelectableLiveList.ItemData<Timetable>>()
                                 for (data: Timetable in it) {
@@ -271,7 +272,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                 .setInitValue(viewModel.subjectLiveData.value?.data)
                 .setDataLoader(object : DialogSelectableLiveList.DataLoader<TermSubject> {
                     override fun loadData(): LiveData<List<DialogSelectableLiveList.ItemData<TermSubject>>> {
-                        return SubjectRepository.getInstance(activity!!.application)
+                        return SubjectRepository(activity!!.application)
                             .getSubjects(viewModel.timetableLiveData.value?.data?.id ?: "")
                             .switchMap {
                                 val res = mutableListOf<DialogSelectableLiveList.ItemData<TermSubject>>()
@@ -352,7 +353,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                 }).setInitValue(viewModel.teacherLiveData.value?.data ?: "")
                 .setDataLoader(object : DialogAutoEditText.DataLoader {
                     override fun loadData(str: String): LiveData<List<String>> {
-                        return TeacherInfoRepository.getInstance(activity!!.application)
+                        return TeacherInfoRepository(activity!!.application)
                             .searchTeachers(str).switchMap {
                                 val r = mutableListOf<String>()
                                 it.data?.let { dt ->
@@ -378,7 +379,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                 }).setInitValue(viewModel.locationLiveData.value?.data ?: "")
                 .setDataLoader(object : DialogAutoEditText.DataLoader {
                     override fun loadData(str: String): LiveData<List<String>> {
-                        return TimetableRepository.getInstance(activity!!.application)
+                        return TimetableRepository(activity!!.application)
                             .searchLocation(str)
                     }
                 }).show(childFragmentManager, "pick_location")
@@ -388,6 +389,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
             when (viewModel.addModeLiveData.value ?: AddEventViewModel.AddMode.BATCH_PERIOD) {
                 AddEventViewModel.AddMode.BATCH_PERIOD -> {
                     viewModel.createEvent()
+                    activity?.let { WidgetUtils.sendRefreshToAll(it) }
                     dismiss()
                 }
 
@@ -531,6 +533,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                     submittingByAgent = false
                     binding?.adeBtDone?.isEnabled = true
                     if (result.ok) {
+                        activity?.let { WidgetUtils.sendRefreshToAll(it) }
                         dismiss()
                     } else {
                         showAgentTraceStatus(result.error ?: getString(R.string.operation_failed))

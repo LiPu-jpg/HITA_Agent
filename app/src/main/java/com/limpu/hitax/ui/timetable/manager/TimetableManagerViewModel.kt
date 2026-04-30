@@ -1,21 +1,21 @@
 package com.limpu.hitax.ui.timetable.manager
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.hitax.data.model.timetable.Timetable
 import com.limpu.hitax.data.repository.IcsImportResult
 import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.component.data.DataState
+import dagger.hilt.android.lifecycle.HiltViewModel
 import java.io.InputStream
+import javax.inject.Inject
 
-class TimetableManagerViewModel(application: Application) : AndroidViewModel(application) {
-    /**
-     * 仓库区
-     */
-    private val timetableRepository = TimetableRepository.getInstance(application)
+@HiltViewModel
+class TimetableManagerViewModel @Inject constructor(
+    private val timetableRepository: TimetableRepository
+) : ViewModel() {
     val timetablesLiveData:LiveData<List<Timetable>> = timetableRepository.getTimetables()
 
     private val exportController = MutableLiveData<Timetable>()

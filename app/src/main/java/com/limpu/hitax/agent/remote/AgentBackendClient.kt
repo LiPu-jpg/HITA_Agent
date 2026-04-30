@@ -1,7 +1,7 @@
 package com.limpu.hitax.agent.remote
 
-import android.util.Log
 import com.limpu.hitax.BuildConfig
+import com.limpu.hitax.utils.LogUtils
 import okhttp3.OkHttpClient
 import retrofit2.Call
 import retrofit2.Retrofit
@@ -179,11 +179,10 @@ object AgentBackendClient {
         return try {
             val response = api.searchTeachers(TeacherSearchRequest(name)).execute()
             if (!response.isSuccessful) {
-                Log.w("AgentBackend", "searchTeacher HTTP ${response.code()}: ${response.errorBody()?.string()?.take(200)}")
+                LogUtils.w("searchTeacher HTTP ${response.code()}: ${response.errorBody()?.string()?.take(200)}")
                 return "教师搜索失败: HTTP ${response.code()}"
             }
             val body = response.body()
-            Log.d("AgentBackend", "searchTeacher body=$body")
             if (body == null) return "教师搜索失败: 空响应"
             
             val ok = body["ok"] as? Boolean ?: false
@@ -193,7 +192,6 @@ object AgentBackendClient {
             }
             
             val unwrapped = unwrapSkillOutput(body)
-            Log.d("AgentBackend", "searchTeacher unwrapped=$unwrapped")
             if (unwrapped == null) return "教师搜索失败: 无法解析响应"
 
             val success = unwrapped["success"] as? Boolean ?: false
@@ -218,8 +216,6 @@ object AgentBackendClient {
                 ?: unwrapped["markdown"] as? String
                 ?: ""
 
-            Log.d("AgentBackend", "searchTeacher name=$teacherName markdownLen=${markdown.length}")
-
             if (markdown.isBlank()) {
                 return "教师信息（$teacherName）：暂无详细信息"
             }
@@ -233,7 +229,7 @@ object AgentBackendClient {
                 append(markdown.take(3000))
             }
         } catch (e: Exception) {
-            Log.e("AgentBackend", "searchTeacher exception: ${e.message}", e)
+            LogUtils.e( "searchTeacher exception: ${e.message}", e)
             "教师搜索失败: ${e.message}"
         }
     }
@@ -387,7 +383,7 @@ object AgentBackendClient {
         return try {
             val response = api.ragQuery(RagQueryRequest(query = query, top_k = 5)).execute()
             if (!response.isSuccessful) {
-                Log.w("AgentBackend", "RAG query HTTP ${response.code()}: ${response.errorBody()?.string()?.take(200)}")
+                LogUtils.w("RAG query HTTP ${response.code()}: ${response.errorBody()?.string()?.take(200)}")
                 return "RAG 查询失败: HTTP ${response.code()}"
             }
             val body = response.body() ?: return "RAG 查询失败: 空响应"
@@ -412,7 +408,7 @@ object AgentBackendClient {
                 }
             }
         } catch (e: Exception) {
-            Log.e("AgentBackend", "RAG query exception: ${e.message}", e)
+            LogUtils.e( "RAG query exception: ${e.message}", e)
             "RAG 查询失败: ${e.message}"
         }
     }

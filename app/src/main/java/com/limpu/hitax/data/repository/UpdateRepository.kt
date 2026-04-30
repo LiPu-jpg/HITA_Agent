@@ -1,16 +1,17 @@
 package com.limpu.hitax.data.repository
 
-import android.content.Context
 import androidx.lifecycle.LiveData
+import javax.inject.Inject
 import androidx.lifecycle.map
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.GitHubRelease
 import com.limpu.hitax.data.source.web.GitHubWebSource
-import com.limpu.stupiduser.data.model.CheckUpdateResult
+import com.limpu.hitauser.data.model.CheckUpdateResult
 import java.util.Locale
 
-class UpdateRepository private constructor(context: Context) {
-    private val githubWebSource = GitHubWebSource.getInstance(context)
+class UpdateRepository @Inject constructor(
+    private val githubWebSource: GitHubWebSource
+) {
 
     fun checkUpdateFromGitHub(
         currentVersionName: String,
@@ -157,19 +158,6 @@ class UpdateRepository private constructor(context: Context) {
                 val label = pre?.groupValues?.getOrNull(1)?.lowercase(Locale.ROOT)
                 val num = pre?.groupValues?.getOrNull(2)?.toIntOrNull()
                 return ParsedVersion(major, minor, patch, label, num)
-            }
-        }
-    }
-
-    companion object {
-        private var instance: UpdateRepository? = null
-
-        fun getInstance(context: Context): UpdateRepository {
-            synchronized(UpdateRepository::class.java) {
-                if (instance == null) {
-                    instance = UpdateRepository(context.applicationContext)
-                }
-                return instance!!
             }
         }
     }

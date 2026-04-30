@@ -2,6 +2,7 @@ plugins {
     id 'com.android.application'
     id 'kotlin-android'
     id 'kotlin-kapt'
+    id 'dagger.hilt.android.plugin'
 }
 
 def appVersionCodeValue = 2026042301
@@ -19,6 +20,7 @@ android {
         compileSdk 35
         versionCode appVersionCodeValue
         versionName appVersionNameValue
+        resConfigs "zh", "en"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         javaCompileOptions {
@@ -54,9 +56,15 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+
+    packagingOptions {
+        exclude '**/*-sources.jar'
+        exclude 'org/bouncycastle/pqc/**/*.properties'
     }
 
     compileOptions {
@@ -84,10 +92,9 @@ dependencies {
     implementation 'androidx.legacy:legacy-support-v4:1.0.0'
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.8.4'
     implementation project(path: ':component')
-    implementation project(path: ':user')
-    implementation project(path: ':sync')
+    implementation project(path: ':hitauser')
     implementation project(path: ':style')
-    implementation project(path: ':theta')
+
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.2.1'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
@@ -173,6 +180,13 @@ dependencies {
     implementation 'io.noties.markwon:html:4.6.2'
     // syntax highlight removed (prism4j artifacts not available in current mirrors)
     implementation 'ru.noties:jlatexmath-android:0.2.0'
+
+    // Hilt DI
+    implementation 'com.google.dagger:hilt-android:2.50'
+    kapt 'com.google.dagger:hilt-android-compiler:2.50'
+
+    // Fragment KTX for by viewModels()
+    implementation 'androidx.fragment:fragment-ktx:1.8.2'
 
 }
 

@@ -1,4 +1,4 @@
-package com.stupidtree.sync
+package com.limpu.sync
 
 import org.junit.Test
 

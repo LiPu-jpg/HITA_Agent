@@ -7,10 +7,18 @@ import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.ui.eas.login.PopUpLoginEAS
 import com.limpu.hitax.utils.ActivityUtils
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.ui.base.HiltBaseActivity
+import javax.inject.Inject
 
-abstract class EASActivity<T : EASViewModel, V : ViewBinding> : BaseActivity<T, V>() {
+import androidx.activity.viewModels
+import dagger.hilt.android.AndroidEntryPoint
 
+abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity<V>() {
+
+    @Inject
+    lateinit var easRepository: EASRepository
+
+    protected abstract val viewModel: T
     private var reloginInProgress = false
     private var sessionRetryConsumed = false
     private var pendingSessionRetryAction: (() -> Boolean)? = null
@@ -43,9 +51,10 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : BaseActivity<T, 
         }
         reloginInProgress = true
         pendingSessionRetryAction = retryAction
-        val tokenCampus = EASRepository.getInstance(application).getEasToken().campus
+        val tokenCampus = easRepository.getEasToken().campus
         ActivityUtils.showEasVerifyWindow<Activity>(
             getThis(),
+            easRepository,
             directTo = null,
             autoLaunchWebLogin = true,
             preferredCampus = if (tokenCampus == EASToken.Campus.BENBU || tokenCampus == EASToken.Campus.WEIHAI) tokenCampus else null,
@@ -84,6 +93,7 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : BaseActivity<T, 
                 } else {
                     ActivityUtils.showEasVerifyWindow<Activity>(
                         getThis(),
+                        easRepository,
                         lock = true,
                         onResponseListener = object :
                             PopUpLoginEAS.OnResponseListener {

@@ -6,9 +6,10 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.Trigger
 import com.limpu.hitax.data.repository.StaticRepository
+import com.limpu.hitax.data.source.web.StaticWebSource
 
 class UserAgreementViewModel(application: Application) : AndroidViewModel(application) {
-    private val staticRepo = StaticRepository.getInstance(application)
+    private val staticRepo = StaticRepository(application, StaticWebSource(application.applicationContext))
 
     private val refreshController = MutableLiveData<Trigger>()
 

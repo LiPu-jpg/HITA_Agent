@@ -1,6 +1,5 @@
 package com.limpu.hitax.ui.eas.score
 
-import android.app.Application
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.map
@@ -14,12 +13,11 @@ import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.source.web.service.EASService
 import com.limpu.hitax.ui.eas.EASViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class ScoreInquiryViewModel(application: Application) : EASViewModel(application) {
-    /**
-     * 仓库区
-     */
-    private val easRepository = EASRepository.getInstance(application)
+@HiltViewModel
+class ScoreInquiryViewModel @Inject constructor(easRepo: EASRepository) : EASViewModel(easRepo) {
 
     /**
      * LiveData区
@@ -27,7 +25,7 @@ class ScoreInquiryViewModel(application: Application) : EASViewModel(application
     private val pageController = MutableLiveData<Trigger>()
 
     val termsLiveData : LiveData<DataState<List<TermItem>>> = pageController.switchMap {
-        return@switchMap easRepository.getAllTerms().map { state ->
+        return@switchMap easRepo.getAllTerms().map { state ->
             val data = state.data
             if (state.state != DataState.STATE.SUCCESS || data.isNullOrEmpty()) {
                 return@map state
@@ -48,7 +46,7 @@ class ScoreInquiryViewModel(application: Application) : EASViewModel(application
 
     private val scoresWithSummaryLiveData =
         MTransformations.switchMap(selectedTermLiveData, selectedTestTypeLiveData) {
-            return@switchMap easRepository.getPersonalScoresWithSummary(it.first, it.second)
+            return@switchMap easRepo.getPersonalScoresWithSummary(it.first, it.second)
         }
 
     val scoresLiveData: LiveData<DataState<List<CourseScoreItem>>> =

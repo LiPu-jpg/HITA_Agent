@@ -1,8 +1,7 @@
 package com.limpu.hitax.ui.about
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.DataState
 import com.limpu.component.data.Trigger
@@ -11,15 +10,20 @@ import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.StaticRepository
 import com.limpu.hitax.data.repository.UpdateRepository
 import com.limpu.hitax.utils.LiveDataUtils
-import com.limpu.stupiduser.data.model.CheckUpdateResult
-import com.limpu.stupiduser.data.repository.LocalUserRepository
-import com.limpu.stupiduser.data.repository.ManagerRepository
+import com.limpu.hitauser.data.model.CheckUpdateResult
+import com.limpu.hitauser.data.repository.LocalUserRepository
+import com.limpu.hitauser.data.repository.ManagerRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class AboutViewModel(application: Application) : AndroidViewModel(application) {
-    private val staticRepo = StaticRepository.getInstance(application)
-    private val localUserRepository = LocalUserRepository.getInstance(application)
-    private val managerRepository = ManagerRepository.getInstance(application)
-    private val updateRepository = UpdateRepository.getInstance(application)
+@HiltViewModel
+class AboutViewModel @Inject constructor(
+    private val staticRepo: StaticRepository,
+    private val localUserRepository: LocalUserRepository,
+    private val managerRepository: ManagerRepository,
+    private val updateRepository: UpdateRepository,
+    private val easRepository: EASRepository
+) : ViewModel() {
 
     private val refreshController = MutableLiveData<Trigger>()
 
@@ -43,7 +47,7 @@ class AboutViewModel(application: Application) : AndroidViewModel(application) {
             return@switchMap managerRepository.checkUpdate(
                 localUserRepository.getLoggedInUser().token?:"",
                 it,
-                EASRepository.getInstance(application).getEasToken().stuId
+                easRepository.getEasToken().stuId
             )
         } else {
             return@switchMap LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))

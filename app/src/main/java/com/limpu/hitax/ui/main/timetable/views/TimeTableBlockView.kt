@@ -91,7 +91,9 @@ class TimeTableBlockView constructor(
             icon?.visibility = GONE
         }
 
-        card.setOnClickListener { v -> onCardClickListener?.onClick(v, event) }
+        card.setOnClickListener { v ->
+            onCardClickListener?.onClick(v, event)
+        }
         card.setOnLongClickListener { v: View ->
             return@setOnLongClickListener onCardLongClickListener?.onLongClick(v, event) == true
         }

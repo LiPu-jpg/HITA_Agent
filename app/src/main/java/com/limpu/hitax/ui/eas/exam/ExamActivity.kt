@@ -3,6 +3,7 @@ package com.limpu.hitax.ui.eas.exam
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.AppCompatEditText
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -10,14 +11,18 @@ import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.eas.ExamItem
 import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.R
-import com.limpu.hitax.ui.eas.EASActivity
 import com.limpu.hitax.databinding.ActivityEasExamBinding
+import com.limpu.hitax.ui.eas.EASActivity
 import com.limpu.style.base.BaseListAdapter
 import com.limpu.style.widgets.PopUpCheckableList
 import com.limpu.hitax.utils.TermNameFormatter
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class ExamActivity :
     EASActivity<ExamViewModel, ActivityEasExamBinding>() {
+
+    override val viewModel: ExamViewModel by viewModels()
     lateinit var listAdapter: ExamListAdapter
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,10 +81,6 @@ class ExamActivity :
 
     override fun initViewBinding(): ActivityEasExamBinding {
         return ActivityEasExamBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<ExamViewModel> {
-        return ExamViewModel::class.java
     }
 
     override fun initViews() {

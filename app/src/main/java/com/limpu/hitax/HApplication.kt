@@ -2,6 +2,7 @@ package com.limpu.hitax
 
 import android.app.Application
 import com.limpu.hitax.utils.LogUtils
+import dagger.hilt.android.HiltAndroidApp
 import androidx.annotation.WorkerThread
 import com.google.gson.Gson
 import java.util.concurrent.ConcurrentHashMap
@@ -11,8 +12,8 @@ import com.limpu.hitax.data.model.GsonBuilderUtil
 import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TermSubject
 import com.limpu.hitax.data.model.timetable.Timetable
-import com.limpu.stupiduser.data.repository.LocalUserRepository
-import com.limpu.sync.StupidSync
+import com.limpu.hitauser.data.repository.LocalUserRepository
+import javax.inject.Inject
 import com.limpu.hitax.agent.remote.AgentBackendClient
 import com.limpu.hitax.data.work.CourseReminderScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -26,131 +27,26 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.TrustManager
 import javax.net.ssl.X509TrustManager
 
+@HiltAndroidApp
 class HApplication : Application() {
+
+    @Inject
+    lateinit var localUserRepository: LocalUserRepository
 
     // 应用级别的协程作用域，生命周期与应用一致
     private val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
-        // 初始化 PDFBox CMap 资源
-        initPdfCMapResources()
+
+        applicationScope.launch(Dispatchers.IO) {
+            initPdfCMapResources()
+        }
+
         val database = AppDatabase.getDatabase(this@HApplication)
         val timetableDao = database.timetableDao()
         val subjectDao = database.subjectDao()
         val eventDao = database.eventItemDao()
-        StupidSync.init(this, object : StupidSync.PushDelegate {
-
-            @WorkerThread
-            override fun getDataForIds(key: String, ids: List<String>): List<JsonObject> {
-                return when (key) {
-                    "timetable" -> {
-                        val list = mutableListOf<JsonObject>()
-                        for (tt in timetableDao.getTimetablesInIdsSync(ids)) {
-                            val jo = Gson().toJsonTree(tt).asJsonObject
-                            jo.addProperty("startTime", tt.startTime.time)
-                            jo.addProperty("endTime", tt.endTime.time)
-                            list.add(jo)
-                        }
-                        list
-                    }
-                    "subject" -> {
-                        val list = mutableListOf<JsonObject>()
-                        for (tt in subjectDao.getSubjectsInIdsSync(ids)) {
-                            val jo = Gson().toJsonTree(tt).asJsonObject
-                            list.add(jo)
-                        }
-                        return list
-                    }
-                    "event" -> {
-                        val list = mutableListOf<JsonObject>()
-                        for (tt in eventDao.getEventInIdsSync(ids)) {
-                            val jo = Gson().toJsonTree(tt).asJsonObject
-                            jo.addProperty("from", tt.from.time)
-                            jo.addProperty("to", tt.to.time)
-                            list.add(jo)
-                        }
-                        return list
-
-                    }
-                    else -> listOf()
-                }
-            }
-
-            override fun saveData(key: String, ids: List<String>, data: List<String>) {
-                when (key) {
-                    "timetable" -> saveAndInsertData<Timetable>(data, ids) { timetableDao.saveTimetablesSync(it) }
-                    "subject" -> saveAndInsertData<TermSubject>(data, ids) { subjectDao.saveSubjectsSync(it) }
-                    "event" -> saveAndInsertData<EventItem>(data, ids) { eventDao.saveEvents(it) }
-                }
-            }
-
-            /**
-             * 通用的数据保存和插入方法
-             */
-            private inline fun <reified T : Any> saveAndInsertData(
-                data: List<String>,
-                ids: List<String>,
-                saveAction: (List<T>) -> Unit
-            ) {
-                val gson = GsonBuilderUtil.create()
-                val dataMap = mutableMapOf<String, T>()
-
-                // 解析JSON数据
-                for (item in data) {
-                    try {
-                        val obj = gson.fromJson(item, T::class.java)
-                        // 假设所有实体都有id字段
-                        val idField = T::class.java.getDeclaredField("id")
-                        idField.isAccessible = true
-                        val id = idField.get(obj) as? String ?: continue
-                        dataMap[id] = obj
-                    } catch (e: Exception) {
-                        LogUtils.e( "解析数据失败: ${e.message}")
-                    }
-                }
-
-                // 按ID顺序插入数据
-                val toAdd = mutableListOf<T>()
-                for (id in ids) {
-                    dataMap[id]?.let { toAdd.add(it) }
-                }
-
-                if (toAdd.isNotEmpty()) {
-                    saveAction(toAdd)
-                }
-            }
-
-            override fun deleteData(key: String, ids: List<String>) {
-                when (key) {
-                    "timetable" -> {
-                        timetableDao.deleteTimetablesInIdsSync(ids)
-                    }
-                    "event" -> {
-                        eventDao.deleteEventsInIdsSync(ids)
-                    }
-                    "subject" -> {
-                        subjectDao.deleteSubjectsInIdsSync(ids)
-                    }
-                }
-            }
-
-            override fun clearData(key: String) {
-                when (key) {
-                    "timetable" -> {
-                        timetableDao.clear()
-                    }
-                    "event" -> {
-                        eventDao.clear()
-                    }
-                    "subject" -> {
-                        subjectDao.clear()
-                    }
-                }
-            }
-
-        })
-        StupidSync.setUID(LocalUserRepository.getInstance(this).getLoggedInUser().id)
         // 注意：在生产环境中应该移除或修改SSL设置
         // handleSSLHandshake()
 
@@ -263,16 +159,14 @@ class HApplication : Application() {
                         parseMethod.isAccessible = true
 
                         var registeredCount = 0
-                        // 扩展常用CMap列表：覆盖中文、日文、韩文
                         val keyCMaps = listOf(
-                            "Identity-H",           // 最常用：水平书写
-                            "Identity-V",           // 垂直书写
-                            "Adobe-GB1-UCS2",       // 简体中文
-                            "Adobe-CNS1-UCS2",      // 繁体中文
-                            "Adobe-Japan1-UCS2",    // 日文
-                            "Adobe-Korea1-UCS2",    // 韩文
-                            "GBK-EUC-H",            // 中文编码
-                            "UniGB-UTF16-H"         // Unicode中文
+                            "Identity-H",
+                            "Adobe-GB1-UCS2",
+                            "Adobe-CNS1-UCS2",
+                            "Adobe-Japan1-UCS2",
+                            "Adobe-Korea1-UCS2",
+                            "GBK-EUC-H",
+                            "UniGB-UTF16-H"
                         )
 
                         for (cmapFile in keyCMaps) {
@@ -303,8 +197,7 @@ class HApplication : Application() {
 
             LogUtils.d( "✅ PDFBox CMap 资源初始化完成")
         } catch (e: Exception) {
-            LogUtils.e( "❌ 初始化 CMap 资源失败: ${e.message}")
-            e.printStackTrace()
+            LogUtils.e( "❌ 初始化 CMap 资源失败: ${e.message}", e)
         }
     }
 

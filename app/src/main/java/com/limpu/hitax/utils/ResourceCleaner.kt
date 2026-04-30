@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import java.io.Closeable
 import java.io.File
+import com.limpu.hitax.utils.LogUtils
 
 /**
  * 资源清理工具类
@@ -31,7 +32,7 @@ object ResourceCleaner {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Failed to clean old cache files", e)
         }
 
         return cleanedCount
@@ -55,7 +56,7 @@ object ResourceCleaner {
             }
             true
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Failed to clean directory: ${directory?.absolutePath}", e)
             false
         }
     }
@@ -83,7 +84,7 @@ object ResourceCleaner {
         return try {
             file.delete()
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Failed to delete file: ${file?.absolutePath}", e)
             false
         }
     }
@@ -106,7 +107,7 @@ object ResourceCleaner {
                 false
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Failed to clean URI temp file: $uri", e)
             false
         }
     }
@@ -137,7 +138,7 @@ object ResourceCleaner {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Failed to calculate directory size: ${directory.absolutePath}", e)
         }
         return size
     }

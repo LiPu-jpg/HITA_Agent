@@ -2,12 +2,13 @@ package com.limpu.hitax.data.repository
 
 import android.app.Application
 import androidx.lifecycle.LiveData
+import javax.inject.Inject
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.source.web.StaticWebSource
 import com.limpu.hitax.data.source.web.additional.AdditionalWebSource
 import com.limpu.hitax.data.source.web.service.AdditionalService
 
-class AdditionalRepository @Suppress("UNUSED_PARAMETER") internal constructor(application: Application) {
+class AdditionalRepository @Inject constructor(application: Application) {
     private val additionalWebSource:AdditionalService = AdditionalWebSource()
 
     fun getLectures(pageSize:Int,pageOffset:Int): LiveData<DataState<List<Map<String,String>>>> {
@@ -19,14 +20,4 @@ class AdditionalRepository @Suppress("UNUSED_PARAMETER") internal constructor(ap
     }
 
 
-    companion object {
-        @Volatile
-        private var instance: AdditionalRepository? = null
-        fun getInstance(application: Application): AdditionalRepository {
-            synchronized(AdditionalRepository::class.java) {
-                if (instance == null) instance = AdditionalRepository(application)
-                return instance!!
-            }
-        }
-    }
 }

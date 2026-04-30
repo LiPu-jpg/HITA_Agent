@@ -89,7 +89,7 @@ internal class ListRemoteViewsFactory(val mContext: Context, intent: Intent) :
 
     override fun onDataSetChanged() {
         val timetableRepo =
-            TimetableRepository.getInstance(mContext.applicationContext as Application)
+            TimetableRepository(mContext.applicationContext as Application)
         // 确保数据库操作在后台线程执行
         val events = runBlocking(Dispatchers.IO) {
             timetableRepo.getTodayEventsSync()

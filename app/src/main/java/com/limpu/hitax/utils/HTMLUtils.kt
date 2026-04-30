@@ -3,6 +3,7 @@ package com.limpu.hitax.utils
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.select.Elements
+import com.limpu.hitax.utils.LogUtils
 
 object HTMLUtils {
     fun getStringValueByClass(d: Element, className: String?): String {
@@ -62,7 +63,7 @@ object HTMLUtils {
         return try {
             d.getElementsByClass(name).first()?.getElementsByTag(tagName) ?: Elements()
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Failed to get elements by class and tag: className=$className, tag=$tag", e)
             Elements()
         }
     }

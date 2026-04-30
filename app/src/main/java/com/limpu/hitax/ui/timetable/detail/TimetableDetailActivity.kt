@@ -1,41 +1,45 @@
 package com.limpu.hitax.ui.timetable.detail
 
+import android.content.Intent
 import android.os.Bundle
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.appbar.AppBarLayout
 import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.timetable.TermSubject
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.databinding.ActivityTimetableDetailBinding
-import com.limpu.style.base.BaseActivity
-import com.limpu.style.base.BaseListAdapter
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.ui.eas.imp.TimetableStructureListAdapter
+import com.limpu.hitax.ui.event.add.PopupAddEvent
 import com.limpu.hitax.ui.widgets.PopUpCalendarPicker
 import com.limpu.hitax.ui.widgets.PopUpTimePeriodPicker
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.EditModeHelper
-import com.limpu.hitax.utils.TextTools
-import com.limpu.style.widgets.PopUpText
-import java.util.*
-import kotlin.Comparator
-import android.content.Intent
-import android.view.HapticFeedbackConstants
-import com.google.android.material.appbar.AppBarLayout
-import com.limpu.hitax.ui.event.add.PopupAddEvent
-import com.limpu.style.widgets.PopUpColorPicker
 import com.limpu.hitax.utils.FileProviderUtils
 import com.limpu.hitax.utils.ImageUtils
 import com.limpu.hitax.utils.ShareUtils
+import com.limpu.hitax.utils.TextTools
+import com.limpu.style.base.BaseListAdapter
+import com.limpu.style.widgets.PopUpColorPicker
 import com.limpu.style.widgets.PopUpEditText
+import com.limpu.style.widgets.PopUpText
+import dagger.hilt.android.AndroidEntryPoint
 import java.io.File
+import java.util.*
+import kotlin.Comparator
 
 
+@AndroidEntryPoint
 class TimetableDetailActivity :
-    BaseActivity<TimetableDetailViewModel, ActivityTimetableDetailBinding>() {
+    HiltBaseActivity<ActivityTimetableDetailBinding>() {
 
+    protected val viewModel: TimetableDetailViewModel by viewModels()
     private var subjectsAdapter: SubjectsListAdapter? = null
     private var teachersListAdapter: TeachersListAdapter? = null
     private lateinit var scheduleStructureAdapter: TimetableStructureListAdapter
@@ -316,9 +320,5 @@ class TimetableDetailActivity :
 
     override fun initViewBinding(): ActivityTimetableDetailBinding {
         return ActivityTimetableDetailBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<TimetableDetailViewModel> {
-        return TimetableDetailViewModel::class.java
     }
 }

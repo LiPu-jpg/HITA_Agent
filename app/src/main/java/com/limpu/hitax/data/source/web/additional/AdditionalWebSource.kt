@@ -5,6 +5,7 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.source.web.service.AdditionalService
+import com.limpu.hitax.utils.LogUtils
 import org.jsoup.Jsoup
 import java.text.SimpleDateFormat
 import java.util.*
@@ -60,7 +61,7 @@ class AdditionalWebSource : AdditionalService {
                         c.set(Calendar.DAY_OF_MONTH, day)
                         "!" + c.timeInMillis.toString()
                     } catch (e: Exception) {
-                        e.printStackTrace()
+                        LogUtils.e("Failed to parse lecture release date", e)
                         "#$date"
                     }
                     lecture["title"] = title
@@ -93,7 +94,7 @@ class AdditionalWebSource : AdditionalService {
                 m["time"] = time
                 ret.postValue(DataState(m))
             } catch (e: Exception) {
-                e.printStackTrace()
+                LogUtils.e("Failed to parse news metadata", e)
                 ret.postValue(DataState(DataState.STATE.FETCH_FAILED))
             }
 

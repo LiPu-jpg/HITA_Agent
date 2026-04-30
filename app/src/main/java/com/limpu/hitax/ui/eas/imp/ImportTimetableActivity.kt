@@ -15,8 +15,10 @@ import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.databinding.ActivityEasImportBinding
+import androidx.activity.viewModels
 import com.limpu.hitax.ui.eas.EASActivity
 import com.limpu.hitax.ui.widgets.PopUpCalendarPicker
+import dagger.hilt.android.AndroidEntryPoint
 import com.limpu.hitax.ui.widgets.PopUpTimePeriodPicker
 import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.hitax.utils.ActivityUtils
@@ -27,8 +29,11 @@ import com.limpu.hitax.utils.TextTools
 import com.limpu.style.base.BaseListAdapter
 import com.limpu.style.widgets.PopUpCheckableList
 
+@AndroidEntryPoint
 class ImportTimetableActivity :
     EASActivity<ImportTimetableViewModel, ActivityEasImportBinding>() {
+
+    override val viewModel: ImportTimetableViewModel by viewModels()
 
     override fun shouldRefreshOnStart(): Boolean = false
 
@@ -73,7 +78,7 @@ class ImportTimetableActivity :
                 (binding.buttonImport.width / 2) * (1 - binding.buttonImport.scaleX)
         })
         binding.cardName.isEnabled = false
-        val token = EASRepository.getInstance(application).getEasToken()
+        val token = easRepository.getEasToken()
         val isUndergrad = token.stutype == EASToken.TYPE.UNDERGRAD
         binding.stutype.isChecked = isUndergrad
         viewModel.changeIsUndergraduate(isUndergrad)
@@ -122,7 +127,7 @@ class ImportTimetableActivity :
         }
 
         refreshLocalUiOnly()
-        if (EASRepository.getInstance(application).getEasToken().isLogin()) {
+        if (easRepository.getEasToken().isLogin()) {
             refresh()
         }
         if (autoImportPending) {
@@ -144,7 +149,7 @@ class ImportTimetableActivity :
     }
 
     override fun onLoginCheckSuccess(retry: Boolean) {
-        val token = EASRepository.getInstance(application).getEasToken()
+        val token = easRepository.getEasToken()
         binding.stutype.isChecked = (token.stutype == EASToken.TYPE.UNDERGRAD)
         viewModel.changeIsUndergraduate(binding.stutype.isChecked)
         refresh()
@@ -164,12 +169,13 @@ class ImportTimetableActivity :
     }
 
     private fun ensureLoggedInForImport(onSuccess: () -> Unit) {
-        if (EASRepository.getInstance(application).getEasToken().isLogin()) {
+        if (easRepository.getEasToken().isLogin()) {
             onSuccess()
             return
         }
         ActivityUtils.showEasVerifyWindow<android.app.Activity>(
             from = this,
+            easRepository = easRepository,
             directTo = null,
             onResponseListener = object : com.limpu.hitax.ui.eas.login.PopUpLoginEAS.OnResponseListener {
                 override fun onSuccess(window: com.limpu.hitax.ui.eas.login.PopUpLoginEAS) {
@@ -405,9 +411,5 @@ class ImportTimetableActivity :
 
     override fun initViewBinding(): ActivityEasImportBinding {
         return ActivityEasImportBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<ImportTimetableViewModel> {
-        return ImportTimetableViewModel::class.java
     }
 }

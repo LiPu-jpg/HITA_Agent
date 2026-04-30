@@ -1,18 +1,21 @@
 package com.limpu.hitax.ui.resource
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.resource.CourseResourceItem
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.HoaRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class CourseResourceSearchViewModel(application: Application) : AndroidViewModel(application) {
-    private val repository = HoaRepository.getInstance()
-    private val easRepository = EASRepository.getInstance(application)
+@HiltViewModel
+class CourseResourceSearchViewModel @Inject constructor(
+    private val repository: HoaRepository,
+    private val easRepository: EASRepository
+) : ViewModel() {
     private val hoaCampus = easRepository.getHoaCampus()
     private val queryLiveData = MutableLiveData<String>()
 

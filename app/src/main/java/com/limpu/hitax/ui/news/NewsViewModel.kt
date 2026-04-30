@@ -1,14 +1,17 @@
 package com.limpu.hitax.ui.news
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.StringTrigger
 import com.limpu.hitax.data.repository.AdditionalRepository
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class NewsViewModel(application: Application) : AndroidViewModel(application) {
-    val addRepo = AdditionalRepository.getInstance(application)
+@HiltViewModel
+class NewsViewModel @Inject constructor(
+    private val addRepo: AdditionalRepository
+) : ViewModel() {
 
     val refreshController = MutableLiveData<StringTrigger>()
     val metaData =  refreshController.switchMap {

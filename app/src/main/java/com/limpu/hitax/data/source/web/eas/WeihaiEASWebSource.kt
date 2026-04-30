@@ -84,8 +84,8 @@ class WeihaiEASWebSource : EASService {
                     result.postValue(DataState(DataState.STATE.FETCH_FAILED, "登录验证失败 HTTP ${response.statusCode()}"))
                 }
             } catch (e: Exception) {
-                LogUtils.e( "❌ Weihai login EXCEPTION: ${e.javaClass.simpleName} ${e.message}")
-                e.printStackTrace()
+                LogUtils.e("❌ Weihai login EXCEPTION: ${e.javaClass.simpleName} ${e.message}")
+                LogUtils.e("Failed to login to Weihai EAS", e)
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "登录失败"))
             }
         }

@@ -112,7 +112,7 @@ object HoaResourceSource {
                     }
 
                     // DEBUG: Log the raw object
-                    android.util.Log.d("HoaResourceSource", "Search result item: ${obj.toString()}")
+                    LogUtils.d("Search result item: ${obj.toString()}")
 
                     items.add(
                         CourseResourceItem(
@@ -220,14 +220,14 @@ object HoaResourceSource {
                 val resultData = data?.optJSONObject("result") ?: JSONObject()
                 
                 // DEBUG: Log the raw response structure
-                android.util.Log.d("HoaResourceSource", "Course read response: ${resObj.toString(2)}")
-                android.util.Log.d("HoaResourceSource", "Result data: ${resultData.toString(2)}")
+                LogUtils.d("Course read response: ${resObj.toString(2)}")
+                LogUtils.d("Result data: ${resultData.toString(2)}")
                 
                 val readmeMd = resultData.optString("readme_md", "")
                 val tomlMeta = parseTomlMeta(readmeMd)
                 
-                android.util.Log.d("HoaResourceSource", "readme_md length: ${readmeMd.length}, contains TOML-COURSE: ${readmeMd.contains("TOML-COURSE:")}")
-                android.util.Log.d("HoaResourceSource", "readme_md first 500 chars: ${readmeMd.take(500)}")
+                LogUtils.d("readme_md length: ${readmeMd.length}, contains TOML-COURSE: ${readmeMd.contains("TOML-COURSE:")}")
+                LogUtils.d("readme_md first 500 chars: ${readmeMd.take(500)}")
                 
                 val summary = resultData.optJSONObject("summary") ?: JSONObject()
                 val meta = summary.optJSONObject("meta") ?: JSONObject()
@@ -282,9 +282,9 @@ object HoaResourceSource {
                     }
                 }
                 if (courses.isEmpty() && readmeMd.contains("TOML-COURSE:")) {
-                    android.util.Log.d("HoaResourceSource", "Parsing TOML courses from readme")
+                    LogUtils.d("Parsing TOML courses from readme")
                     courses = parseTomlCourses(readmeMd)
-                    android.util.Log.d("HoaResourceSource", "Parsed ${courses.size} courses from TOML")
+                    LogUtils.d("Parsed ${courses.size} courses from TOML")
                 }
                 val teachers = jsonArrayToTeacherList(summary.optJSONArray("teachers"))
                 val resolvedRepoType = tomlMeta["repo_type"] ?: meta.optString("repo_type").ifBlank {
@@ -292,8 +292,8 @@ object HoaResourceSource {
                 }
                 
                 // DEBUG: Log repo type detection
-                android.util.Log.d("HoaResourceSource", "Detected repo_type: $resolvedRepoType, courses count: ${courses.size}, meta.repo_type: ${meta.optString("repo_type")}, tomlMeta: $tomlMeta")
-                android.util.Log.d("HoaResourceSource", "Courses parsed: ${courses.map { it.name to it.teachers }}")
+                LogUtils.d("Detected repo_type: $resolvedRepoType, courses count: ${courses.size}, meta.repo_type: ${meta.optString("repo_type")}, tomlMeta: $tomlMeta")
+                LogUtils.d("Courses parsed: ${courses.map { it.name to it.teachers }}")
                 
                 result.postValue(
                     DataState(
@@ -468,12 +468,12 @@ object HoaResourceSource {
     private fun parseTomlCourses(readmeMd: String): MutableList<CourseSummary> {
         val courses = mutableListOf<CourseSummary>()
         val regex = """<!--\s*TOML-COURSE:\s*([^>]+)\s*-->""".toRegex()
-        android.util.Log.d("HoaResourceSource", "TOML regex pattern: $regex")
+        LogUtils.d("TOML regex pattern: $regex")
         val matches = regex.findAll(readmeMd)
         val matchList = matches.toList()
-        android.util.Log.d("HoaResourceSource", "Found ${matchList.size} TOML-COURSE matches")
+        LogUtils.d("Found ${matchList.size} TOML-COURSE matches")
         for (match in matchList) {
-            android.util.Log.d("HoaResourceSource", "Match: ${match.value}, group1: ${match.groupValues[1]}")
+            LogUtils.d("Match: ${match.value}, group1: ${match.groupValues[1]}")
             val content = match.groupValues[1]
             var code = ""
             var name = ""
@@ -492,7 +492,7 @@ object HoaResourceSource {
                 name = nameMatch.groupValues[1]
             }
             
-            android.util.Log.d("HoaResourceSource", "Parsed: code=$code, name=$name")
+            LogUtils.d("Parsed: code=$code, name=$name")
             if (name.isNotBlank()) {
                 val teachers = extractTeachersForCourse(readmeMd, name)
                 courses.add(CourseSummary(name = name, code = code, teachers = teachers))

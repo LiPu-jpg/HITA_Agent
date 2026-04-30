@@ -8,12 +8,12 @@ import android.net.Uri
 import android.view.View
 import android.widget.ImageView
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityOptionsCompat
-import com.limpu.hita.theta.ThetaActivity
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.ui.eas.login.PopUpLoginEAS
 import com.limpu.hitax.ui.myprofile.MyProfileActivity
 import com.limpu.hitax.ui.eas.imp.ImportTimetableActivity
@@ -28,9 +28,9 @@ import com.limpu.hitax.ui.subject.SubjectActivity
 import com.limpu.hitax.ui.teacher.ActivityTeacherOfficial
 import com.limpu.hitax.ui.timetable.detail.TimetableDetailActivity
 import com.limpu.hitax.ui.timetable.manager.TimetableManagerActivity
-import com.limpu.stupiduser.data.model.CheckUpdateResult
-import com.limpu.stupiduser.data.repository.LocalUserRepository
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitauser.data.model.CheckUpdateResult
+import com.limpu.hitauser.data.repository.LocalUserRepository
+import androidx.appcompat.app.AppCompatActivity
 import com.limpu.style.widgets.PopUpText
 import com.limpu.style.widgets.PopUpUpdate
 import java.net.URLEncoder
@@ -48,7 +48,7 @@ object ActivityUtils {
     }
 
 
-    enum class SearchType { TEACHER, CLASS,ARTICLE,USER }
+    enum class SearchType { TEACHER }
 
     enum class CourseResourceMode { VIEW, SUBMIT }
 
@@ -83,10 +83,11 @@ object ActivityUtils {
         from.startActivity(i)
     }
 
-    fun startWelcomeActivity(from: Context) {
-        if (from is BaseActivity<*, *>) {
+    fun startWelcomeActivity(from: Context, easRepository: EASRepository) {
+        if (from is AppCompatActivity) {
             showEasVerifyWindow<Activity>(
                 from = from,
+                easRepository = easRepository,
                 directTo = null,
                 onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                     override fun onSuccess(window: PopUpLoginEAS) {
@@ -109,28 +110,31 @@ object ActivityUtils {
      */
     fun <T : Activity> showEasVerifyWindow(
         from: Context,
+        easRepository: EASRepository,
         directTo: Class<T>? = null,
         lock: Boolean = false,
         autoLaunchWebLogin: Boolean = false,
         preferredCampus: EASToken.Campus? = null,
         onResponseListener: PopUpLoginEAS.OnResponseListener
     ) {
-        if (from is BaseActivity<*, *>) {
-            if (EASRepository.getInstance((from as AppCompatActivity).application).getEasToken()
-                    .isLogin()
-            ) {
+        LogUtils.d("showEasVerifyWindow called, from is AppCompatActivity=${from is AppCompatActivity}")
+        if (from is AppCompatActivity) {
+            if (easRepository.getEasToken().isLogin()) {
                 directTo?.let {
                     val i = Intent(from, directTo)
                     from.startActivity(i)
                     return
                 }
             }
+            LogUtils.d("Creating PopUpLoginEAS and showing")
             val window = PopUpLoginEAS()
             window.lock = lock
             window.autoLaunchWebLogin = autoLaunchWebLogin
             window.preferredCampus = preferredCampus
             window.onResponseListener = onResponseListener
             window.show(from.supportFragmentManager, "verify")
+        } else {
+            LogUtils.e("showEasVerifyWindow failed: from is not AppCompatActivity, actual type=${from.javaClass.name}")
         }
     }
 
@@ -216,16 +220,6 @@ object ActivityUtils {
         from.startActivity(i)
     }
 
-    fun startThetaActivity(from: Context) {
-        if(LocalUserRepository.getInstance(from).getLoggedInUser().isValid()){
-            val i = Intent(from, ThetaActivity::class.java)
-            from.startActivity(i)
-        }else{
-            Toast.makeText(from, R.string.eas_login_prompt, Toast.LENGTH_SHORT).show()
-        }
-
-    }
-
     fun startProfileActivity(from: Context, userId: String?, imageView: ImageView?=null) {
         val i = Intent(from, ProfileActivity::class.java)
         i.putExtra("id", userId)
@@ -237,7 +231,7 @@ object ActivityUtils {
         }
     }
 
-    fun showUpdateNotificationForce(cr:CheckUpdateResult,activity: BaseActivity<*,*>){
+    fun showUpdateNotificationForce(cr:CheckUpdateResult,activity: AppCompatActivity){
         PopUpText().setText("版本：${cr.latestVersionName}\n更新内容：${cr.updateLog}\n" + "是否前往下载？")
             .setTitle(R.string.new_version_available)
             .setOnConfirmListener(object : PopUpText.OnConfirmListener {
@@ -251,7 +245,7 @@ object ActivityUtils {
     }
 
 
-    fun showUpdateNotification(cr:CheckUpdateResult,activity: BaseActivity<*,*>){
+    fun showUpdateNotification(cr:CheckUpdateResult,activity: AppCompatActivity){
        val preference: SharedPreferences =
             activity.application.getSharedPreferences("update_skip", Context.MODE_PRIVATE)
         if(preference.getBoolean(cr.latestVersionCode.toString(),false)) return

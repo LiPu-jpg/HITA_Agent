@@ -64,7 +64,7 @@
             android:layout_height="match_parent"
             android:layout_marginTop="2dp"
             android:orientation="horizontal"
-            android:visibility="gone">
+            android:visibility="visible">
 
             <ImageView
                 android:id="@+id/loc_ic"

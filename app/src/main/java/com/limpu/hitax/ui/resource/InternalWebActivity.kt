@@ -5,11 +5,14 @@ import android.os.Bundle
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebViewClient
+import androidx.activity.viewModels
 import com.limpu.hitax.databinding.ActivityInternalWebBinding
-import com.limpu.style.base.BaseActivity
+import com.limpu.hitax.ui.base.HiltBaseActivity
+import dagger.hilt.android.AndroidEntryPoint
 
-class InternalWebActivity : BaseActivity<InternalWebViewModel, ActivityInternalWebBinding>() {
-    override fun getViewModelClass(): Class<InternalWebViewModel> = InternalWebViewModel::class.java
+@AndroidEntryPoint
+class InternalWebActivity : HiltBaseActivity<ActivityInternalWebBinding>() {
+    protected val viewModel: InternalWebViewModel by viewModels()
 
     override fun initViewBinding(): ActivityInternalWebBinding =
         ActivityInternalWebBinding.inflate(layoutInflater)

@@ -1,14 +1,12 @@
 package com.limpu.hitax.ui.search
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.switchMap
 import com.limpu.component.data.DataState
 
-abstract class BaseSearchResultViewModel<T>(application: Application) :
-    AndroidViewModel(application) {
+abstract class BaseSearchResultViewModel<T> : ViewModel() {
 
 
     private val searchTriggerLiveData: MutableLiveData<SearchTrigger> = MutableLiveData()

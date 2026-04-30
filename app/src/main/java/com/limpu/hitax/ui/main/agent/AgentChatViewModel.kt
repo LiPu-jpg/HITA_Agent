@@ -2,9 +2,10 @@ package com.limpu.hitax.ui.main.agent
 
 import android.app.Application
 import android.net.Uri
-import androidx.lifecycle.AndroidViewModel
+import android.os.Looper
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.limpu.hitax.agent.core.AgentProvider
 import com.limpu.hitax.agent.core.AgentTraceEvent
@@ -17,8 +18,10 @@ import com.limpu.hitax.agent.timetable.TimetableAgentOutput
 import com.limpu.hitax.data.AppDatabase
 import com.limpu.hitax.data.model.chat.ChatMessageEntity
 import com.limpu.hitax.data.model.chat.ChatSession
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
 import java.util.concurrent.Executors
+import javax.inject.Inject
 
 internal fun nextSessionIdAfterDeletion(
     deletedSessionId: String,
@@ -28,7 +31,10 @@ internal fun nextSessionIdAfterDeletion(
     return if (deletedSessionId == currentSessionId) remainingLatestSessionId else currentSessionId
 }
 
-class AgentChatViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class AgentChatViewModel @Inject constructor(
+    private val application: Application,
+) : ViewModel() {
 
     private val db = AppDatabase.getDatabase(application)
     private val sessionDao = db.chatSessionDao()
@@ -60,10 +66,34 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
 
     private var placeholderMessage: AgentChatMessage? = null
 
+    private fun publishMessages() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            _messages.value = messageList
+        } else {
+            _messages.postValue(messageList)
+        }
+    }
+
+    private fun publishStatus(text: String) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            _status.value = text
+        } else {
+            _status.postValue(text)
+        }
+    }
+
+    private fun publishLoading(loading: Boolean) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            _isLoading.value = loading
+        } else {
+            _isLoading.postValue(loading)
+        }
+    }
+
     fun addMessage(message: AgentChatMessage) {
         synchronized(this) {
             messageList = messageList + message
-            _messages.postValue(messageList)
+            publishMessages()
         }
         val sid = currentSessionId ?: return
         ioExecutor.execute {
@@ -79,27 +109,31 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun updateOrCreatePlaceholder(text: String) {
+    fun updateOrCreatePlaceholder(text: String, thinking: String? = null) {
         synchronized(this) {
             val existing = placeholderMessage
             if (existing != null) {
                 val idx = messageList.indexOf(existing)
                 if (idx >= 0) {
-                    val updated = existing.copy(text = text)
+                    val updated = existing.copy(
+                        text = text,
+                        thinking = thinking ?: existing.thinking,
+                    )
                     messageList = messageList.toMutableList().apply { set(idx, updated) }
                     placeholderMessage = updated
-                    _messages.postValue(messageList)
+                    publishMessages()
                     return
                 }
             }
             val newPlaceholder = AgentChatMessage(
                 role = AgentChatMessage.Role.ASSISTANT,
                 text = text,
+                thinking = thinking,
                 isPlaceholder = true,
             )
             placeholderMessage = newPlaceholder
             messageList = messageList + newPlaceholder
-            _messages.postValue(messageList)
+            publishMessages()
         }
     }
 
@@ -113,7 +147,7 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
                 messageList = messageList + finalMessage
             }
             placeholderMessage = null
-            _messages.postValue(messageList)
+            publishMessages()
         }
         val sid = currentSessionId ?: return
         ioExecutor.execute {
@@ -136,11 +170,11 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun setStatus(text: String) {
-        _status.postValue(text)
+        publishStatus(text)
     }
 
     fun setLoading(loading: Boolean) {
-        _isLoading.postValue(loading)
+        publishLoading(loading)
     }
 
     fun setPendingAttachment(uri: Uri?) {
@@ -156,8 +190,8 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
         currentSessionId = session.id
         chatHistory.clear()
         messageList = emptyList()
-        _messages.postValue(emptyList())
-        _status.postValue("")
+        publishMessages()
+        publishStatus("")
         ioExecutor.execute { sessionDao.save(session) }
     }
 
@@ -234,7 +268,7 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
             LlmChatService.chat(
                 history = synchronized(this) { chatHistory.toList() },
                 timetableId = null,
-                application = getApplication(),
+                application = application,
                 agentProvider = agentProvider,
                 onTrace = { trace ->
                     val statusText = when (trace.stage) {
@@ -258,7 +292,12 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
                         }
                         else -> "正在处理…"
                     }
-                    updateOrCreatePlaceholder(statusText)
+                    val currentThinking = if (trace.stage == "react_step") {
+                        trace.payload.ifBlank { trace.message }
+                    } else {
+                        null
+                    }
+                    updateOrCreatePlaceholder(statusText, currentThinking)
                 },
                 onResult = { result ->
                     when (result) {
@@ -310,7 +349,7 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
                 attachmentBase64 = base64Content,
                 attachmentMimeType = mimeType,
                 timetableId = null,
-                application = getApplication(),
+                application = application,
                 agentProvider = agentProvider,
                 onTrace = { trace: AgentTraceEvent ->
                     val statusText = when (trace.stage) {
@@ -330,7 +369,12 @@ class AgentChatViewModel(application: Application) : AndroidViewModel(applicatio
                         }
                         else -> "正在处理…"
                     }
-                    updateOrCreatePlaceholder(statusText)
+                    val currentThinking = if (trace.stage == "react_step") {
+                        trace.payload.ifBlank { trace.message }
+                    } else {
+                        null
+                    }
+                    updateOrCreatePlaceholder(statusText, currentThinking)
                 },
                 onResult = { result: LlmChatResult ->
                     when (result) {

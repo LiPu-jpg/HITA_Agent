@@ -40,7 +40,7 @@ object AgentChatFileParser {
 
             try {
                 // 1. 使用新的文件解析调度器
-                val dispatcher = FileParserDispatcher.getInstance()
+                val dispatcher = FileParserDispatcher()
                 val parseResult = dispatcher.parse(context, uri, fileName)
 
                 when (parseResult) {

@@ -26,20 +26,7 @@ import kotlinx.coroutines.withContext
  * }
  * ```
  */
-class FileParserDispatcher private constructor() {
-
-    companion object {
-        private const val TAG = "FileParserDispatcher"
-
-        @Volatile
-        private var instance: FileParserDispatcher? = null
-
-        fun getInstance(): FileParserDispatcher {
-            return instance ?: synchronized(this) {
-                instance ?: FileParserDispatcher().also { instance = it }
-            }
-        }
-    }
+class FileParserDispatcher constructor() {
 
     /**
      * 注册的解析器列表

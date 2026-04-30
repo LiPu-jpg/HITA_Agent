@@ -1,7 +1,5 @@
-include ':app',':user','component','style'
+include ':app',':hitauser','component','style'
 rootProject.name = "HITA"
-include ':sync'
-include ':theta'
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {

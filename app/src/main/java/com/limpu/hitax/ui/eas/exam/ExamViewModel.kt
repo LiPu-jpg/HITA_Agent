@@ -1,6 +1,6 @@
 package com.limpu.hitax.ui.eas.exam
 
-import android.app.Application
+import android.content.Context
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.switchMap
@@ -12,13 +12,19 @@ import com.limpu.hitax.data.model.eas.TermItem
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.source.local.ExamMemoStore
 import com.limpu.hitax.ui.eas.EASViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 
-class ExamViewModel(application: Application) : EASViewModel(application){
+@HiltViewModel
+class ExamViewModel @Inject constructor(
+    easRepo: EASRepository,
+    @ApplicationContext private val context: Context
+) : EASViewModel(easRepo) {
     /**
      * 仓库区
      */
-    private val easRepository = EASRepository.getInstance(application)
-    private val memoStore = ExamMemoStore(application)
+    private val memoStore = ExamMemoStore(context.applicationContext as android.app.Application)
 
     /**
      * LiveData区
@@ -26,7 +32,7 @@ class ExamViewModel(application: Application) : EASViewModel(application){
     private val pageController = MutableLiveData<Trigger>()
 
     val termsLiveData: LiveData<DataState<List<TermItem>>> = pageController.switchMap {
-        return@switchMap easRepository.getAllTerms()
+        return@switchMap easRepo.getAllTerms()
     }
 
     val selectedTermLiveData: MutableLiveData<TermItem> = MutableLiveData()

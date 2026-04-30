@@ -15,14 +15,21 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.limpu.hitax.data.model.eas.EASToken
+import androidx.activity.viewModels
 import com.limpu.hitax.databinding.ActivityWebviewLoginBinding
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.utils.LogUtils
-import com.limpu.style.base.BaseActivity
+import dagger.hilt.android.AndroidEntryPoint
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 import org.json.JSONObject
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
-class WebViewLoginActivity : BaseActivity<WebViewLoginViewModel, ActivityWebviewLoginBinding>() {
+@AndroidEntryPoint
+class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
+
+    protected val viewModel: WebViewLoginViewModel by viewModels()
 
     companion object {
         const val EXTRA_SILENT_MODE = "silent_mode"
@@ -76,8 +83,6 @@ class WebViewLoginActivity : BaseActivity<WebViewLoginViewModel, ActivityWebview
     private var autoOpeningJwts = false
     private var silentMode = false
     private lateinit var config: CampusWebConfig
-
-    override fun getViewModelClass(): Class<WebViewLoginViewModel> = WebViewLoginViewModel::class.java
 
     override fun initViewBinding(): ActivityWebviewLoginBinding =
         ActivityWebviewLoginBinding.inflate(layoutInflater)
@@ -610,4 +615,5 @@ class WebViewLoginActivity : BaseActivity<WebViewLoginViewModel, ActivityWebview
     }
 }
 
-class WebViewLoginViewModel : androidx.lifecycle.ViewModel()
+@HiltViewModel
+class WebViewLoginViewModel @Inject constructor() : androidx.lifecycle.ViewModel()

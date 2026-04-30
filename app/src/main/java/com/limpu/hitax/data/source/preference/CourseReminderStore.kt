@@ -6,6 +6,11 @@ import android.content.SharedPreferences
 /**
  * 课程提醒设置存储
  */
+private const val SP_NAME = "course_reminder"
+private const val KEY_ENABLED = "enabled"
+private const val KEY_MINUTES = "minutes"
+private const val DEFAULT_MINUTES = 10
+
 class CourseReminderStore(private val context: Context) {
     private val preference: SharedPreferences
         get() = context.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
@@ -36,23 +41,5 @@ class CourseReminderStore(private val context: Context) {
      */
     fun setReminderMinutes(minutes: Int) {
         preference.edit().putInt(KEY_MINUTES, minutes).apply()
-    }
-
-    companion object {
-        private const val SP_NAME = "course_reminder"
-        private const val KEY_ENABLED = "enabled"
-        private const val KEY_MINUTES = "minutes"
-        private const val DEFAULT_MINUTES = 10
-
-        @Volatile
-        private var instance: CourseReminderStore? = null
-
-        fun getInstance(context: Context): CourseReminderStore {
-            return instance ?: synchronized(this) {
-                instance ?: CourseReminderStore(context.applicationContext).also {
-                    instance = it
-                }
-            }
-        }
     }
 }

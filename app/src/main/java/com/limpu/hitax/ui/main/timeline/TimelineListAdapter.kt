@@ -22,6 +22,7 @@ import com.limpu.style.base.BaseListAdapterClassic
 import com.limpu.hitax.utils.MaterialCircleAnimator
 import com.limpu.hitax.utils.TextTools
 import com.limpu.hitax.utils.TimeTools
+import com.limpu.hitax.utils.LogUtils
 import net.cachapa.expandablelayout.ExpandableLayout
 import java.util.*
 
@@ -181,7 +182,7 @@ class TimelineListAdapter(
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Failed to bind timeline holder at position $position", e)
         }
     }
 

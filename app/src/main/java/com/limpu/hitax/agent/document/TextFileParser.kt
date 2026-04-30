@@ -2,7 +2,7 @@ package com.limpu.hitax.agent.document
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
+import com.limpu.hitax.utils.LogUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -27,7 +27,6 @@ import java.nio.charset.Charset
 class TextFileParser : FileParser {
 
     companion object {
-        private const val TAG = "TextFileParser"
         private const val MAX_TEXT_LENGTH = 5000
         private const val BOM_UTF8 = "\uFEFF"
     }
@@ -46,7 +45,7 @@ class TextFileParser : FileParser {
     override suspend fun parse(context: Context, uri: Uri, fileName: String): ParseResult {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "开始解析文本文件: $fileName")
+                LogUtils.d("开始解析文本文件: $fileName")
 
                 // 1. 检查文件大小
                 val fileSize = getFileSize(context, uri)
@@ -59,7 +58,7 @@ class TextFileParser : FileParser {
 
                 // 2. 读取文件
                 val text = readTextFile(context, uri, fileSize)
-                Log.d(TAG, "读取文本长度: ${text.length}")
+                LogUtils.d("读取文本长度: ${text.length}")
 
                 // 3. 判断文件类型
                 val extension = fileName.substringAfterLast('.', "").lowercase()
@@ -89,7 +88,7 @@ class TextFileParser : FileParser {
                     )
                 )
             } catch (e: Exception) {
-                Log.e(TAG, "文本文件解析失败", e)
+                LogUtils.e("文本文件解析失败", e)
                 ParseResult.Error(
                     message = "文本文件解析失败: ${e.message}",
                     cause = e,
@@ -127,7 +126,7 @@ class TextFileParser : FileParser {
 
                 // 简单验证：检查是否包含大量非法字符
                 if (isValidText(text)) {
-                    Log.d(TAG, "使用编码: ${encoding.name()}")
+                    LogUtils.d("使用编码: ${encoding.name()}")
                     return text
                 }
             } catch (e: Exception) {

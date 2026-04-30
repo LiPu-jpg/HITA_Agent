@@ -1,6 +1,5 @@
 package com.limpu.hitax.ui.search.teacher
 
-import android.app.Application
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.map
 import com.limpu.component.data.DataState
@@ -8,12 +7,14 @@ import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.data.repository.HoaRepository
 import com.limpu.hitax.ui.search.BaseSearchResultViewModel
 import com.limpu.hitax.ui.search.SearchTrigger
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class SearchTeacherViewModel(application: Application) : BaseSearchResultViewModel<TeacherSearched>(
-    application
-) {
-    private val hoaRepository = HoaRepository.getInstance()
-    private val easRepository = EASRepository.getInstance(application)
+@HiltViewModel
+class SearchTeacherViewModel @Inject constructor(
+    private val hoaRepository: HoaRepository,
+    private val easRepository: EASRepository
+) : BaseSearchResultViewModel<TeacherSearched>() {
     private val hoaCampus = easRepository.getHoaCampus()
     override fun doSearch(trigger: SearchTrigger): LiveData<DataState<List<TeacherSearched>>> {
         val query = trigger.text.trim()

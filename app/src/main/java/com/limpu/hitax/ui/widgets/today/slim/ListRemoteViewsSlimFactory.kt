@@ -14,6 +14,7 @@ import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.ui.widgets.WidgetThemeUtils
 import com.limpu.hitax.ui.widgets.today.slim.TodayWidgetSlim.Companion.EVENT_EXTRA2
 import com.limpu.hitax.utils.TimeTools
+import com.limpu.hitax.R.string
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 
@@ -48,10 +49,12 @@ internal class ListRemoteViewsSlimFactory(val mContext: Context, intent: Intent)
             rv.setInt(R.id.icon, "setBackgroundResource", R.drawable.element_round_primary)
             rv.setTextColor(R.id.name, accent)
             rv.setTextColor(R.id.time, accent)
+            rv.setTextColor(R.id.location, accent)
         } else {
             rv.setInt(R.id.icon, "setBackgroundResource", R.drawable.element_round_blue)
             rv.setTextColor(R.id.name, palette.primaryTextColor)
             rv.setTextColor(R.id.time, palette.secondaryTextColor)
+            rv.setTextColor(R.id.location, palette.secondaryTextColor)
         }
 
         val lockIntent = Intent()
@@ -78,7 +81,7 @@ internal class ListRemoteViewsSlimFactory(val mContext: Context, intent: Intent)
 
     override fun onDataSetChanged() {
         val timetableRepo =
-            TimetableRepository.getInstance(mContext.applicationContext as Application)
+            TimetableRepository(mContext.applicationContext as Application)
         // 确保数据库操作在后台线程执行
         val events = runBlocking(Dispatchers.IO) {
             timetableRepo.getTodayEventsSync()

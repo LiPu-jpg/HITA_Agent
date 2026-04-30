@@ -2,6 +2,7 @@ package com.limpu.hitax.data.repository
 
 import android.app.Application
 import android.os.Handler
+import javax.inject.Inject
 import android.os.Looper
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MediatorLiveData
@@ -29,8 +30,6 @@ import com.limpu.hitax.utils.TimeTools.getDateAtWOT
 import com.limpu.hitax.utils.TermNameFormatter
 import com.limpu.hitax.utils.CourseCodeUtils
 import com.limpu.hitax.utils.CourseNameUtils
-import com.limpu.sync.StupidSync
-import com.limpu.sync.data.model.History
 import java.sql.Timestamp
 import java.util.*
 import java.util.concurrent.CountDownLatch
@@ -38,12 +37,17 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import com.limpu.hitax.utils.LogUtils
 
-class EASRepository internal constructor(application: Application) {
+class EASRepository @Inject constructor(
+    application: Application,
+    private val easPreferenceSource: EasPreferenceSource,
+    private val timetablePreferenceSource: TimetablePreferenceSource
+) {
     private val appContext = application.applicationContext
-    private val shenzhenService: EASWebSource = EASWebSource()
+    private val shenzhenService: EASWebSource = EASWebSource { token ->
+        saveEasToken(token)
+    }
     private val benbuService: EASService = BenbuEASWebSource()
     private val weihaiService: EASService = WeihaiEASWebSource()
-    private var easPreferenceSource = EasPreferenceSource.getInstance(application)
     private var eventItemDao = AppDatabase.getDatabase(application).eventItemDao()
     private var timetableDao = AppDatabase.getDatabase(application).timetableDao()
     private var subjectDao = AppDatabase.getDatabase(application).subjectDao()
@@ -113,14 +117,19 @@ class EASRepository internal constructor(application: Application) {
      */
     fun loginCheck(): LiveData<DataState<Boolean>> {
         val token = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "🔐 loginCheck: isLogin=${token.isLogin()}, campus=${token.campus}, token=${token.accessToken?.take(8)}...")
         if (!token.isLogin()) {
+            LogUtils.w("EASRepository", "⚠️ loginCheck: not logged in")
             return LiveDataUtils.getMutableLiveData(DataState(false))
         }
         return getService(token.campus).loginCheck(token).switchMap {
+            LogUtils.d("EASRepository", "🔐 loginCheck result: state=${it.state}, valid=${it.data?.first}")
             if (it.state == DataState.STATE.SUCCESS && it.data != null) {
                 if (!it.data!!.first) {
+                    LogUtils.w("EASRepository", "⚠️ loginCheck: token invalid, clearing")
                     clearEasToken()
                 } else {
+                    LogUtils.d("EASRepository", "✅ loginCheck: token valid, saving")
                     saveEasToken(it.data!!.second)
                 }
             }
@@ -133,9 +142,11 @@ class EASRepository internal constructor(application: Application) {
      */
     fun getStartDateOfTerm(term: TermItem): LiveData<DataState<Calendar>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📅 getStartDateOfTerm: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getStartDate(easToken, term)
         }
+        LogUtils.w("EASRepository", "⚠️ getStartDateOfTerm: not logged in")
         return LiveDataUtils.getMutableLiveData<DataState<Calendar>>(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -145,9 +156,11 @@ class EASRepository internal constructor(application: Application) {
      */
     fun getAllTerms(): LiveData<DataState<List<TermItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📚 getAllTerms: isLogin=${easToken.isLogin()}, campus=${easToken.campus}, token=${easToken.accessToken?.take(8)}...")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getAllTerms(easToken)
         }
+        LogUtils.w("EASRepository", "⚠️ getAllTerms: not logged in")
         return LiveDataUtils.getMutableLiveData<DataState<List<TermItem>>>(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -159,9 +172,11 @@ class EASRepository internal constructor(application: Application) {
         isUndergraduate: Boolean? = null
     ): LiveData<DataState<MutableList<TimePeriodInDay>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "🏗️ getScheduleStructure: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getScheduleStructure(term, isUndergraduate, easToken)
         }
+        LogUtils.w("EASRepository", "⚠️ getScheduleStructure: not logged in")
         return LiveDataUtils.getMutableLiveData<DataState<MutableList<TimePeriodInDay>>>(
             DataState(
                 DataState.STATE.NOT_LOGGED_IN
@@ -175,9 +190,11 @@ class EASRepository internal constructor(application: Application) {
      */
     fun getTeachingBuildings(): LiveData<DataState<List<BuildingItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "🏢 getTeachingBuildings: isLogin=${easToken.isLogin()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getTeachingBuildings(easToken)
         }
+        LogUtils.w("EASRepository", "⚠️ getTeachingBuildings: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
 
     }
@@ -191,6 +208,7 @@ class EASRepository internal constructor(application: Application) {
         week: Int
     ): LiveData<DataState<List<ClassroomItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "🏫 queryEmptyClassroom: isLogin=${easToken.isLogin()}, term=${term.getCode()}, building=${buildingItem.name}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).queryEmptyClassroom(
                 easToken,
@@ -199,6 +217,7 @@ class EASRepository internal constructor(application: Application) {
                 listOf(week.toString())
             )
         }
+        LogUtils.w("EASRepository", "⚠️ queryEmptyClassroom: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -210,9 +229,11 @@ class EASRepository internal constructor(application: Application) {
         testType: EASService.TestType
     ): LiveData<DataState<List<CourseScoreItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📊 getPersonalScores: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getPersonalScores(term, easToken, testType)
         }
+        LogUtils.w("EASRepository", "⚠️ getPersonalScores: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -221,6 +242,7 @@ class EASRepository internal constructor(application: Application) {
         testType: EASService.TestType
     ): LiveData<DataState<ScoreQueryResult>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📊 getPersonalScoresWithSummary: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (!easToken.isLogin()) {
             return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
         }
@@ -244,9 +266,11 @@ class EASRepository internal constructor(application: Application) {
      */
     fun getExamInfo(): LiveData<DataState<List<ExamItem>>> {
         val easToken = easPreferenceSource.getEasToken()
+        LogUtils.d("EASRepository", "📝 getExamInfo: isLogin=${easToken.isLogin()}, campus=${easToken.campus}, token=${easToken.accessToken?.take(8)}...")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getExamItems(easToken)
         }
+        LogUtils.w("EASRepository", "⚠️ getExamInfo: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -265,9 +289,7 @@ class EASRepository internal constructor(application: Application) {
         startDate.firstDayOfWeek = Calendar.MONDAY
         startDate.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d(
-            "startImportTimetableOfTerm term=${term.getCode()} campus=${easToken.campus} start=${startDate.time} scheduleSize=${schedule.size} loggedIn=${easToken.isLogin()}"
-        )
+        LogUtils.d("EASRepository", "📥 startImportTimetableOfTerm: term=${term.getCode()}, campus=${easToken.campus}, isLogin=${easToken.isLogin()}, token=${easToken.accessToken?.take(8)}...")
         if (easToken.isLogin()) {
             val finished = AtomicBoolean(false)
             val timeoutHandler = Handler(Looper.getMainLooper())
@@ -312,16 +334,8 @@ class EASRepository internal constructor(application: Application) {
                                     timetable = Timetable()
                                 } else {
                                     //若存在，则先清空原有课表课程
-                                    val eventIds =
-                                        eventItemDao.getEventIdsFromTimetablesSync(listOf(timetable.id))
-                                    StupidSync.putHistorySync("event", History.ACTION.REMOVE, eventIds)
                                     eventItemDao.deleteCourseFromTimetable(timetable.id)
                                 }
-                                StupidSync.putHistorySync(
-                                    "timetable",
-                                    History.ACTION.REQUIRE,
-                                    listOf(timetable.id)
-                                )
                                 //记录最后的时间戳，作为学期结束的标志
                                 var maxTs: Long = 0
                                 //添加时间表
@@ -350,9 +364,9 @@ class EASRepository internal constructor(application: Application) {
                                         // 科目已存在，总是尝试更新为更完整的名称
                                         // 优先选择包含更多信息（括号、方括号）的名称
                                         val oldHasBrackets = subject.name.contains("（") || subject.name.contains("(") ||
-                                                               subject.name.contains("[") || subject.name.contains("【")
+                                                                       subject.name.contains("[") || subject.name.contains("【")
                                         val newHasBrackets = rawName.contains("（") || rawName.contains("(") ||
-                                                               rawName.contains("[") || rawName.contains("【")
+                                                                       rawName.contains("[") || rawName.contains("【")
 
                                         // 如果新名称包含括号信息（通常更完整），或者新名称明显更长，则更新
                                         if (newHasBrackets && !oldHasBrackets) {
@@ -401,11 +415,6 @@ class EASRepository internal constructor(application: Application) {
                                     subjectDao.saveSubjectSync(subject)
                                     if (requireSubjects[subject.id] == null) {
                                         requireSubjects[subject.id] = subject.id
-                                        StupidSync.putHistorySync(
-                                            "subject",
-                                            History.ACTION.REQUIRE,
-                                            listOf(subject.id)
-                                        )
                                     }
 
                                     for (week in item.weeks) {
@@ -464,7 +473,6 @@ class EASRepository internal constructor(application: Application) {
                                 }
                                 LogUtils.d( "import saving ${events.size} events for term=${term.getCode()}")
                                 eventItemDao.saveEvents(events)
-                                StupidSync.putHistorySync("event", History.ACTION.REQUIRE, events.getIds())
 
                                 //更新timetable对象
                                 timetable.name = buildTimetableName(term)
@@ -480,7 +488,6 @@ class EASRepository internal constructor(application: Application) {
                                     importTimetableLiveData.postValue(DataState(true, DataState.STATE.SUCCESS))
                                 }
                             } catch (e: Exception) {
-                                e.printStackTrace()
                                 LogUtils.e( "import failed term=${term.getCode()}: ${e.message}", e)
                                 if (finished.compareAndSet(false, true)) {
                                     timeoutHandler.removeCallbacks(timeoutRunnable)
@@ -503,6 +510,7 @@ class EASRepository internal constructor(application: Application) {
                 }
             }
         } else {
+            LogUtils.e("❌ startImportTimetableOfTerm: not logged in, cannot import")
             importTimetableLiveData.value = DataState(DataState.STATE.NOT_LOGGED_IN)
         }
     }
@@ -618,7 +626,7 @@ class EASRepository internal constructor(application: Application) {
                 service.getScheduleStructure(term, isUndergraduate, token),
                 6
             )
-            val schedule = scheduleState.data ?: TimetablePreferenceSource.getInstance(appContext).getSchedule()
+            val schedule = scheduleState.data ?: timetablePreferenceSource.getSchedule()
             LogUtils.d( "autoImport schedule state=${scheduleState.state} size=${schedule.size} message=${scheduleState.message}")
             if (startDate == null) {
                 onResult?.invoke(false)
@@ -692,18 +700,6 @@ class EASRepository internal constructor(application: Application) {
     }
 
 
-    companion object {
-        private const val TAG = "EASRepository"
-
-        @Volatile
-        private var instance: EASRepository? = null
-        fun getInstance(application: Application): EASRepository {
-            synchronized(EASService::class.java) {
-                if (instance == null) instance = EASRepository(application)
-                return instance!!
-            }
-        }
-    }
 }
 
 private fun List<EventItem>.getIds(): List<String> {

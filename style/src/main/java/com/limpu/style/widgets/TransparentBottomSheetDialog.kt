@@ -16,15 +16,54 @@ import com.limpu.style.base.BaseActivity
 @Suppress("DEPRECATION")
 abstract class TransparentBottomSheetDialog<V:ViewBinding> : BottomSheetDialogFragment() {
     lateinit var binding:V
+
+    private var cachedColorPrimary: Int? = null
+    private var cachedColorControlNormal: Int? = null
+    private var cachedTextColorSecondary: Int? = null
+
     fun getColorPrimary(): Int {
-        return (activity as BaseActivity<*, *>).getColorPrimary()
+        cachedColorPrimary?.let { return it }
+        val act = activity ?: return 0
+        val result = when (act) {
+            is BaseActivity<*, *> -> act.getColorPrimary()
+            else -> {
+                val typedValue = android.util.TypedValue()
+                act.theme.resolveAttribute(R.attr.colorPrimary, typedValue, true)
+                typedValue.data
+            }
+        }
+        cachedColorPrimary = result
+        return result
     }
 
     fun getColorControlNormal(): Int {
-        return (activity as BaseActivity<*, *>).getColorControlNormal()
+        cachedColorControlNormal?.let { return it }
+        val act = activity ?: return 0
+        val result = when (act) {
+            is BaseActivity<*, *> -> act.getColorControlNormal()
+            else -> {
+                val typedValue = android.util.TypedValue()
+                act.theme.resolveAttribute(R.attr.colorControlNormal, typedValue, true)
+                typedValue.data
+            }
+        }
+        cachedColorControlNormal = result
+        return result
     }
+
     fun getTextColorSecondary(): Int {
-        return (activity as BaseActivity<*, *>).getTextColorSecondary()
+        cachedTextColorSecondary?.let { return it }
+        val act = activity ?: return 0
+        val result = when (act) {
+            is BaseActivity<*, *> -> act.getTextColorSecondary()
+            else -> {
+                val typedValue = android.util.TypedValue()
+                act.theme.resolveAttribute(R.attr.textColorSecondary, typedValue, true)
+                typedValue.data
+            }
+        }
+        cachedTextColorSecondary = result
+        return result
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

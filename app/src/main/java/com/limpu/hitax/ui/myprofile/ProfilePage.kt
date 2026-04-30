@@ -13,7 +13,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.limpu.hitax.R
-import com.limpu.stupiduser.data.model.UserProfile
+import com.limpu.hitauser.data.model.UserProfile
 import com.limpu.component.data.DataState
 import com.limpu.hitax.ui.theme.AppTheme
 import com.limpu.hitax.ui.theme.AppBar

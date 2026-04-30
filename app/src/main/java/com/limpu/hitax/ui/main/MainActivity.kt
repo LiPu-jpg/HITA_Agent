@@ -6,7 +6,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import com.limpu.hitax.utils.LogUtils
 import android.view.HapticFeedbackConstants
 import android.view.MenuItem
 import android.view.View
@@ -14,6 +14,7 @@ import android.view.View.VISIBLE
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.activity.viewModels
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout.DrawerListener
 import androidx.drawerlayout.widget.DrawerLayout.GONE
@@ -27,6 +28,7 @@ import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.databinding.ActivityMainBinding
 import com.limpu.hitax.ui.about.ActivityAbout
 import com.limpu.hitax.ui.about.UserAgreementDialog
+import com.limpu.hitax.ui.base.HiltBaseActivity
 import com.limpu.hitax.ui.eas.login.PopUpLoginEAS
 import com.limpu.hitax.ui.event.add.PopupAddEvent
 import com.limpu.hitax.ui.main.agent.AgentChatDialog
@@ -38,18 +40,28 @@ import com.limpu.hitax.ui.main.timetable.panel.FragmentTimetablePanel
 import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.ImageUtils
-import com.limpu.stupiduser.data.repository.LocalUserRepository
+import com.limpu.hitauser.data.repository.LocalUserRepository
 import com.limpu.style.ThemeTools
-import com.limpu.style.base.BaseActivity
 import com.limpu.style.base.BaseTabAdapter
 import com.limpu.style.widgets.PopUpText
+import dagger.hilt.android.AndroidEntryPoint
 import me.ibrahimsn.lib.OnItemSelectedListener
+import javax.inject.Inject
 
 /**
  * 很显然，这是主界面
  */
-class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
+@AndroidEntryPoint
+class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
     TimetableFragment.MainPageController, FragmentTimeLine.MainPageController {
+
+    @Inject
+    lateinit var localUserRepository: LocalUserRepository
+
+    @Inject
+    lateinit var easRepository: EASRepository
+
+    protected val viewModel: MainViewModel by viewModels()
 
     private val easTokenObserver = Observer<com.limpu.hitax.data.model.eas.EASToken> {
         refreshDrawerEasInfo()
@@ -191,7 +203,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
         viewModel.startRefreshUser()
         refreshTheme()
         refreshDrawerEasInfo()
-        EASRepository.getInstance(application).observeEasToken().observe(this, easTokenObserver)
+        easRepository.observeEasToken().observe(this, easTokenObserver)
         maybeAutoReimportTimetable()
         try {
             val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -207,22 +219,22 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
             }
             if (System.currentTimeMillis() - lastCheckTs > 5 * 60 * 1000) checkedUpdate = false
             if (!checkedUpdate) {
-                if (LocalUserRepository.getInstance(this).getLoggedInUser().isValid()) {
+                if (localUserRepository.getLoggedInUser().isValid()) {
                     checkedUpdate = true
                     lastCheckTs = System.currentTimeMillis()
                 }
                 viewModel.checkForUpdate(code)
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            LogUtils.e("Failed to get package info for update check", e)
         }
 
     }
 
     private fun maybeAutoReimportTimetable() {
-        val settings = EasSettingsRepository.getInstance(application)
+        val settings = EasSettingsRepository(application)
         if (!settings.isAutoReimportEnabled()) return
-        val token = EASRepository.getInstance(application).getEasToken()
+        val token = easRepository.getEasToken()
         if (!token.isLogin()) return
         if (autoReimportAttempted) return
         val now = System.currentTimeMillis()
@@ -230,7 +242,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
         if (now - last < autoReimportIntervalMs) return
         autoReimportAttempted = true
         val isUndergrad = token.stutype == com.limpu.hitax.data.model.eas.EASToken.TYPE.UNDERGRAD
-        EASRepository.getInstance(application).startAutoImportCurrentTimetable(isUndergrad) { success ->
+        easRepository.startAutoImportCurrentTimetable(isUndergrad) { success ->
             if (success) {
                 settings.setLastAutoReimportTs(System.currentTimeMillis())
             }
@@ -329,16 +341,16 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
             }
         }
         viewModel.loggedInUserLiveData.observe(this) {
-            Log.e("user", it.toString())
+            LogUtils.e(it.toString())
             refreshDrawerEasInfo()
         }
     }
 
 
     private fun refreshDrawerEasInfo() {
-        val localUser = LocalUserRepository.getInstance(applicationContext).getLoggedInUser()
+        val localUser = localUserRepository.getLoggedInUser()
         if (localUser.isValid()) {
-            com.limpu.stupiduser.util.ImageUtils.loadAvatarInto(
+            com.limpu.hitauser.util.ImageUtils.loadAvatarInto(
                 this,
                 localUser.avatar,
                 drawerAvatar!!
@@ -355,7 +367,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
             return
         }
 
-        val easToken = EASRepository.getInstance(application).getEasToken()
+        val easToken = easRepository.getEasToken()
         if (easToken.isLogin()) {
             drawerUsername?.text = easToken.name?.ifBlank { easToken.stuId?.ifBlank { easToken.username } }
                 ?: easToken.stuId?.ifBlank { easToken.username }
@@ -383,7 +395,8 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
         drawerAvatar?.setImageResource(R.drawable.place_holder_avatar)
         drawerHeader?.setOnClickListener {
             ActivityUtils.showEasVerifyWindow<Activity>(
-                getThis(),
+                this,
+                easRepository,
                 directTo = null,
                 onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                     override fun onSuccess(window: PopUpLoginEAS) {
@@ -411,7 +424,7 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
     }
 
     override fun onStop() {
-        EASRepository.getInstance(application).observeEasToken().removeObserver(easTokenObserver)
+        easRepository.observeEasToken().removeObserver(easTokenObserver)
         super.onStop()
     }
 
@@ -422,10 +435,6 @@ class MainActivity : BaseActivity<MainViewModel, ActivityMainBinding>(),
             ThemeTools.MODE.LIGHT -> binding.switchTheme.setImageResource(R.drawable.ic_sun)
             else -> binding.switchTheme.setImageResource(R.drawable.ic_moon_auto)
         }
-    }
-
-    override fun getViewModelClass(): Class<MainViewModel> {
-        return MainViewModel::class.java
     }
 
     override fun initViewBinding(): ActivityMainBinding {

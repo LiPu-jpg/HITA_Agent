@@ -4,12 +4,14 @@ import com.limpu.hitax.utils.LogUtils
 import android.app.Activity
 import android.content.DialogInterface
 import android.content.Intent
+import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.viewModels
 import com.limpu.component.data.DataState
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.EASToken
@@ -17,7 +19,9 @@ import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.databinding.DialogBottomEasVerifyBinding
 import com.limpu.hitax.utils.ImageUtils
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class PopUpLoginEAS :
     TransparentModeledBottomSheetDialog<LoginEASViewModel, DialogBottomEasVerifyBinding>() {
 
@@ -29,8 +33,15 @@ class PopUpLoginEAS :
     private var autoLaunchTriggered = false
     private var silentWebLoginTried = false
 
+    private val hiltViewModel: LoginEASViewModel by viewModels()
+
     override fun getViewModelClass(): Class<LoginEASViewModel> {
         return LoginEASViewModel::class.java
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        viewModel = hiltViewModel
     }
 
     companion object {
@@ -85,7 +96,7 @@ class PopUpLoginEAS :
             val bitmap = ImageUtils.getResourceBitmap(requireContext(), iconId)
             binding?.buttonLogin?.doneLoadingAnimation(getColorPrimary(), bitmap)
             if (it.state == DataState.STATE.SUCCESS) {
-                val token = EASRepository.getInstance(requireActivity().application).getEasToken()
+                val token = viewModel.easRepo.getEasToken()
                 LogUtils.d( "popup login success savedToken campus=${token.campus} isLogin=${token.isLogin()} cookieKeys=${token.cookies.keys.sorted()}")
                 onResponseListener?.onSuccess(this)
 
@@ -214,8 +225,7 @@ class PopUpLoginEAS :
 
     override fun onStart() {
         super.onStart()
-        val token = EASRepository.getInstance(requireActivity().application)
-            .getEasToken()
+        val token = viewModel.easRepo.getEasToken()
         binding?.username?.setText(token.username)
         binding?.password?.setText(token.password)
         val preferred = preferredCampus

@@ -6,7 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.limpu.stupiduser.data.model.UserProfile
+import com.limpu.hitauser.data.model.UserProfile
 import com.limpu.hitax.data.model.chat.ChatMessageEntity
 import com.limpu.hitax.data.model.chat.ChatSession
 import com.limpu.hitax.data.model.timetable.EventItem
@@ -17,7 +17,7 @@ import com.limpu.hitax.data.source.dao.ChatSessionDao
 import com.limpu.hitax.data.source.dao.EventItemDao
 import com.limpu.hitax.data.source.dao.SubjectDao
 import com.limpu.hitax.data.source.dao.TimetableDao
-import com.limpu.stupiduser.data.source.dao.UserProfileDao
+import com.limpu.hitauser.data.source.dao.UserProfileDao
 
 @Database(
     entities = [EventItem::class, TermSubject::class, Timetable::class, ChatSession::class, ChatMessageEntity::class],

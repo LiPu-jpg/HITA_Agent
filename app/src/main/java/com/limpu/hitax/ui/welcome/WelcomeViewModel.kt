@@ -1,6 +1,8 @@
 package com.limpu.hitax.ui.welcome
 
-import android.app.Application
-import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.ViewModel
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
 
-class WelcomeViewModel(application: Application) : AndroidViewModel(application)
+@HiltViewModel
+class WelcomeViewModel @Inject constructor() : ViewModel()

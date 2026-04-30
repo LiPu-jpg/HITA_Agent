@@ -2,7 +2,7 @@ package com.limpu.hitax.ui.main.timetable
 
 import android.content.Context
 import android.os.Bundle
-import android.util.Log
+
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
@@ -18,22 +18,27 @@ import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.model.timetable.Timetable
 import com.limpu.hitax.data.repository.TimetableRepository
+import androidx.fragment.app.viewModels
 import com.limpu.hitax.databinding.FragmentTimetableBinding
+import com.limpu.hitax.ui.base.HiltBaseFragment
 import com.limpu.hitax.ui.event.add.PopupAddEvent
 import com.limpu.hitax.ui.main.timetable.views.TimeTableView
 import com.limpu.hitax.ui.main.timetable.views.TimetableWeekView
 import com.limpu.hitax.ui.main.timetable.views.LeftLabelView
+import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.EventsUtils
 import com.limpu.hitax.utils.TimeTools
-import com.limpu.style.base.BaseFragment
+import dagger.hilt.android.AndroidEntryPoint
 import tyrantgit.explosionfield.ExplosionField
 import java.util.*
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-class TimetableFragment :
-    BaseFragment<TimetableViewModel, FragmentTimetableBinding>() {
+@AndroidEntryPoint
+class TimetableFragment : HiltBaseFragment<FragmentTimetableBinding>() {
+
+    protected val viewModel: TimetableViewModel by viewModels()
 
     companion object {
         const val WINDOW_SIZE: Int = 5
@@ -46,10 +51,6 @@ class TimetableFragment :
 
     override fun initViewBinding(): FragmentTimetableBinding {
         return FragmentTimetableBinding.inflate(layoutInflater)
-    }
-
-    override fun getViewModelClass(): Class<TimetableViewModel> {
-        return TimetableViewModel::class.java
     }
 
     override fun onAttach(context: Context) {
@@ -269,11 +270,11 @@ class TimetableFragment :
                 }
                 views[pos]?.setOnCardClickListener(object : TimeTableView.OnCardClickListener {
                     override fun onEventClick(v: View, eventItem: EventItem) {
-                        context?.let { EventsUtils.showEventItem(it, eventItem) }
+                        EventsUtils.showEventItem(requireActivity(), eventItem)
                     }
 
                     override fun onDuplicateEventClick(v: View, eventItems: List<EventItem>) {
-                        context?.let { EventsUtils.showEventItem(it,eventItems) }
+                        EventsUtils.showEventItem(requireActivity(), eventItems)
                     }
 
                 })
@@ -293,9 +294,10 @@ class TimetableFragment :
                                         v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                                         Thread{
                                             activity?.application?.let {
-                                                TimetableRepository.getInstance(it).actionDeleteEvents(
+                                                TimetableRepository(it).actionDeleteEvents(
                                                     listOf(eventItem)
                                                 )
+                                                activity?.let { act -> WidgetUtils.sendRefreshToAll(act) }
                                             }
                                         }.start()
                                     }.create()
@@ -328,13 +330,14 @@ class TimetableFragment :
                                                 ExplosionField.attach2Window(requireActivity())
                                             ef.explode(v)
                                             v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                            Thread{
-                                                activity?.application?.let {
-                                                    TimetableRepository.getInstance(it).actionDeleteEvents(
-                                                        eventItems
-                                                    )
-                                                }
-                                            }.start()
+                                        Thread{
+                                            activity?.application?.let {
+                                                TimetableRepository(it).actionDeleteEvents(
+                                                    eventItems
+                                                )
+                                                activity?.let { act -> WidgetUtils.sendRefreshToAll(act) }
+                                            }
+                                        }.start()
                                         }.create()
                                     ad.setTitle(R.string.dialog_title_sure_delete)
                                     ad.show()
@@ -354,9 +357,10 @@ class TimetableFragment :
                                                     v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                                                     Thread{
                                                         activity?.application?.let {
-                                                            TimetableRepository.getInstance(it).actionDeleteEvents(
+                                                            TimetableRepository(it).actionDeleteEvents(
                                                                 listOf(selectedEvent)
                                                             )
+                                                            activity?.let { act -> WidgetUtils.sendRefreshToAll(act) }
                                                         }
                                                     }.start()
                                                 }.create()

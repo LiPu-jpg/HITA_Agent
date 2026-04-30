@@ -1,6 +1,7 @@
 package com.limpu.hitax.data.repository
 
 import androidx.lifecycle.LiveData
+import javax.inject.Inject
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.resource.CourseReadmeData
 import com.limpu.hitax.data.model.resource.CourseResourceItem
@@ -9,7 +10,7 @@ import com.limpu.hitax.data.model.resource.ValidateReadmeResult
 import com.limpu.hitax.data.source.web.HoaResourceSource
 import org.json.JSONArray
 
-class HoaRepository private constructor() {
+class HoaRepository @Inject constructor() {
     fun searchCourses(query: String, campus: String? = null): LiveData<DataState<List<CourseResourceItem>>> {
         return HoaResourceSource.searchCourses(query, campus)
     }
@@ -42,14 +43,4 @@ class HoaRepository private constructor() {
         return HoaResourceSource.submitOps(repoName, courseCode, courseName, repoType, ops, campus)
     }
 
-    companion object {
-        private var instance: HoaRepository? = null
-
-        fun getInstance(): HoaRepository {
-            if (instance == null) {
-                instance = HoaRepository()
-            }
-            return instance!!
-        }
-    }
 }

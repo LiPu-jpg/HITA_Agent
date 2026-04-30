@@ -9,17 +9,24 @@ import com.limpu.hitax.R
 import com.limpu.hitax.data.model.timetable.EventItem
 import com.limpu.hitax.data.model.timetable.TimeInDay
 import com.limpu.hitax.data.repository.EASRepository
+import com.limpu.hitax.data.source.preference.EasPreferenceSource
+import com.limpu.hitax.data.source.preference.TimetablePreferenceSource
 import com.limpu.hitax.databinding.DialogBottomTimetableClassBinding
+import com.limpu.hitax.ui.base.HiltBaseFragment
 import com.limpu.hitax.ui.subject.SubjectActivity
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.TimeTools
 import com.limpu.hitax.utils.CourseResourceLinker
-import com.limpu.style.base.BaseFragment
 import com.limpu.style.widgets.PopUpColorPicker
 import com.limpu.style.widgets.PopUpText
+import dagger.hilt.android.AndroidEntryPoint
+import androidx.fragment.app.viewModels
 import java.util.*
 
-class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetableClassBinding>() {
+@AndroidEntryPoint
+class EventItemFragment : HiltBaseFragment<DialogBottomTimetableClassBinding>() {
+
+    protected val viewModel: EventItemViewModel by viewModels()
 
     interface EventParent {
         fun callDismiss()
@@ -42,7 +49,9 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
 //    }
 
     var parent: EventParent? = null
-    private val easRepository by lazy { EASRepository.getInstance(requireActivity().application) }
+    private val easRepository by lazy {
+        EASRepository(requireActivity().application, EasPreferenceSource(requireActivity().application.applicationContext), TimetablePreferenceSource(requireActivity().application.applicationContext))
+    }
     private val hoaCampus by lazy { easRepository.getHoaCampus() }
     private var currentSubject: com.limpu.hitax.data.model.timetable.TermSubject? = null
 //    override fun onAttach(context: Context) {
@@ -246,10 +255,6 @@ class EventItemFragment : BaseFragment<EventItemViewModel, DialogBottomTimetable
 //            this.eventItem = eventItem
 //        }
 //    }
-
-    override fun getViewModelClass(): Class<EventItemViewModel> {
-        return EventItemViewModel::class.java
-    }
 
     override fun initViewBinding(): DialogBottomTimetableClassBinding {
         return DialogBottomTimetableClassBinding.inflate(layoutInflater)

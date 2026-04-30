@@ -2,11 +2,16 @@ package com.limpu.hitax.data.repository
 
 import android.app.Application
 import android.content.Context
+import javax.inject.Inject
 import android.content.SharedPreferences
 import com.limpu.component.data.SharedPreferenceBooleanLiveData
 import com.limpu.component.data.booleanLiveData
 
-class EasSettingsRepository(application: Application) {
+private const val SP_NAME = "eas_settings"
+private const val KEY_AUTO_REIMPORT = "auto_reimport"
+private const val KEY_AUTO_REIMPORT_LAST_TS = "auto_reimport_last_ts"
+
+class EasSettingsRepository @Inject constructor(application: Application) {
     private val preference: SharedPreferences =
         application.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
 
@@ -34,17 +39,5 @@ class EasSettingsRepository(application: Application) {
 
     fun setLastAutoReimportTs(ts: Long) {
         preference.edit().putLong(KEY_AUTO_REIMPORT_LAST_TS, ts).apply()
-    }
-
-    companion object {
-        private var instance: EasSettingsRepository? = null
-        private const val SP_NAME = "eas_settings"
-        const val KEY_AUTO_REIMPORT = "auto_reimport"
-        const val KEY_AUTO_REIMPORT_LAST_TS = "auto_reimport_last_ts"
-
-        fun getInstance(application: Application): EasSettingsRepository {
-            if (instance == null) instance = EasSettingsRepository(application)
-            return instance!!
-        }
     }
 }

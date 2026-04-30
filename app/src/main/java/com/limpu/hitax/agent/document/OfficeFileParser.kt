@@ -2,7 +2,7 @@ package com.limpu.hitax.agent.document
 
 import android.content.Context
 import android.net.Uri
-import android.util.Log
+import com.limpu.hitax.utils.LogUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.poi.xssf.usermodel.XSSFWorkbook
@@ -15,7 +15,6 @@ import java.io.File
 class ExcelFileParser : FileParser {
 
     companion object {
-        private const val TAG = "ExcelFileParser"
         private const val MAX_ROWS = 100
         private const val MAX_COLS = 20
     }
@@ -28,7 +27,7 @@ class ExcelFileParser : FileParser {
     override suspend fun parse(context: Context, uri: Uri, fileName: String): ParseResult {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "开始解析Excel: $fileName")
+                LogUtils.d("开始解析Excel: $fileName")
 
                 val tempFile = copyToTempFile(context, uri, fileName)
 
@@ -80,10 +79,10 @@ class ExcelFileParser : FileParser {
                     ParseResult.Success(text.toString())
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Excel解析失败", e)
+                LogUtils.e("Excel解析失败", e)
                 ParseResult.Error("Excel解析失败: ${e.message}", cause = e)
             } catch (e: OutOfMemoryError) {
-                Log.e(TAG, "内存不足", e)
+                LogUtils.e("内存不足", e)
                 ParseResult.Error("内存不足，请尝试更小的文件", cause = e, isRetryable = true)
             } finally {
                 cleanupTempFile(context, fileName)
@@ -104,7 +103,7 @@ class ExcelFileParser : FileParser {
             val tempFile = File(context.cacheDir, fileName)
             if (tempFile.exists()) tempFile.delete()
         } catch (e: Exception) {
-            Log.w(TAG, "清理临时文件失败", e)
+            LogUtils.e("清理临时文件失败", e)
         }
     }
 }
@@ -115,7 +114,6 @@ class ExcelFileParser : FileParser {
 class PowerPointFileParser : FileParser {
 
     companion object {
-        private const val TAG = "PowerPointFileParser"
         private const val MAX_SLIDES = 20
         private const val MAX_TEXT_LENGTH = 5000
     }
@@ -128,7 +126,7 @@ class PowerPointFileParser : FileParser {
     override suspend fun parse(context: Context, uri: Uri, fileName: String): ParseResult {
         return withContext(Dispatchers.IO) {
             try {
-                Log.d(TAG, "开始解析PowerPoint: $fileName")
+                LogUtils.d("开始解析PowerPoint: $fileName")
 
                 val tempFile = copyToTempFile(context, uri, fileName)
 
@@ -178,10 +176,10 @@ class PowerPointFileParser : FileParser {
                     ParseResult.Success(text.toString())
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "PowerPoint解析失败", e)
+                LogUtils.e("PowerPoint解析失败", e)
                 ParseResult.Error("PowerPoint解析失败: ${e.message}", cause = e)
             } catch (e: OutOfMemoryError) {
-                Log.e(TAG, "内存不足", e)
+                LogUtils.e("内存不足", e)
                 ParseResult.Error("内存不足，请尝试更小的文件", cause = e, isRetryable = true)
             } finally {
                 cleanupTempFile(context, fileName)
@@ -202,7 +200,7 @@ class PowerPointFileParser : FileParser {
             val tempFile = File(context.cacheDir, fileName)
             if (tempFile.exists()) tempFile.delete()
         } catch (e: Exception) {
-            Log.w(TAG, "清理临时文件失败", e)
+            LogUtils.e("清理临时文件失败", e)
         }
     }
 }
