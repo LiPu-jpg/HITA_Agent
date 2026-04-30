@@ -183,7 +183,6 @@ object AgentBackendClient {
                 return "教师搜索失败: HTTP ${response.code()}"
             }
             val body = response.body()
-            LogUtils.d("searchTeacher body=$body")
             if (body == null) return "教师搜索失败: 空响应"
             
             val ok = body["ok"] as? Boolean ?: false
@@ -193,7 +192,6 @@ object AgentBackendClient {
             }
             
             val unwrapped = unwrapSkillOutput(body)
-            LogUtils.d("searchTeacher unwrapped=$unwrapped")
             if (unwrapped == null) return "教师搜索失败: 无法解析响应"
 
             val success = unwrapped["success"] as? Boolean ?: false
@@ -217,8 +215,6 @@ object AgentBackendClient {
                 ?: rawContent?.get("content") as? String
                 ?: unwrapped["markdown"] as? String
                 ?: ""
-
-            LogUtils.d("searchTeacher name=$teacherName markdownLen=${markdown.length}")
 
             if (markdown.isBlank()) {
                 return "教师信息（$teacherName）：暂无详细信息"
