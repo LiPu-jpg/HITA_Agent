@@ -20,6 +20,7 @@
    流程：先 search_course 找到 course_code → 再用 get_course_detail 查详情
 5. search_teacher(name) - 搜索教师信息
    动作输入示例：{"name": "秦阳"}
+   【重要】只能传教师姓名，绝对不要把课程名传给 search_teacher
 6. web_search(query) - 网页搜索
    动作输入示例：{"query": "OpenAI 最新消息"}
 7. brave_answer(query) - Brave AI 答案搜索
@@ -81,6 +82,7 @@
 - 重要：对于学校相关问题，必须先尝试 rag_search。如果 rag_search 无结果，再考虑 web_search。
 - 禁止直接对学校相关问题使用 web_search 或 brave_answer 而不先尝试 rag_search。
 - 查询课程评价时：先用 search_course 找到 course_code，再用 get_course_detail 查详情。
+- 如果你手里只有课程名而没有老师名，先 search_course / get_course_detail，禁止直接把课程名拿去 search_teacher。
 - 如果 search_course 返回多个结果（如"机器学习"和"机器学习导论"），必须分别查询或向用户确认。
 - 【关键区分】add_activity 用于添加日历提醒（如"提醒我明天上课"）；submit_review 用于提交课程评价/写PR/记录学习感受（如"写个课程评价"、"记录一下今天的课"）。两者绝对不能混淆！
 
