@@ -35,7 +35,7 @@ object LlmChatService {
             try {
                 val userMessage = history.lastOrNull { it.role == "user" }?.content ?: ""
 
-                onTrace(AgentTraceEvent(stage = "react_start", message = "分析中…", payload = ""))
+                emitTraceToMain(onTrace, AgentTraceEvent(stage = "react_start", message = "分析中…", payload = ""))
 
                 val contextMessage = ReactPromptBuilder.build(
                     context = application,
@@ -57,16 +57,12 @@ object LlmChatService {
                     timetableId = timetableId,
                     agentProvider = agentProvider,
                     onTrace = onTrace,
-                ) ?: return@withContext onResult(LlmChatResult.Error(error = "本地 AI 推理失败"))
+                ) ?: return@withContext emitResultToMain(onResult, LlmChatResult.Error(error = "本地 AI 推理失败"))
 
-                LogUtils.d( "[DEBUG] localReAct returned answer length=${answer.length}, thinking length=${thinking.length}")
-
-                LogUtils.d( "[DEBUG] Calling onResult with Success, answer length=${answer.length}")
-                onResult(LlmChatResult.Success(text = answer, thinking = thinking))
-                LogUtils.d( "[DEBUG] onResult called successfully")
+                emitResultToMain(onResult, LlmChatResult.Success(text = answer, thinking = thinking))
             } catch (e: Exception) {
                 LogUtils.e( "Chat failed", e)
-                onResult(LlmChatResult.Error(error = e.message ?: "调用失败"))
+                emitResultToMain(onResult, LlmChatResult.Error(error = e.message ?: "调用失败"))
             }
         }
     }
@@ -87,23 +83,28 @@ object LlmChatService {
         val thinkingSteps = mutableListOf<String>()
 
         repeat(15) { step ->
-            LogUtils.d( "[DEBUG] localReAct step ${step + 1}/10 starting, messages count=${messages.size}")
-            onTrace(AgentTraceEvent(stage = "react_step", message = "步骤 ${step + 1}/15: 正在思考…", payload = ""))
+            emitTraceToMain(onTrace, AgentTraceEvent(stage = "react_step", message = "步骤 ${step + 1}/15: 正在思考…", payload = ""))
 
             val request = ChatCompletionRequest(
                 model = LlmClient.MODEL,
                 messages = messages,
             )
-            LogUtils.d( "[DEBUG] Sending MiniMax request with ${messages.size} messages")
             var response: retrofit2.Response<ChatCompletionResponse>? = null
             var retryCount = 0
-            val maxRetries = 5
+            val maxRetries = 3
             while (retryCount < maxRetries) {
                 val currentResponse = try {
                     LlmClient.service.chatCompletion(LlmClient.authHeader(), request).execute()
                 } catch (e: Exception) {
-                    LogUtils.e( "MiniMax API error in step ${step + 1}, attempt ${retryCount + 1}: ${e.javaClass.simpleName}: ${e.message}", e)
-                    return null
+                    retryCount++
+                    if (retryCount >= maxRetries) {
+                        LogUtils.e("MiniMax API error in step ${step + 1} after $maxRetries attempts: ${e.javaClass.simpleName}: ${e.message}", e)
+                        return null
+                    }
+                    val delayMs = 2000L * retryCount
+                    LogUtils.w("MiniMax network error in step ${step + 1}, attempt $retryCount/$maxRetries (${e.javaClass.simpleName}), retrying in ${delayMs}ms...")
+                    delay(delayMs)
+                    continue
                 }
                 response = currentResponse
                 if (currentResponse.isSuccessful) break
@@ -111,15 +112,13 @@ object LlmChatService {
                 if (code == 529 || code == 503 || code == 429) {
                     retryCount++
                     val delayMs = 3000L * retryCount
-                    LogUtils.w( "MiniMax HTTP $code in step ${step + 1}, attempt $retryCount/$maxRetries, retrying after ${delayMs}ms...")
+                    LogUtils.w("MiniMax HTTP $code in step ${step + 1}, attempt $retryCount/$maxRetries, retrying after ${delayMs}ms...")
                     delay(delayMs)
                 } else {
                     break
                 }
             }
             val finalResponse = response ?: return null
-
-            LogUtils.d( "[DEBUG] MiniMax response received: isSuccessful=${finalResponse.isSuccessful}, code=${finalResponse.code()}")
 
             if (!finalResponse.isSuccessful) {
                 val errorBody = finalResponse.errorBody()?.string()
@@ -128,45 +127,38 @@ object LlmChatService {
             }
 
             val body = finalResponse.body()
-            LogUtils.d( "[DEBUG] MiniMax body=${body != null}, choices=${body?.choices?.size}")
             if (body == null) {
-                LogUtils.e( "[DEBUG] MiniMax body is null in step ${step + 1}")
+                LogUtils.e("MiniMax body is null in step ${step + 1}")
                 return null
             }
             val choice = body.choices?.firstOrNull()
             if (choice == null) {
-                LogUtils.e( "[DEBUG] MiniMax choices empty in step ${step + 1}")
+                LogUtils.e("MiniMax choices empty in step ${step + 1}")
                 return null
             }
             val content = choice.message?.content
             if (content == null) {
-                LogUtils.e( "[DEBUG] MiniMax content null in step ${step + 1}, message=${choice.message}")
+                LogUtils.e("MiniMax content null in step ${step + 1}, message=${choice.message}")
                 return null
             }
-            val finishReason = choice.finishReason
-
-            LogUtils.d( "[DEBUG] MiniMax raw content length=${content.length} finish_reason=$finishReason")
-            LogUtils.d( "[DEBUG] MiniMax raw content:\n$content")
 
             val parsed = parseLocalReActStep(content)
-            LogUtils.d( "[DEBUG] Parsed thought length=${parsed.thought.length} action=${parsed.action} actionInput length=${parsed.actionInput.length}")
-            LogUtils.d( "[DEBUG] Parsed thought:\n${parsed.thought}")
 
             thinkingSteps.add("步骤 ${step + 1}: ${parsed.thought.take(100)}${if (parsed.action.isNotBlank()) " → ${parsed.action}" else ""}")
 
-            onTrace(AgentTraceEvent(
+            emitTraceToMain(onTrace, AgentTraceEvent(
                 stage = "react_step",
                 message = "思考: ${parsed.thought.take(80)}${if (parsed.action.isNotBlank()) " → ${parsed.action}" else ""}",
-                payload = parsed.actionInput.take(200),
+                payload = parsed.thought.take(500),
             ))
 
             if (parsed.action == "答案" || parsed.action.isBlank()) {
-                LogUtils.d( "[DEBUG] Returning final answer length=${parsed.thought.length}")
+                delay(FINAL_THOUGHT_PREVIEW_MS)
                 val thinking = thinkingSteps.joinToString("\n")
                 return Pair(parsed.thought, thinking)
             }
 
-            LogUtils.d( "[DEBUG] Executing tool action=${parsed.action} input=${parsed.actionInput}")
+            LogUtils.d("[ReAct] tool=${parsed.action} step=${step + 1}")
             val observation = toolRegistry.get(parsed.action)
                 ?.execute(ReActToolInput(
                     actionInput = parsed.actionInput,
@@ -177,13 +169,10 @@ object LlmChatService {
                     onTrace = onTrace,
                 ))
                 ?: "未知工具: ${parsed.action}"
-            LogUtils.d( "[DEBUG] Tool observation length=${observation?.length ?: 0}")
-
-            onTrace(AgentTraceEvent(stage = "react_step", message = "观察: ${observation.take(100)}", payload = observation.take(500)))
+            emitTraceToMain(onTrace, AgentTraceEvent(stage = "react_step", message = "观察: ${observation.take(100)}", payload = observation.take(500)))
 
             messages.add(ChatMessage(role = "assistant", content = content))
             messages.add(ChatMessage(role = "user", content = "观察结果: $observation"))
-            LogUtils.d( "[DEBUG] Appended observation to messages, now ${messages.size} messages")
         }
 
         val thinking = thinkingSteps.joinToString("\n")
@@ -214,7 +203,6 @@ object LlmChatService {
         }
 
         if (thought.isBlank() && action.isBlank()) {
-            LogUtils.d( "[DEBUG] No ReAct tags found, treating as direct answer")
             return ParsedStep(thought = cleanedText.trim(), action = "答案", actionInput = "")
         }
 
@@ -244,6 +232,26 @@ sealed class LlmChatResult {
     data class Error(val error: String) : LlmChatResult()
 }
 
+private const val FINAL_THOUGHT_PREVIEW_MS = 120L
+
+private suspend fun emitTraceToMain(
+    onTrace: (AgentTraceEvent) -> Unit,
+    event: AgentTraceEvent,
+) {
+    withContext(Dispatchers.Main.immediate) {
+        onTrace(event)
+    }
+}
+
+private suspend fun emitResultToMain(
+    onResult: (LlmChatResult) -> Unit,
+    result: LlmChatResult,
+) {
+    withContext(Dispatchers.Main.immediate) {
+        onResult(result)
+    }
+}
+
 /**
  * 处理带附件的消息，使用智谱多模态API理解附件内容
  * 仅用于图片和视频理解，文档类文件优先本地处理
@@ -261,7 +269,7 @@ suspend fun LlmChatService.chatWithAttachment(
 ) {
     withContext(Dispatchers.IO) {
         try {
-            onTrace(AgentTraceEvent(stage = "react_start", message = "正在理解附件内容…", payload = ""))
+            emitTraceToMain(onTrace, AgentTraceEvent(stage = "react_start", message = "正在理解附件内容…", payload = ""))
 
             // 1. 判断附件类型并处理
             val contentType = when {
@@ -269,7 +277,7 @@ suspend fun LlmChatService.chatWithAttachment(
                 attachmentMimeType.startsWith("video/") -> "video_url"
                 else -> {
                     LogUtils.e("Unsupported attachment type: $attachmentMimeType")
-                    return@withContext onResult(LlmChatResult.Error("不支持的附件类型：$attachmentMimeType\n\n支持的类型：\n- 图片：JPG、PNG、GIF、WebP\n- 视频：MP4、MOV\n\n注意：PDF、Word、Excel、PowerPoint 请直接上传，系统会自动本地解析"))
+                    return@withContext emitResultToMain(onResult, LlmChatResult.Error("不支持的附件类型：$attachmentMimeType\n\n支持的类型：\n- 图片：JPG、PNG、GIF、WebP\n- 视频：MP4、MOV\n\n注意：PDF、Word、Excel、PowerPoint 请直接上传，系统会自动本地解析"))
                 }
             }
 
@@ -344,19 +352,19 @@ suspend fun LlmChatService.chatWithAttachment(
                 if (!response.isSuccessful) {
                     val errorBody = response.errorBody()?.string()
                     LogUtils.e("Zhipu API error: ${response.code()} - $errorBody")
-                    return@withContext onResult(LlmChatResult.Error("附件理解失败：HTTP ${response.code()}"))
+                    return@withContext emitResultToMain(onResult, LlmChatResult.Error("附件理解失败：HTTP ${response.code()}"))
                 }
 
                 val body = response.body()
                 if (body == null) {
                     LogUtils.e("Zhipu response body is null")
-                    return@withContext onResult(LlmChatResult.Error("附件理解失败：响应为空"))
+                    return@withContext emitResultToMain(onResult, LlmChatResult.Error("附件理解失败：响应为空"))
                 }
 
                 body.choices.firstOrNull()?.message?.content ?: "无法理解附件内容"
             } catch (e: Exception) {
             LogUtils.e("chatWithAttachment error: ${e.message}", e)
-                return@withContext onResult(LlmChatResult.Error("附件理解失败：${e.message}"))
+                return@withContext emitResultToMain(onResult, LlmChatResult.Error("附件理解失败：${e.message}"))
             }
 
             // 2. 将附件理解结果添加到对话历史
@@ -380,7 +388,7 @@ suspend fun LlmChatService.chatWithAttachment(
 
         } catch (e: Exception) {
             LogUtils.e("chatWithAttachment error: ${e.message}", e)
-            onResult(LlmChatResult.Error("处理失败：${e.message}"))
+            emitResultToMain(onResult, LlmChatResult.Error("处理失败：${e.message}"))
         }
     }
 }

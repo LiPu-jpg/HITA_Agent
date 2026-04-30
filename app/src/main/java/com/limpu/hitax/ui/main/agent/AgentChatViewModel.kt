@@ -2,6 +2,7 @@ package com.limpu.hitax.ui.main.agent
 
 import android.app.Application
 import android.net.Uri
+import android.os.Looper
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -65,10 +66,34 @@ class AgentChatViewModel @Inject constructor(
 
     private var placeholderMessage: AgentChatMessage? = null
 
+    private fun publishMessages() {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            _messages.value = messageList
+        } else {
+            _messages.postValue(messageList)
+        }
+    }
+
+    private fun publishStatus(text: String) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            _status.value = text
+        } else {
+            _status.postValue(text)
+        }
+    }
+
+    private fun publishLoading(loading: Boolean) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            _isLoading.value = loading
+        } else {
+            _isLoading.postValue(loading)
+        }
+    }
+
     fun addMessage(message: AgentChatMessage) {
         synchronized(this) {
             messageList = messageList + message
-            _messages.postValue(messageList)
+            publishMessages()
         }
         val sid = currentSessionId ?: return
         ioExecutor.execute {
@@ -84,27 +109,31 @@ class AgentChatViewModel @Inject constructor(
         }
     }
 
-    fun updateOrCreatePlaceholder(text: String) {
+    fun updateOrCreatePlaceholder(text: String, thinking: String? = null) {
         synchronized(this) {
             val existing = placeholderMessage
             if (existing != null) {
                 val idx = messageList.indexOf(existing)
                 if (idx >= 0) {
-                    val updated = existing.copy(text = text)
+                    val updated = existing.copy(
+                        text = text,
+                        thinking = thinking ?: existing.thinking,
+                    )
                     messageList = messageList.toMutableList().apply { set(idx, updated) }
                     placeholderMessage = updated
-                    _messages.postValue(messageList)
+                    publishMessages()
                     return
                 }
             }
             val newPlaceholder = AgentChatMessage(
                 role = AgentChatMessage.Role.ASSISTANT,
                 text = text,
+                thinking = thinking,
                 isPlaceholder = true,
             )
             placeholderMessage = newPlaceholder
             messageList = messageList + newPlaceholder
-            _messages.postValue(messageList)
+            publishMessages()
         }
     }
 
@@ -118,7 +147,7 @@ class AgentChatViewModel @Inject constructor(
                 messageList = messageList + finalMessage
             }
             placeholderMessage = null
-            _messages.postValue(messageList)
+            publishMessages()
         }
         val sid = currentSessionId ?: return
         ioExecutor.execute {
@@ -141,11 +170,11 @@ class AgentChatViewModel @Inject constructor(
     }
 
     fun setStatus(text: String) {
-        _status.postValue(text)
+        publishStatus(text)
     }
 
     fun setLoading(loading: Boolean) {
-        _isLoading.postValue(loading)
+        publishLoading(loading)
     }
 
     fun setPendingAttachment(uri: Uri?) {
@@ -161,8 +190,8 @@ class AgentChatViewModel @Inject constructor(
         currentSessionId = session.id
         chatHistory.clear()
         messageList = emptyList()
-        _messages.postValue(emptyList())
-        _status.postValue("")
+        publishMessages()
+        publishStatus("")
         ioExecutor.execute { sessionDao.save(session) }
     }
 
@@ -263,7 +292,12 @@ class AgentChatViewModel @Inject constructor(
                         }
                         else -> "正在处理…"
                     }
-                    updateOrCreatePlaceholder(statusText)
+                    val currentThinking = if (trace.stage == "react_step") {
+                        trace.payload.ifBlank { trace.message }
+                    } else {
+                        null
+                    }
+                    updateOrCreatePlaceholder(statusText, currentThinking)
                 },
                 onResult = { result ->
                     when (result) {
@@ -335,7 +369,12 @@ class AgentChatViewModel @Inject constructor(
                         }
                         else -> "正在处理…"
                     }
-                    updateOrCreatePlaceholder(statusText)
+                    val currentThinking = if (trace.stage == "react_step") {
+                        trace.payload.ifBlank { trace.message }
+                    } else {
+                        null
+                    }
+                    updateOrCreatePlaceholder(statusText, currentThinking)
                 },
                 onResult = { result: LlmChatResult ->
                     when (result) {
