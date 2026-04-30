@@ -92,11 +92,9 @@ class TimeTableBlockView constructor(
         }
 
         card.setOnClickListener { v ->
-            android.util.Log.d("TimeTableBlockView", "🎯 Card clicked: ${event.name}")
             onCardClickListener?.onClick(v, event)
         }
         card.setOnLongClickListener { v: View ->
-            android.util.Log.d("TimeTableBlockView", "🎯 Card long clicked: ${event.name}")
             return@setOnLongClickListener onCardLongClickListener?.onLongClick(v, event) == true
         }
         title?.text = event.name

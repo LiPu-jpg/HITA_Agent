@@ -9,28 +9,14 @@ import java.util.*
 
 object EventsUtils {
     fun showEventItem(context: Context, eventItem: EventItem) {
-        android.util.Log.d("EventsUtils", "🚀 showEventItem called for: ${eventItem.name}")
-        val activity = context as? AppCompatActivity
-        if (activity == null) {
-            android.util.Log.e("EventsUtils", "❌ Context is not AppCompatActivity: ${context.javaClass.name}")
-            return
-        }
-        android.util.Log.d("EventsUtils", "✅ Got activity: ${activity.javaClass.simpleName}")
+        val activity = context as? AppCompatActivity ?: return
         val list: ArrayList<EventItem> = ArrayList<EventItem>()
         list.add(eventItem)
-        val sheet = FragmentTimeInfoSheet.newInstance(list)
-        android.util.Log.d("EventsUtils", "📋 Showing bottom sheet...")
-        sheet.show(activity.supportFragmentManager, "event")
-        android.util.Log.d("EventsUtils", "✅ Bottom sheet shown")
+        FragmentTimeInfoSheet.newInstance(list).show(activity.supportFragmentManager, "event")
     }
 
     fun showEventItem(context: Context, eventItems: List<EventItem>) {
-        android.util.Log.d("EventsUtils", "🚀 showEventItem called for ${eventItems.size} events")
-        val activity = context as? AppCompatActivity
-        if (activity == null) {
-            android.util.Log.e("EventsUtils", "❌ Context is not AppCompatActivity: ${context.javaClass.name}")
-            return
-        }
+        val activity = context as? AppCompatActivity ?: return
         val list: ArrayList<EventItem> = ArrayList<EventItem>(eventItems)
         FragmentTimeInfoSheet.newInstance(list)
             .show(activity.supportFragmentManager, "event")

@@ -271,14 +271,12 @@ class TimeTableView : ViewGroup {
         timeTableBlockView.onCardClickListener =
             object : TimeTableBlockView.OnCardClickListener {
                 override fun onClick(v: View, ei: EventItem) {
-                    android.util.Log.d("TimeTableView", "📤 Forwarding click to listener: ${ei.name}")
                     onCardClickListener?.onEventClick(v, ei)
                 }
             }
         timeTableBlockView.onCardLongClickListener =
             object : TimeTableBlockView.OnCardLongClickListener {
                 override fun onLongClick(v: View, ei: EventItem): Boolean {
-                    android.util.Log.d("TimeTableView", "📤 Forwarding long click to listener: ${ei.name}")
                     return onCardLongClickListener?.onEventLongClick(v, ei) == true
                 }
             }

@@ -16,40 +16,54 @@ import com.limpu.style.base.BaseActivity
 @Suppress("DEPRECATION")
 abstract class TransparentBottomSheetDialog<V:ViewBinding> : BottomSheetDialogFragment() {
     lateinit var binding:V
+
+    private var cachedColorPrimary: Int? = null
+    private var cachedColorControlNormal: Int? = null
+    private var cachedTextColorSecondary: Int? = null
+
     fun getColorPrimary(): Int {
+        cachedColorPrimary?.let { return it }
         val act = activity ?: return 0
-        return when (act) {
+        val result = when (act) {
             is BaseActivity<*, *> -> act.getColorPrimary()
             else -> {
                 val typedValue = android.util.TypedValue()
-                act.theme.resolveAttribute(com.limpu.style.R.attr.colorPrimary, typedValue, true)
+                act.theme.resolveAttribute(R.attr.colorPrimary, typedValue, true)
                 typedValue.data
             }
         }
+        cachedColorPrimary = result
+        return result
     }
 
     fun getColorControlNormal(): Int {
+        cachedColorControlNormal?.let { return it }
         val act = activity ?: return 0
-        return when (act) {
+        val result = when (act) {
             is BaseActivity<*, *> -> act.getColorControlNormal()
             else -> {
                 val typedValue = android.util.TypedValue()
-                act.theme.resolveAttribute(com.limpu.style.R.attr.colorControlNormal, typedValue, true)
+                act.theme.resolveAttribute(R.attr.colorControlNormal, typedValue, true)
                 typedValue.data
             }
         }
+        cachedColorControlNormal = result
+        return result
     }
 
     fun getTextColorSecondary(): Int {
+        cachedTextColorSecondary?.let { return it }
         val act = activity ?: return 0
-        return when (act) {
+        val result = when (act) {
             is BaseActivity<*, *> -> act.getTextColorSecondary()
             else -> {
                 val typedValue = android.util.TypedValue()
-                act.theme.resolveAttribute(com.limpu.style.R.attr.textColorSecondary, typedValue, true)
+                act.theme.resolveAttribute(R.attr.textColorSecondary, typedValue, true)
                 typedValue.data
             }
         }
+        cachedTextColorSecondary = result
+        return result
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,14 +73,11 @@ abstract class TransparentBottomSheetDialog<V:ViewBinding> : BottomSheetDialogFr
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
-        android.util.Log.d("TransparentBottomSheet", "🎭 onCreateView called")
         val contextThemeWrapper = ContextThemeWrapper(context,R.style.AppTheme)
         val v = inflater.cloneInContext(contextThemeWrapper)
             .inflate(getLayoutId(), container, false)
         binding = initViewBinding(v)
-        android.util.Log.d("TransparentBottomSheet", "🎭 Binding initialized, calling initViews")
         initViews(binding.root)
-        android.util.Log.d("TransparentBottomSheet", "🎭 initViews done")
         return binding.root
     }
 
