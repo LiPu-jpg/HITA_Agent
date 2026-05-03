@@ -285,8 +285,8 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
                 when (position) {
                     0 -> binding.todayLayout.visibility = VISIBLE
                     1 -> binding.timetableLayout.visibility = VISIBLE
-                    2 -> binding.navigationLayout.visibility = VISIBLE
-                    3 -> binding.agentLayout.visibility = VISIBLE
+                    2 -> binding.agentLayout.visibility = VISIBLE
+                    3 -> binding.navigationLayout.visibility = VISIBLE
                 }
 //                val item = binding.navView.menu.getItem(position)
 //                item.isChecked = true
@@ -320,7 +320,7 @@ class MainActivity : HiltBaseActivity<ActivityMainBinding>(),
         }
 
         binding.agentChat.setOnClickListener {
-            binding.pager.currentItem = 3
+            binding.pager.currentItem = 2
         }
 
         binding.addEvent.setOnClickListener {

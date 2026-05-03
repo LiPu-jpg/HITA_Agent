@@ -203,15 +203,15 @@ class AddEventViewModel @Inject constructor(
         subject: TermSubject?,
         courseTime: CourseTime?
     ) {
+        initCourseT = courseTime
+        initSubject = subject
+        this.addSubject = addSubject
+
         if (timetable == null) {
             timetableLiveData.value = DataState(DataState.STATE.NOTHING)
         } else {
             timetableLiveData.value = DataState(timetable)
         }
-
-        initCourseT = courseTime
-        initSubject = subject
-        this.addSubject = addSubject
 
         if (courseTime == null) {
             customTimePeriodLiveData.value = DataState(DataState.STATE.NOTHING)
@@ -258,6 +258,9 @@ class AddEventViewModel @Inject constructor(
                                 val se = timetable.getTimestamps(w, range.dow, range.period)
                                 ei.from = Timestamp(se[0])
                                 ei.to = Timestamp(se[1])
+                                val nums = timetable.transformCourseNumber(range.period)
+                                ei.fromNumber = nums.first
+                                ei.lastNumber = nums.second - nums.first + 1
                                 maxEndTime = maxEndTime.coerceAtLeast(ei.to.time)
                                 data.add(ei)
                             }

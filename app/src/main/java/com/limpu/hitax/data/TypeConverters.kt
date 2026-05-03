@@ -62,13 +62,9 @@ object TypeConverters {
     @JvmStatic
     @TypeConverter
     fun stringToTimePeriodList(string: String): List<TimePeriodInDay> {
-        val res = mutableListOf<TimePeriodInDay>()
         val g = Gson()
-        val list = g.fromJson(string,List::class.java)
-        for(e in list){
-            res.add(g.fromJson(e.toString(),TimePeriodInDay::class.java))
-        }
-        return res
+        val type = object : com.google.gson.reflect.TypeToken<List<TimePeriodInDay>>() {}.type
+        return g.fromJson(string, type) ?: mutableListOf()
     }
 
 
