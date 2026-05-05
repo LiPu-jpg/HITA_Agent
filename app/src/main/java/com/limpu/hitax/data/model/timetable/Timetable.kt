@@ -49,7 +49,9 @@ class Timetable {
 
     fun getTimestamps(week:Int,dow:Int,start:Int,end:Int): List<Long> {
         val startOfDay:Long = startTime.time + (week-1).toLong()*7*24*60*60*1000 + (dow-1).toLong()*24*60*60*1000
-        return listOf(startOfDay+scheduleStructure[start-1].from.toMills(),startOfDay+ scheduleStructure[end-1].to.toMills())
+        val s = if (start - 1 in scheduleStructure.indices) scheduleStructure[start - 1].from.toMills() else 0L
+        val e = if (end - 1 in scheduleStructure.indices) scheduleStructure[end - 1].to.toMills() else 0L
+        return listOf(startOfDay + s, startOfDay + e)
     }
 
     fun getTimestamps(week:Int,dow:Int,period: TimePeriodInDay): List<Long> {
@@ -58,7 +60,9 @@ class Timetable {
     }
 
     fun transformTimePeriod(start:Int,end:Int):TimePeriodInDay{
-        return TimePeriodInDay(scheduleStructure[start-1].from,scheduleStructure[end-1].to)
+        val s = if (start - 1 in scheduleStructure.indices) scheduleStructure[start - 1].from else TimeInDay(0, 0)
+        val e = if (end - 1 in scheduleStructure.indices) scheduleStructure[end - 1].to else TimeInDay(0, 0)
+        return TimePeriodInDay(s, e)
     }
 
     fun transformCourseNumber(period:TimePeriodInDay):Pair<Int,Int>{

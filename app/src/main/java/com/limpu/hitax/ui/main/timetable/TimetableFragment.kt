@@ -385,7 +385,7 @@ class TimetableFragment : HiltBaseFragment<FragmentTimetableBinding>() {
                             val cp = getCurrentTimetableAndWeek()
                             cp.first?.let { timetable ->
                                 PopupAddEvent().setInitTimetable(timetable).setInitTime(
-                                    dow, week = cp.second ?: 1,
+                                    dow, week = if ((cp.second ?: 1) <= 0) 1 else cp.second!!,
                                     period
                                 ).show(childFragmentManager, "add")
                             } ?: kotlin.run {
