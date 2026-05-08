@@ -33,8 +33,10 @@ import com.limpu.hitax.ui.widgets.WidgetUtils
 import com.limpu.style.widgets.DialogAutoEditText
 import com.limpu.style.widgets.DialogSelectableLiveList
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
+import dagger.hilt.android.AndroidEntryPoint
 import java.util.Calendar
 
+@AndroidEntryPoint
 class PopupAddEvent(private val addSubjectMode: Boolean = false) :
     TransparentModeledBottomSheetDialog<AddEventViewModel, DialogBottomAddEventBinding>() {
 
@@ -212,7 +214,9 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                 binding?.timeShow?.setTextColor(getColorPrimary())
                 if (viewModel.timetableLiveData.value?.data != null) {
                     it.data?.let { ct ->
-                        val t1 = resources.getStringArray(R.array.dow1)[ct.dow - 1].toString() +
+                        val dowArray = resources.getStringArray(R.array.dow1)
+                        val dowIndex = (ct.dow - 1).coerceIn(0, dowArray.size - 1)
+                        val t1 = dowArray[dowIndex].toString() +
                                 " " + ct.period.from.toString() + "-" + ct.period.to.toString()
                         val set = HashSet<Int>()
                         val frags = mutableListOf<String>()

@@ -140,7 +140,8 @@ class TimeTableView : ViewGroup {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.action == MotionEvent.ACTION_UP) {
             removeView(addButton)
-            val dow = event.x.toInt() / sectionWidth + 1
+            if (sectionWidth <= 0) return super.onTouchEvent(event)
+            val dow = (event.x.toInt() / sectionWidth + 1).coerceIn(1, 7)
             val st = styleSheet.getStartTimeObject()
             val time: TimeInDay = st.getAdded((event.y / sectionHeight * 60f).toInt())
             var period: TimePeriodInDay? = null
