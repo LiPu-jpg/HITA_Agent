@@ -689,8 +689,8 @@ class BenbuEASWebSource : EASService {
 
         val electronicExpHostName = "http://eelabinfo-hit-edu-cn.ivpn.hit.edu.cn:1080"
 
-        // 尝试从token中获取JWT token（存储在accessToken字段中）
-        val jwtToken = token.accessToken
+        // 尝试从token中获取JWT token（存储在electronicExpToken字段中）
+        val jwtToken = token.electronicExpToken
         if (jwtToken.isNullOrBlank()) {
             LogUtils.w("📍 ⚠️ 未找到电子实验中心JWT token，跳过查询")
             return emptyList()
@@ -842,7 +842,7 @@ class BenbuEASWebSource : EASService {
      * @param jwtToken JWT token字符串
      */
     fun setElectronicExperimentToken(token: EASToken, jwtToken: String) {
-        token.accessToken = jwtToken
+        token.electronicExpToken = jwtToken
         LogUtils.d("✅ 电子实验中心JWT token已设置: ${jwtToken.take(20)}...")
     }
 

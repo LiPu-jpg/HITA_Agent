@@ -18,6 +18,9 @@ class EASToken {
     // route / JSESSIONID 由 Jsoup session 自动管理，同时存一份供跨请求复用
     var cookies = HashMap<String, String>()
 
+    // --- 本部电子实验中心 JWT token (用于 eelabinfo-hit-edu-cn.ivpn.hit.edu.cn) ---
+    var electronicExpToken: String? = null
+
     var campus: Campus = Campus.SHENZHEN
     var username: String? = null
     var password: String? = null
@@ -47,7 +50,7 @@ class EASToken {
     }
 
     override fun toString(): String {
-        return "EASToken(campus=$campus, accessToken=${accessToken?.take(10)}..., username=$username, name=$name, stutype=${getStudentType()}, stuId=$stuId, school=$school)"
+        return "EASToken(campus=$campus, accessToken=${accessToken?.take(10)}..., electronicExpToken=${electronicExpToken?.take(10)}..., username=$username, name=$name, stutype=${getStudentType()}, stuId=$stuId, school=$school)"
     }
 
 
