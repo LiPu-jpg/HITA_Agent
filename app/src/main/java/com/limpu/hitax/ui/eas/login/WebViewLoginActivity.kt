@@ -182,6 +182,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
 
                     // 注入JavaScript来拦截电子实验中心的API响应
                     if (url?.contains("eelabinfo-hit-edu-cn.ivpn.hit.edu.cn") == true) {
+                        LogUtils.i("🔌 检测到电子实验中心页面，准备注入token拦截脚本")
                         injectJavaScriptForTokenInterception()
                     }
                 }

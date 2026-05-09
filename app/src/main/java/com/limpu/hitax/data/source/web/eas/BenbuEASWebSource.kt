@@ -30,6 +30,40 @@ class BenbuEASWebSource : EASService {
         private const val DEBUG_WEEK = 7
         private val DEBUG_DOW = setOf(5, 6)
         private val SAFE_PERSONAL_INFO_LABELS = setOf("姓名", "学号", "院系", "学院", "系", "专业", "年级", "班级")
+
+        /**
+         * 🔧 调试工具：手动设置电子实验中心JWT token
+         *
+         * 使用方法：
+         * 1. 在浏览器中访问：http://eelabinfo-hit-edu-cn.ivpn.hit.edu.cn:1080/api/cas/loginSuccess
+         * 2. 完成CAS登录
+         * 3. 打开浏览器开发者工具（F12）
+         * 4. 切换到Network标签
+         * 5. 刷新页面或访问课表页面
+         * 6. 查找请求头中的 VcTchToken 字段
+         * 7. 复制完整的JWT token（很长的字符串）
+         * 8. 调用此方法设置token
+         *
+         * @param token EASToken对象
+         * @param jwtToken JWT token字符串（从浏览器请求头复制）
+         */
+        fun setElectronicExperimentToken(token: EASToken, jwtToken: String) {
+            LogUtils.d("🔑 === 手动设置电子实验中心JWT Token ===")
+            LogUtils.d("🔑 JWT Token长度: ${jwtToken.length}")
+            LogUtils.d("🔑 JWT Token预览: ${jwtToken.take(50)}...")
+
+            // 简单验证JWT格式
+            if (!jwtToken.contains(".")) {
+                LogUtils.w("🔑 ⚠️ 警告：JWT token格式异常（不包含.分隔符）")
+            }
+
+            val parts = jwtToken.split(".")
+            LogUtils.d("🔑 JWT token包含${parts.size}个部分")
+
+            token.electronicExpToken = jwtToken
+            LogUtils.d("🔑 ✅ 电子实验中心JWT token已保存到 token.electronicExpToken")
+            LogUtils.d("🔑 现在可以查询电子实验中心的课程了")
+        }
     }
 
     override fun login(
