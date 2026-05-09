@@ -686,6 +686,9 @@ class BenbuEASWebSource : EASService {
     private fun getElectronicExperimentCourses(term: TermItem, token: EASToken): List<CourseItem> {
         LogUtils.d("📍 === 🔬 电子实验中心查询 START ===")
         LogUtils.d("📍 term: code=${term.getCode()}, name=${term.termName}")
+        LogUtils.d("📍 token.electronicExpToken: ${token.electronicExpToken?.take(30)}...")
+        LogUtils.d("📍 token.cookies.size: ${token.cookies.size}")
+        LogUtils.d("📍 token.cookies.keys: ${token.cookies.keys.sorted()}")
 
         val electronicExpHostName = "http://eelabinfo-hit-edu-cn.ivpn.hit.edu.cn:1080"
 
@@ -693,13 +696,25 @@ class BenbuEASWebSource : EASService {
         val jwtToken = token.electronicExpToken
         if (jwtToken.isNullOrBlank()) {
             LogUtils.w("📍 ⚠️ 未找到电子实验中心JWT token，跳过查询")
+            LogUtils.w("📍 💡 提示：需要先调用 setElectronicExperimentToken() 设置JWT token")
+            LogUtils.w("📍 💡 JWT token应从电子实验中心的CAS登录中获取")
             return emptyList()
+        }
+
+        LogUtils.d("📍 ✅ JWT token已设置，长度: ${jwtToken.length}")
+        LogUtils.d("📍 JWT token preview: ${jwtToken.take(50)}...")
+        if (jwtToken.length < 50) {
+            LogUtils.w("📍 ⚠️ JWT token长度异常，可能无效")
         }
 
         // 步骤1：查询实验课表API
         LogUtils.d("📍 步骤1: 查询 /api/stu/viewCKKB?sf_request_type=ajax")
+        LogUtils.d("📍 准备发送请求...")
         try {
-            val response = Jsoup.connect("$electronicExpHostName/api/stu/viewCKKB?sf_request_type=ajax")
+            val url = "$electronicExpHostName/api/stu/viewCKKB?sf_request_type=ajax"
+            LogUtils.d("📍 URL: $url")
+
+            val response = Jsoup.connect(url)
                 .cookies(token.cookies)
                 .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 Safari/605.1.15")
                 .header("Accept", "*/*")
@@ -716,35 +731,56 @@ class BenbuEASWebSource : EASService {
                 .method(Connection.Method.POST)
                 .execute()
 
-            LogUtils.d("📍 API响应 status=${response.statusCode()}")
-            LogUtils.d("📍 API响应 length: ${response.body().length}")
+            LogUtils.d("📍 === API响应分析 ===")
+            LogUtils.d("📍 HTTP Status: ${response.statusCode()}")
+            LogUtils.d("📍 Content-Type: ${response.contentType()}")
+            LogUtils.d("📍 Body Length: ${response.body().length} bytes")
+
+            // 检查响应头
+            val headers = response.headers()
+            LogUtils.d("📍 Response Headers (前10个):")
+            var headerCount = 0
+            headers.forEach { (key, value) ->
+                if (headerCount++ < 10) {
+                    LogUtils.d("📍   $key: ${value.take(100)}")
+                }
+            }
 
             if (response.statusCode() != 200) {
                 LogUtils.e("📍 ❌ 电子实验中心查询失败 HTTP ${response.statusCode()}")
+                LogUtils.e("📍 响应内容: ${response.body().take(500)}")
                 return emptyList()
             }
 
             val body = response.body()
-            LogUtils.d("📍 API响应 preview: ${body.take(500)}")
+            LogUtils.d("📍 响应内容预览 (前800字符):")
+            LogUtils.d("📍 ${body.take(800)}")
 
             // 解析JSON响应
+            LogUtils.d("📍 === 开始解析JSON ===")
             val parsedCourses = parseElectronicExperimentJson(body)
 
             LogUtils.d("📍 ✅ 电子实验中心解析完成: count=${parsedCourses.size}")
-            parsedCourses.forEachIndexed { index, course ->
-                val timeDisplay = if (course.startTime != null && course.endTime != null) {
-                    "${course.startTime}-${course.endTime}"
-                } else {
-                    "第${course.begin}-${course.last}节"
+            if (parsedCourses.isEmpty()) {
+                LogUtils.w("📍 ⚠️ 没有解析到任何实验课程")
+            } else {
+                parsedCourses.forEachIndexed { index, course ->
+                    val timeDisplay = if (course.startTime != null && course.endTime != null) {
+                        "${course.startTime}-${course.endTime}"
+                    } else {
+                        "第${course.begin}-${course.last}节"
+                    }
+                    LogUtils.d("📍 实验#$index: ${course.name} 周${course.weeks} 星期${course.dow} $timeDisplay ${course.teacher} ${course.classroom}")
                 }
-                LogUtils.d("📍 电子实验#$index: ${course.name} 周${course.weeks} 星期${course.dow} $timeDisplay ${course.teacher} ${course.classroom}")
             }
 
             return parsedCourses
 
         } catch (e: Exception) {
-            LogUtils.e("📍 ❌ 电子实验中心查询异常: ${e.message}")
+            LogUtils.e("📍 ❌ 电子实验中心查询异常: ${e.javaClass.simpleName} - ${e.message}")
+            LogUtils.e("📍 异常堆栈: ", e)
             LogUtils.w("📍 这可能需要用户在WebView中完成电子实验中心的登录认证")
+            LogUtils.w("📍 或者JWT token已过期，需要重新获取")
             return emptyList()
         }
     }
@@ -773,21 +809,32 @@ class BenbuEASWebSource : EASService {
         val courses = mutableListOf<CourseItem>()
 
         try {
+            LogUtils.d("📍 [JSON解析] 开始解析JSON，长度: ${json.length}")
+            LogUtils.d("📍 [JSON解析] JSON预览: ${json.take(400)}")
+
             val jsonObj = org.json.JSONObject(json)
             val code = jsonObj.optInt("code", -1)
+            val codeMessage = jsonObj.optString("codeMessage", "")
+
+            LogUtils.d("📍 [JSON解析] 响应码: code=$code, message=$codeMessage")
 
             if (code != 0) {
-                val message = jsonObj.optString("codeMessage", "未知错误")
-                LogUtils.w("📍 API返回错误: code=$code, message=$message")
+                LogUtils.e("📍 [JSON解析] ❌ API返回错误: code=$code, message=$codeMessage")
                 return courses
             }
 
-            val dataArray = jsonObj.optJSONArray("data") ?: org.json.JSONArray()
-            LogUtils.d("📍 解析${dataArray.length()}条电子实验数据")
+            val dataArray = jsonObj.optJSONArray("data")
+            if (dataArray == null) {
+                LogUtils.w("📍 [JSON解析] ⚠️ data字段为null")
+                return courses
+            }
+
+            LogUtils.d("📍 [JSON解析] 找到${dataArray.length()}条实验记录")
 
             for (i in 0 until dataArray.length()) {
                 try {
                     val item = dataArray.getJSONObject(i)
+                    LogUtils.d("📍 [JSON解析] 解析第${i+1}条记录")
 
                     val subjectName = item.optString("subjectName", "").trim()
                     val classDate = item.optString("classDate", "").trim()
@@ -797,15 +844,27 @@ class BenbuEASWebSource : EASService {
                     val address = item.optString("address", "").trim()
                     val labsName = item.optString("labsName", "").trim()
 
-                    if (subjectName.isEmpty()) continue
+                    LogUtils.d("📍 [JSON解析#$i] 课程: $subjectName")
+                    LogUtils.d("📍 [JSON解析#$i] 日期: $classDate")
+                    LogUtils.d("📍 [JSON解析#$i] 时间: $startTime - $endTime")
+                    LogUtils.d("📍 [JSON解析#$i] 教师: $teacher")
+                    LogUtils.d("📍 [JSON解析#$i] 地点: $address")
+                    LogUtils.d("📍 [JSON解析#$i] 实验室: $labsName")
+
+                    if (subjectName.isEmpty()) {
+                        LogUtils.w("📍 [JSON解析#$i] ⚠️ 课程名称为空，跳过")
+                        continue
+                    }
 
                     // 解析日期：2026-05-12 -> 计算周数和星期
                     val (dow, weekNum) = parseDateToWeekAndDow(classDate)
 
                     if (dow == -1 || weekNum == -1) {
-                        LogUtils.w("📍 跳过无效日期: $classDate")
+                        LogUtils.w("📍 [JSON解析#$i] ⚠️ 日期解析失败: $classDate (dow=$dow, week=$weekNum)")
                         continue
                     }
+
+                    LogUtils.d("📍 [JSON解析#$i] ✅ 日期解析成功: 星期${dow}, 第${weekNum}周")
 
                     val course = CourseItem().apply {
                         name = subjectName
@@ -820,14 +879,17 @@ class BenbuEASWebSource : EASService {
                     }
 
                     courses.add(course)
+                    LogUtils.d("📍 [JSON解析#$i] ✅ 课程添加成功")
 
                 } catch (e: Exception) {
-                    LogUtils.e("📍 解析单条数据失败: ${e.message}")
+                    LogUtils.e("📍 [JSON解析#$i] ❌ 解析单条数据失败: ${e.message}")
+                    LogUtils.e("📍 [JSON解析#$i] 异常详情: ", e)
                 }
             }
 
         } catch (e: Exception) {
-            LogUtils.e("📍 JSON解析失败: ${e.message}")
+            LogUtils.e("📍 [JSON解析] ❌ JSON解析失败: ${e.javaClass.simpleName} - ${e.message}")
+            LogUtils.e("📍 [JSON解析] 异常堆栈: ", e)
         }
 
         return courses
@@ -842,8 +904,21 @@ class BenbuEASWebSource : EASService {
      * @param jwtToken JWT token字符串
      */
     fun setElectronicExperimentToken(token: EASToken, jwtToken: String) {
+        LogUtils.d("🔑 === 设置电子实验中心JWT Token ===")
+        LogUtils.d("🔑 JWT Token长度: ${jwtToken.length}")
+        LogUtils.d("🔑 JWT Token预览: ${jwtToken.take(50)}...")
+
+        // 简单验证JWT格式
+        if (!jwtToken.contains(".")) {
+            LogUtils.w("🔑 ⚠️ 警告：JWT token格式异常（不包含.分隔符）")
+        }
+
+        val parts = jwtToken.split(".")
+        LogUtils.d("🔑 JWT token包含${parts.size}个部分")
+
         token.electronicExpToken = jwtToken
-        LogUtils.d("✅ 电子实验中心JWT token已设置: ${jwtToken.take(20)}...")
+        LogUtils.d("🔑 ✅ 电子实验中心JWT token已保存到 token.electronicExpToken")
+        LogUtils.d("🔑 现在可以查询电子实验中心的课程了")
     }
 
     /**
@@ -857,10 +932,13 @@ class BenbuEASWebSource : EASService {
      */
     private fun parseDateToWeekAndDow(dateStr: String): Pair<Int, Int> {
         try {
+            LogUtils.d("📍 [日期解析] 输入日期: $dateStr")
+
             // 假设2025年秋季学期开学日期为2025-09-01（周一）
             val startDate = Calendar.getInstance().apply {
                 set(2025, Calendar.SEPTEMBER, 1)
             }
+            LogUtils.d("📍 [日期解析] 学期开学日期: 2025-09-01")
 
             val currentDate = SimpleDateFormat("yyyy-MM-dd").parse(dateStr)
             val currentCalendar = Calendar.getInstance().apply {
@@ -885,10 +963,13 @@ class BenbuEASWebSource : EASService {
                 else -> -1
             }
 
+            LogUtils.d("📍 [日期解析] 计算结果: 星期${adjustedDow}, 第${weekNum}周 (距离开学${diffDays}天)")
+
             return Pair(adjustedDow, weekNum)
 
         } catch (e: Exception) {
-            LogUtils.e("📍 日期解析失败: ${e.message}")
+            LogUtils.e("📍 [日期解析] ❌ 解析失败: ${e.message}")
+            LogUtils.e("📍 [日期解析] 异常详情: ", e)
             return Pair(-1, -1)
         }
     }
