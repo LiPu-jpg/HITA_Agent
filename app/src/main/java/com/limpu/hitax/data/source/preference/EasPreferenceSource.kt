@@ -38,6 +38,7 @@ class EasPreferenceSource(context: Context) {
             .putString("sfxsx", token.sfxsx)
             .putString("email", token.email)
             .putString("phone", token.phone)
+            .putString("electronicExpToken", token.electronicExpToken)
             .apply()
     }
 
@@ -73,6 +74,7 @@ class EasPreferenceSource(context: Context) {
         result.sfxsx = preference.getString("sfxsx", null)
         result.email = preference.getString("email", null)
         result.phone = preference.getString("phone", null)
+        result.electronicExpToken = preference.getString("electronicExpToken", null)
         val map = runCatching {
             Gson().fromJson(preference.getString("cookies", "{}"), HashMap::class.java)
         }.getOrNull() ?: HashMap<Any, Any>()

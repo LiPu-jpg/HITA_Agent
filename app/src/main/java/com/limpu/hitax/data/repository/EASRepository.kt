@@ -387,13 +387,13 @@ class EASRepository @Inject constructor(
 
                                 // Count free time courses before processing
                                 val freeTimeCount = courseItems.count { item ->
-                                    item.startTime != null && item.endTime != null && item.begin == -1 && item.last == -1
+                                    !item.startTime.isNullOrBlank() && !item.endTime.isNullOrBlank() && item.begin == -1 && item.last == -1
                                 }
                                 LogUtils.d("📊 [IMPORT] Total courses: ${courseItems.size}, Free time courses: $freeTimeCount, Period courses: ${courseItems.size - freeTimeCount}")
 
                                 for (item in courseItems) {
                                     // Check if this is a free time course (has startTime/EndTime)
-                                    val isFreeTimeCourse = item.startTime != null && item.endTime != null && item.begin == -1 && item.last == -1
+                                    val isFreeTimeCourse = !item.startTime.isNullOrBlank() && !item.endTime.isNullOrBlank() && item.begin == -1 && item.last == -1
 
                                     // Debug log for experiment courses
                                     if (isFreeTimeCourse) {

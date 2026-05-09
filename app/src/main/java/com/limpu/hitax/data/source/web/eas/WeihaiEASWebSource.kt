@@ -1185,6 +1185,7 @@ class WeihaiEASWebSource : EASService {
             enriched.major = valuesByLabel["专业"] ?: token.major
             enriched.grade = valuesByLabel["年级"] ?: token.grade
             enriched.className = valuesByLabel["班级"] ?: token.className
+            enriched.electronicExpToken = token.electronicExpToken
         }
     }
 

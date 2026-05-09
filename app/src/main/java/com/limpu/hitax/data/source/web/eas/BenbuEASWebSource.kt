@@ -686,26 +686,18 @@ class BenbuEASWebSource : EASService {
     private fun getElectronicExperimentCourses(term: TermItem, token: EASToken): List<CourseItem> {
         LogUtils.d("📍 === 🔬 电子实验中心查询 START ===")
         LogUtils.d("📍 term: code=${term.getCode()}, name=${term.termName}")
-        LogUtils.d("📍 token.electronicExpToken: ${token.electronicExpToken?.take(30)}...")
         LogUtils.d("📍 token.cookies.size: ${token.cookies.size}")
-        LogUtils.d("📍 token.cookies.keys: ${token.cookies.keys.sorted()}")
 
         val electronicExpHostName = "http://eelabinfo-hit-edu-cn.ivpn.hit.edu.cn:1080"
 
-        // 尝试从token中获取JWT token（存储在electronicExpToken字段中）
+        // JWT token from WebView login flow
         val jwtToken = token.electronicExpToken
         if (jwtToken.isNullOrBlank()) {
-            LogUtils.w("📍 ⚠️ 未找到电子实验中心JWT token，跳过查询")
-            LogUtils.w("📍 💡 提示：需要先调用 setElectronicExperimentToken() 设置JWT token")
-            LogUtils.w("📍 💡 JWT token应从电子实验中心的CAS登录中获取")
+            LogUtils.w("📍 ⚠️ 电子实验中心JWT token为空，请重新登录获取。跳过查询")
             return emptyList()
         }
 
         LogUtils.d("📍 ✅ JWT token已设置，长度: ${jwtToken.length}")
-        LogUtils.d("📍 JWT token preview: ${jwtToken.take(50)}...")
-        if (jwtToken.length < 50) {
-            LogUtils.w("📍 ⚠️ JWT token长度异常，可能无效")
-        }
 
         // 步骤1：查询实验课表API
         LogUtils.d("📍 步骤1: 查询 /api/stu/viewCKKB?sf_request_type=ajax")
@@ -758,7 +750,7 @@ class BenbuEASWebSource : EASService {
 
             // 解析JSON响应
             LogUtils.d("📍 === 开始解析JSON ===")
-            val parsedCourses = parseElectronicExperimentJson(body)
+            val parsedCourses = parseElectronicExperimentJson(body, term)
 
             LogUtils.d("📍 ✅ 电子实验中心解析完成: count=${parsedCourses.size}")
             if (parsedCourses.isEmpty()) {
@@ -805,7 +797,7 @@ class BenbuEASWebSource : EASService {
      *   ]
      * }
      */
-    private fun parseElectronicExperimentJson(json: String): List<CourseItem> {
+    private fun parseElectronicExperimentJson(json: String, term: TermItem): List<CourseItem> {
         val courses = mutableListOf<CourseItem>()
 
         try {
@@ -838,15 +830,24 @@ class BenbuEASWebSource : EASService {
 
                     val subjectName = item.optString("subjectName", "").trim()
                     val classDate = item.optString("classDate", "").trim()
-                    val startTime = item.optString("startTime", "").trim()
-                    val endTime = item.optString("endTime", "").trim()
+                    val startTimeRaw = item.optString("startTime", "").trim()
+                    val endTimeRaw = item.optString("endTime", "").trim()
                     val teacher = item.optString("teacher", "").trim()
                     val address = item.optString("address", "").trim()
                     val labsName = item.optString("labsName", "").trim()
 
+                    // startTime/endTime 可能是 "HH:MM" 或 "HH:MM:SS"，统一取前两段
+                    val startTime = parseTimeField(startTimeRaw)
+                    // endTime 为空时，从 startTime 推算默认 2 小时（实验课标准时长）
+                    val endTime = if (endTimeRaw.isBlank()) {
+                        deriveEndTime(startTime, durationMinutes = 120)
+                    } else {
+                        parseTimeField(endTimeRaw)
+                    }
+
                     LogUtils.d("📍 [JSON解析#$i] 课程: $subjectName")
                     LogUtils.d("📍 [JSON解析#$i] 日期: $classDate")
-                    LogUtils.d("📍 [JSON解析#$i] 时间: $startTime - $endTime")
+                    LogUtils.d("📍 [JSON解析#$i] 时间: $startTimeRaw -> $startTime, $endTimeRaw -> $endTime")
                     LogUtils.d("📍 [JSON解析#$i] 教师: $teacher")
                     LogUtils.d("📍 [JSON解析#$i] 地点: $address")
                     LogUtils.d("📍 [JSON解析#$i] 实验室: $labsName")
@@ -857,7 +858,7 @@ class BenbuEASWebSource : EASService {
                     }
 
                     // 解析日期：2026-05-12 -> 计算周数和星期
-                    val (dow, weekNum) = parseDateToWeekAndDow(classDate)
+                    val (dow, weekNum) = parseDateToWeekAndDow(classDate, term)
 
                     if (dow == -1 || weekNum == -1) {
                         LogUtils.w("📍 [JSON解析#$i] ⚠️ 日期解析失败: $classDate (dow=$dow, week=$weekNum)")
@@ -895,50 +896,40 @@ class BenbuEASWebSource : EASService {
         return courses
     }
 
-    /**
-     * 设置电子实验中心JWT token
-     *
-     * 此方法用于在WebView登录后设置JWT token，以便查询电子实验中心的课程
-     *
-     * @param token EASToken对象
-     * @param jwtToken JWT token字符串
-     */
-    fun setElectronicExperimentToken(token: EASToken, jwtToken: String) {
-        LogUtils.d("🔑 === 设置电子实验中心JWT Token ===")
-        LogUtils.d("🔑 JWT Token长度: ${jwtToken.length}")
-        LogUtils.d("🔑 JWT Token预览: ${jwtToken.take(50)}...")
+    /** 将 "HH:MM" 或 "HH:MM:SS" 统一为 "HH:MM"，无法解析时返回 null */
+    private fun parseTimeField(raw: String): String? {
+        if (raw.isBlank()) return null
+        val parts = raw.split(":")
+        if (parts.size < 2) return null
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        return String.format("%02d:%02d", hour, minute)
+    }
 
-        // 简单验证JWT格式
-        if (!jwtToken.contains(".")) {
-            LogUtils.w("🔑 ⚠️ 警告：JWT token格式异常（不包含.分隔符）")
-        }
-
-        val parts = jwtToken.split(".")
-        LogUtils.d("🔑 JWT token包含${parts.size}个部分")
-
-        token.electronicExpToken = jwtToken
-        LogUtils.d("🔑 ✅ 电子实验中心JWT token已保存到 token.electronicExpToken")
-        LogUtils.d("🔑 现在可以查询电子实验中心的课程了")
+    /** 从 startTime 推算 endTime，默认加 durationMinutes 分钟 */
+    private fun deriveEndTime(startTime: String?, durationMinutes: Int): String? {
+        if (startTime == null) return null
+        val parts = startTime.split(":")
+        if (parts.size < 2) return null
+        val hour = parts[0].toIntOrNull() ?: return null
+        val minute = parts[1].toIntOrNull() ?: return null
+        val total = hour * 60 + minute + durationMinutes
+        return String.format("%02d:%02d", total / 60, total % 60)
     }
 
     /**
      * 解析日期字符串为周数和星期
      *
-     * 需要知道学期的开学日期才能正确计算
-     * 这里使用一个简单的假设：2025年秋季学期开学日期为2025-09-01（周一）
-     *
      * @param dateStr 日期字符串，格式：2026-05-12
+     * @param term 学期信息，用于推断开学日期
      * @return Pair(星期几, 周数)，星期几：1=周一, 7=周日
      */
-    private fun parseDateToWeekAndDow(dateStr: String): Pair<Int, Int> {
+    private fun parseDateToWeekAndDow(dateStr: String, term: TermItem): Pair<Int, Int> {
         try {
             LogUtils.d("📍 [日期解析] 输入日期: $dateStr")
 
-            // 假设2025年秋季学期开学日期为2025-09-01（周一）
-            val startDate = Calendar.getInstance().apply {
-                set(2025, Calendar.SEPTEMBER, 1)
-            }
-            LogUtils.d("📍 [日期解析] 学期开学日期: 2025-09-01")
+            val startDate = inferTermStartDate(term)
+            LogUtils.d("📍 [日期解析] 学期开学日期: ${startDate.time}")
 
             val currentDate = SimpleDateFormat("yyyy-MM-dd").parse(dateStr)
             val currentCalendar = Calendar.getInstance().apply {
@@ -1403,6 +1394,7 @@ class BenbuEASWebSource : EASService {
             enriched.major = valuesByLabel["专业"] ?: token.major
             enriched.grade = valuesByLabel["年级"] ?: token.grade
             enriched.className = valuesByLabel["班级"] ?: token.className
+            enriched.electronicExpToken = token.electronicExpToken
         }
     }
 
