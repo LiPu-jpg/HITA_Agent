@@ -119,7 +119,6 @@ class EASWebSource internal constructor(
         data: Map<String, String> = emptyMap()
     ): Connection.Response {
         fun executeOnce(): Connection.Response {
-            LogUtils.d("EASWebSource", "🌐 authedFormPost: path=$path, token=${token.accessToken?.take(8)}..., cookies=${token.cookies.size}")
 
             // 强制使用IPv4以避免IPv6连接问题
             val originalIPv4 = System.getProperty("java.net.preferIPv4Stack")
@@ -139,7 +138,6 @@ class EASWebSource internal constructor(
                 data.forEach { (k, v) -> req.data(k, v) }
                 val resp = req.execute()
                 token.cookies.putAll(resp.cookies())
-                LogUtils.d("EASWebSource", "🌐 authedFormPost response: status=${resp.statusCode()}, cookies=${resp.cookies().size}")
                 return resp
             } finally {
                 // 恢复原始设置
@@ -158,12 +156,12 @@ class EASWebSource internal constructor(
 
         var resp = executeOnce()
         if (isAuthExpiredResponse(resp)) {
-            LogUtils.w("EASWebSource", "⚠️ Auth expired for path=$path, attempting relogin...")
+            LogUtils.w("authedFormPost: auth expired, path=$path, attempting relogin...")
             if (tryRelogin(token)) {
-                LogUtils.d("EASWebSource", "✅ Relogin successful, retrying path=$path")
+                LogUtils.d("authedFormPost: relogin successful, retrying path=$path")
                 resp = executeOnce()
             } else {
-                LogUtils.e("❌ Relogin failed for path=$path")
+                LogUtils.e("authedFormPost: relogin failed, path=$path")
             }
         }
         return resp
@@ -220,13 +218,13 @@ class EASWebSource internal constructor(
     private fun isAuthExpiredResponse(resp: Connection.Response): Boolean {
         val body = resp.body()
         if (resp.statusCode() == 401 || resp.statusCode() == 403) {
-            LogUtils.w("EASWebSource", "⚠️ Auth expired by status code: ${resp.statusCode()}, body=${body.take(200)}")
+            LogUtils.w("isAuthExpiredResponse: auth expired by status code: ${resp.statusCode()}, body=${body.take(200)}")
             return true
         }
         val jo = JsonUtils.getJsonObject(body) ?: return false
         val code = jo.optInt("code", Int.MIN_VALUE)
         if (code in setOf(401, 403, 2005)) {
-            LogUtils.w("EASWebSource", "⚠️ Auth expired by JSON code: $code, body=${body.take(200)}")
+            LogUtils.w("isAuthExpiredResponse: auth expired by JSON code: $code, body=${body.take(200)}")
             return true
         }
         val msg = listOf(
@@ -243,7 +241,7 @@ class EASWebSource internal constructor(
             msg.contains("失效") ||
             msg.contains("过期")
         if (expired) {
-            LogUtils.w("EASWebSource", "⚠️ Auth expired by JSON message: '$msg', body=${body.take(200)}")
+            LogUtils.w("isAuthExpiredResponse: auth expired by JSON message: '$msg', body=${body.take(200)}")
         }
         return expired
     }
@@ -272,23 +270,23 @@ class EASWebSource internal constructor(
     private fun tryRelogin(token: EASToken): Boolean {
         val username = token.username?.trim().orEmpty()
         val password = token.password.orEmpty()
-        LogUtils.d("EASWebSource", "🔄 tryRelogin: username=$username, hasPassword=${password.isNotBlank()}")
+        LogUtils.d("tryRelogin: username=$username, hasPassword=${password.isNotBlank()}")
         if (username.isBlank() || password.isBlank()) {
-            LogUtils.e("❌ tryRelogin failed: username or password blank")
+            LogUtils.e("tryRelogin: failed, username or password blank")
             return false
         }
         val refreshed = loginCore(username, password)
         if (refreshed == null) {
-            LogUtils.e("❌ tryRelogin failed: loginCore returned null")
+            LogUtils.e("tryRelogin: failed, loginCore returned null")
             return false
         }
-        LogUtils.d("EASWebSource", "✅ tryRelogin success: newToken=${refreshed.accessToken?.take(8)}..., cookies=${refreshed.cookies.size}")
+        LogUtils.d("tryRelogin: success, newToken=${refreshed.accessToken?.take(8)}, cookies=${refreshed.cookies.size}")
         token.accessToken = refreshed.accessToken
         token.refreshToken = refreshed.refreshToken
         token.cookies.clear()
         token.cookies.putAll(refreshed.cookies)
         onTokenRefreshed?.invoke(token)
-        LogUtils.d("EASWebSource", "💾 Token refreshed callback invoked")
+        LogUtils.d("tryRelogin: token refreshed callback invoked")
         return true
     }
 
@@ -658,13 +656,13 @@ class EASWebSource internal constructor(
                 // 策略1：先尝试 querykbrczong 总览接口
                 val zongResult = fetchTimetableFromOverview(token, term)
                 if (!zongResult.isNullOrEmpty()) {
-                    LogUtils.d("EASWebSource", "✅ Using overview (querykbrczong) result: ${zongResult.size} courses")
+                    LogUtils.d("getTimetableOfTerm: using overview result, count=${zongResult.size}")
                     res.postValue(DataState(zongResult, DataState.STATE.SUCCESS))
                     return@Thread
                 }
 
                 // 策略2：总览没结果，走 Kbcx/query + querykbrcbyday 周表路径
-                LogUtils.d("EASWebSource", "🔄 Overview empty, falling back to week schedule path")
+                LogUtils.d("getTimetableOfTerm: overview empty, falling back to week schedule")
                 val merged = linkedMapOf<String, CourseItem>()
                 val selectedCourseNameByCode = fetchSelectedCourseNameByCodeSync(token, term)
                 val dayScheduleCache = java.util.concurrent.ConcurrentHashMap<String, List<DayScheduleItem>>()
@@ -714,7 +712,7 @@ class EASWebSource internal constructor(
 
                 // 并行请求所有需要富化的日期
                 if (enrichmentNeeded.isNotEmpty()) {
-                    LogUtils.d("EASWebSource", "🚀 Fetching ${enrichmentNeeded.size} day schedules in parallel")
+                    LogUtils.d("getTimetableOfTerm: fetching ${enrichmentNeeded.size} day schedules in parallel")
                     val futures = enrichmentNeeded.distinct().map { date ->
                         pool.submit(java.util.concurrent.Callable<Unit> {
                             dayScheduleCache[date] = fetchDaySchedule(token, date)
@@ -778,7 +776,7 @@ class EASWebSource internal constructor(
                         val summary = debugWeekRows
                             .sortedWith(compareBy<CourseItem> { it.dow }.thenBy { it.begin })
                             .joinToString(" || ") { debugCourseIdentity(it) }
-                        LogUtils.d("raw week=$week dow=$DEBUG_DOW rows=${debugWeekRows.size} term=${term.getCode()} -> $summary")
+                        LogUtils.d("[DBG] raw week=$week dow=$DEBUG_DOW rows=${debugWeekRows.size} term=${term.getCode()} -> $summary")
                     }
                 }
                 pool.shutdown()
@@ -790,7 +788,7 @@ class EASWebSource internal constructor(
                     .filter { it.dow == DEBUG_DOW && it.weeks.contains(DEBUG_WEEK) }
                     .sortedWith(compareBy<CourseItem> { it.begin }.thenBy { it.name })
                 LogUtils.d(
-                    "dedup week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugBeforeMerge.size} term=${term.getCode()} -> " +
+                    "[DBG] dedup week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugBeforeMerge.size} term=${term.getCode()} -> " +
                         debugBeforeMerge.joinToString(" || ") { debugCourseIdentity(it) }
                 )
                 val mergedAdjacent = mergeAdjacentCourses(result)
@@ -798,7 +796,7 @@ class EASWebSource internal constructor(
                     .filter { it.dow == DEBUG_DOW && it.weeks.contains(DEBUG_WEEK) }
                     .sortedWith(compareBy<CourseItem> { it.begin }.thenBy { it.name })
                 LogUtils.d(
-                    "merged week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugAfterMerge.size} term=${term.getCode()} -> " +
+                    "[DBG] merged week=$DEBUG_WEEK dow=$DEBUG_DOW count=${debugAfterMerge.size} term=${term.getCode()} -> " +
                         debugAfterMerge.joinToString(" || ") { debugCourseIdentity(it) }
                 )
 
@@ -1111,9 +1109,9 @@ class EASWebSource internal constructor(
                         break
                     }
 
-                    if (shouldDebugPair(base, candidate)) {
+                    if (shouldDebug(base, candidate)) {
                         LogUtils.d(
-                            "no-merge week=$DEBUG_WEEK dow=$DEBUG_DOW reason=${mergeBlockReason(base, candidate)} left=${debugCourseIdentity(base)} right=${debugCourseIdentity(candidate)}"
+                            "[DBG] no-merge week=$DEBUG_WEEK dow=$DEBUG_DOW reason=${mergeBlockReason(base, candidate)} left=${debugCourseIdentity(base)} right=${debugCourseIdentity(candidate)}"
                         )
                     }
                 }
@@ -1172,9 +1170,9 @@ class EASWebSource internal constructor(
             left.code = right.code
         }
 
-        if (shouldDebugPair(left, right)) {
+        if (shouldDebug(left, right)) {
             LogUtils.d(
-                "week-split-merge shared=$sharedWeeks leftOnly=$leftOnlyWeeks rightOnly=$rightOnlyWeeks left=${debugCourseIdentity(left)} right=${debugCourseIdentity(right)}"
+                "[DBG] week-split-merge shared=$sharedWeeks leftOnly=$leftOnlyWeeks rightOnly=$rightOnlyWeeks left=${debugCourseIdentity(left)} right=${debugCourseIdentity(right)}"
             )
         }
 
@@ -1301,7 +1299,7 @@ class EASWebSource internal constructor(
         }
     }
 
-    private fun shouldDebugPair(left: CourseItem, right: CourseItem): Boolean {
+    private fun shouldDebug(left: CourseItem, right: CourseItem): Boolean {
         if (left.dow != DEBUG_DOW || right.dow != DEBUG_DOW) return false
         if (!left.weeks.contains(DEBUG_WEEK) || !right.weeks.contains(DEBUG_WEEK)) return false
         return true
@@ -1892,9 +1890,7 @@ class EASWebSource internal constructor(
         val res = MutableLiveData<DataState<List<ExamItem>>>()
         Thread {
             try {
-                LogUtils.d("EASWebSource", "=== 📝深圳校区考试查询 START ===")
-                LogUtils.d("EASWebSource", "Token: accessToken=${token.accessToken?.take(12)}..., campus=${token.campus}")
-                LogUtils.d("EASWebSource", "查询学期: term=${term?.name}, yearCode=${term?.yearCode}, termCode=${term?.termCode}")
+                LogUtils.d("getExamItems: term=${term?.name}, yearCode=${term?.yearCode}, termCode=${term?.termCode}, campus=${token.campus}")
 
                 // 使用传入的学期参数，如果没有则使用当前学期
                 val xn = term?.yearCode ?: run {
@@ -1915,13 +1911,11 @@ class EASWebSource internal constructor(
                     put("pageSize", 20)
                 }.toString()
 
-                LogUtils.d("EASWebSource", "request body: $requestBody")
 
                 // 发送POST请求到深圳校区考试查询接口
                 val examHost = "https://mjw.hitsz.edu.cn"
                 val url = "$examHost/incoSpringBoot/app/kscx/queryKsxxByXs"
 
-                LogUtils.d("EASWebSource", "calling API: $url")
 
                 val req = Jsoup.newSession()
                     .url(url)
@@ -1938,55 +1932,41 @@ class EASWebSource internal constructor(
 
                 // 添加Bearer Token认证
                 if (!token.accessToken.isNullOrEmpty()) {
-                    LogUtils.d("EASWebSource", "using Bearer token authentication")
                     req.header("authorization", "bearer ${token.accessToken}")
                     req.header("rolecode", "06")
                 } else {
-                    LogUtils.d("EASWebSource", "using cookie authentication")
                 }
 
                 val response = req.execute()
 
-                LogUtils.d("EASWebSource", "response status: ${response.statusCode()}")
-                LogUtils.d("EASWebSource", "response body preview: ${response.body().take(300)}")
+                LogUtils.d("getExamItems: HTTP ${response.statusCode()}, body length=${response.body().length}")
 
                 if (response.statusCode() == 200) {
                     val responseBody = response.body()
-                    LogUtils.d("完整响应内容: $responseBody", "EASWebSource")
-
                     val jsonResponse = org.json.JSONObject(responseBody)
 
-                    LogUtils.d("API response code: ${jsonResponse.optInt("code")}", "EASWebSource")
+                    LogUtils.d("getExamItems: API code=${jsonResponse.optInt("code")}")
 
                     if (jsonResponse.optInt("code") == 200) {
                         val content = jsonResponse.optJSONObject("content")
                         val examList = mutableListOf<ExamItem>()
 
-                        // 详细输出content结构
                         if (content != null) {
-                            LogUtils.d("content结构: total=${content.optInt("total")}, pageNum=${content.optInt("pageNum")}, pageSize=${content.optInt("pageSize")}", "EASWebSource")
-                        } else {
-                            LogUtils.d("content为null，完整响应: $responseBody", "EASWebSource")
+                            LogUtils.d("getExamItems: total=${content.optInt("total")}, pageSize=${content.optInt("pageSize")}")
                         }
 
                         content?.optJSONArray("list")?.let { list ->
-                            LogUtils.d("found ${list.length()} exam items in response", "EASWebSource")
                             for (i in 0 until list.length()) {
                                 try {
                                     val examObj = list.getJSONObject(i)
                                     val examItem = ExamItem().apply {
-                                        courseName = examObj.optString("KCMC") // 课程名称
-                                        examDate = examObj.optString("KSRQ") // 考试日期
-                                        examTime = examObj.optString("KSJTSJ") // 考试时间
-                                        examType = examObj.optString("KSSJDMC") // 考试类型（期末/期中）
-                                        examLocation = "${examObj.optString("JXLMC")} ${examObj.optString("JXCDMC")}" // 教学楼 + 教室
-                                        termName = examObj.optString("XNXQMC") // 学年学期名称（显示用）
-                                        campusName = examObj.optString("XIAOQUBMC") // 校区名称
-
-                                        // **重要**：设置统一的学期ID，用于与TermItem.id匹配
-                                        // 格式：yearCode-termCode，如 "2025-2026-2"
-                                        // 优先使用传入的term参数，否则使用请求参数xn和xq
-                                        // 注意：不要使用API返回的XNXQMC字段生成ID，因为格式可能不一致
+                                        courseName = examObj.optString("KCMC")
+                                        examDate = examObj.optString("KSRQ")
+                                        examTime = examObj.optString("KSJTSJ")
+                                        examType = examObj.optString("KSSJDMC")
+                                        examLocation = "${examObj.optString("JXLMC")} ${examObj.optString("JXCDMC")}"
+                                        termName = examObj.optString("XNXQMC")
+                                        campusName = examObj.optString("XIAOQUBMC")
                                         termId = if (term != null) {
                                             "${term.yearCode}-${term.termCode}"
                                         } else {
@@ -1994,26 +1974,25 @@ class EASWebSource internal constructor(
                                         }
                                     }
                                     examList.add(examItem)
-                                    LogUtils.d("✅ parsed exam ${i+1}: ${examItem.courseName} ${examItem.examDate} ${examItem.examTime}", "EASWebSource")
                                 } catch (e: Exception) {
-                                    LogUtils.e("❌ Failed to parse exam item $i: ${e.message}", e, "EASWebSource")
+                                    LogUtils.e("getExamItems: parse failed at item $i", e)
                                 }
                             }
-                        } ?: LogUtils.d("list数组为null", "EASWebSource")
+                        }
 
-                        LogUtils.d("✅ 深圳校区考试查询 SUCCESS! found ${examList.size} exams", "EASWebSource")
+                        LogUtils.d("getExamItems: count=${examList.size}")
                         res.postValue(DataState(examList, DataState.STATE.SUCCESS))
                     } else {
                         val errorMsg = jsonResponse.optString("msg", "查询失败")
-                        LogUtils.e("❌ 深圳校区考试查询 FAILED: code=${jsonResponse.optInt("code")} msg=$errorMsg", null, "EASWebSource")
+                        LogUtils.e("getExamItems: API error, code=${jsonResponse.optInt("code")}, msg=$errorMsg")
                         res.postValue(DataState(DataState.STATE.FETCH_FAILED, errorMsg))
                     }
                 } else {
-                    LogUtils.e("❌ 深圳校区考试查询 HTTP ERROR: ${response.statusCode()}", null, "EASWebSource")
+                    LogUtils.e("getExamItems: HTTP ${response.statusCode()}")
                     res.postValue(DataState(DataState.STATE.FETCH_FAILED, "网络请求失败 HTTP ${response.statusCode()}"))
                 }
             } catch (e: Exception) {
-                LogUtils.e("❌ 深圳校区考试查询 EXCEPTION: ${e.javaClass.simpleName} ${e.message}", e, "EASWebSource")
+                LogUtils.e("getExamItems: ${e.javaClass.simpleName} ${e.message}", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "查询考试失败"))
             }
         }.start()

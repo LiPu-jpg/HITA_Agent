@@ -126,7 +126,7 @@ object BenbuScheduleParser {
         val matches = weekPattern.findAll(element).toList()
 
         if (matches.isEmpty()) {
-            maybeLogDebug(dow, emptyList(), "parseCourseElement no week match course=$courseName element=$element")
+            debugLog(dow, emptyList(), "parseCourseElement no week match course=$courseName element=$element")
             return emptyList()
         }
 
@@ -153,7 +153,7 @@ object BenbuScheduleParser {
             val periodResolved = resolvePeriod(periodInfo, periodHint)
             val teacherResolved = sanitizeTeacher(courseName, teacherPart)
 
-            maybeLogDebug(
+            debugLog(
                 dow,
                 weeks,
                 "parseCourseElement parsed course=$courseName teacherRaw=${teacherPart.ifBlank { "<blank>" }} " +
@@ -282,9 +282,9 @@ object BenbuScheduleParser {
         return dow in DEBUG_DOW && weeks.contains(DEBUG_WEEK)
     }
 
-    private fun maybeLogDebug(dow: Int, weeks: List<Int>, message: String) {
+    private fun debugLog(dow: Int, weeks: List<Int>, message: String) {
         if (!shouldDebug(dow, weeks)) return
-        LogUtils.d("[DBG_W7_D56] dow=$dow weeks=$weeks $message")
+        LogUtils.d("[DBG] dow=$dow weeks=$weeks $message")
     }
 
     /**
@@ -295,16 +295,16 @@ object BenbuScheduleParser {
     fun parseExperimentHtml(html: String): List<CourseItem> {
         val result = mutableListOf<CourseItem>()
         try {
-            LogUtils.d("🔬 === 实验课解析 START ===")
+            LogUtils.d("parseExperimentHtml: START")
             val doc = Jsoup.parse(html)
             val table = doc.select("table.dataTable").firstOrNull()
             if (table == null) {
-                LogUtils.w("🔬 ⚠️ 未找到 table.dataTable")
+                LogUtils.w("parseExperimentHtml: table.dataTable not found")
                 return result
             }
 
             val rows = table.select("tr")
-            LogUtils.d("🔬 找到表格，行数: ${rows.size}")
+            LogUtils.d("parseExperimentHtml: table found, rows=${rows.size}")
 
             // 跳过表头，从第2行开始
             for (rowIndex in 2 until rows.size) {
@@ -324,12 +324,12 @@ object BenbuScheduleParser {
                     if (cellText.isBlank() || cellText == "&nbsp;") continue
 
                     val dow = cellIndex - 1 // 星期几（1-7）
-                    LogUtils.d("🔬 行${rowIndex} 列${cellIndex} 星期${dow}: $cellText")
+                    LogUtils.d("parseExperimentHtml: row=$rowIndex, col=$cellIndex, dow=$dow, text=$cellText")
                     val courses = parseExperimentCell(cellHtml, dow, periodLabel, periodRange)
                     result.addAll(courses)
                 }
             }
-            LogUtils.d("🔬 === 实验课解析 END === total=${result.size}")
+            LogUtils.d("parseExperimentHtml: END, total=${result.size}")
         } catch (e: Exception) {
             LogUtils.e("parseExperimentHtml failed", e)
         }
@@ -399,7 +399,7 @@ object BenbuScheduleParser {
 
     private fun parseExperimentDetail(courseName: String, detail: String, dow: Int, periodLabel: String, periodRange: String): CourseItem? {
         try {
-            LogUtils.d("🔬 解析课程详情: name=$courseName, detail=$detail")
+            LogUtils.d("parseExperimentDetail: name=$courseName, detail=$detail")
             // 格式: 教师 [周次] 节次 上课形式[形式]地点，时间
             // 例如: 黄丽 [14周第7，8节] 上课形式[线下]L619，13:00-18:10
 
@@ -408,7 +408,7 @@ object BenbuScheduleParser {
             // 1. 提取教师名称（第一个空格之前）
             val teacherEndIndex = detail.indexOf(" [")
             if (teacherEndIndex <= 0) {
-                LogUtils.d("🔬 ❌ 未找到教师信息: $detail")
+                LogUtils.d("parseExperimentDetail: teacher not found, detail=$detail")
                 return null
             }
             course.teacher = detail.substring(0, teacherEndIndex).trim()
@@ -417,13 +417,13 @@ object BenbuScheduleParser {
             val weekPattern = Regex("\\[(\\d+)周第([\\d，]+)节\\]")
             val weekMatch = weekPattern.find(detail)
             if (weekMatch == null) {
-                LogUtils.d("🔬 ❌ 未找到周次信息: $detail")
+                LogUtils.d("parseExperimentDetail: weeks not found, detail=$detail")
                 return null
             }
 
             val weekNum = weekMatch.groupValues[1].toIntOrNull()
             if (weekNum == null) {
-                LogUtils.d("🔬 ❌ 周次解析失败: ${weekMatch.groupValues[1]}")
+                LogUtils.d("parseExperimentDetail: weeks parse failed, value=${weekMatch.groupValues[1]}")
                 return null
             }
             course.weeks = mutableListOf(weekNum)
@@ -438,7 +438,7 @@ object BenbuScheduleParser {
                 course.endTime = timeMatch.groupValues[2]      // "18:10"
                 course.begin = -1  // 实验课使用自由时间，标记为-1
                 course.last = -1
-                LogUtils.d("🔬 使用自由时间: ${course.startTime}-${course.endTime}")
+                LogUtils.d("parseExperimentDetail: using free time, startTime=${course.startTime}, endTime=${course.endTime}")
             } else {
                 // 回退到使用节次号
                 val periodStr = weekMatch.groupValues[2]
@@ -446,7 +446,7 @@ object BenbuScheduleParser {
                 val endPeriod = begin + duration - 1
                 course.begin = begin
                 course.last = duration
-                LogUtils.d("🔬 使用节次号: 第${begin}-${endPeriod}节")
+                LogUtils.d("parseExperimentDetail: using period, begin=$begin, end=$endPeriod")
             }
             course.dow = dow
 
@@ -462,7 +462,7 @@ object BenbuScheduleParser {
             course.name = courseName
 
             val timeDisplay = if (course.startTime != null) "${course.startTime}-${course.endTime}" else "第${course.begin}-${course.begin + course.last - 1}节"
-            LogUtils.d("🔬 ✅ 解析成功: ${course.name} 周${course.weeks} 星期${dow} $timeDisplay ${course.teacher} @${course.classroom}")
+            LogUtils.d("parseExperimentDetail: parsed, name=${course.name}, weeks=${course.weeks}, dow=$dow, time=$timeDisplay, teacher=${course.teacher}, room=${course.classroom}")
             return course
         } catch (e: Exception) {
             LogUtils.e("parseExperimentDetail failed: courseName=$courseName, detail=$detail", e)
@@ -473,14 +473,14 @@ object BenbuScheduleParser {
     // 处理合并格式："课程名 教师 [周次] 节次 上课形式[形式]地点，时间"
     private fun parseExperimentDetailFromCombined(combined: String, dow: Int, periodLabel: String, periodRange: String): CourseItem? {
         try {
-            LogUtils.d("🔬 解析合并格式: combined=$combined")
+            LogUtils.d("parseExperimentDetailFromCombined: combined=$combined")
 
             // 格式: 用拉伸法测定弹性模量 姚凤凤 [11周第7，8节] 上课形式[线下]L622，15:40-18:10
             // 提取第一个方括号之前的内容，然后分割课程名和教师
 
             val bracketIndex = combined.indexOf(" [")
             if (bracketIndex <= 0) {
-                LogUtils.d("🔬 ❌ 合并格式未找到方括号: $combined")
+                LogUtils.d("parseExperimentDetailFromCombined: brackets not found, combined=$combined")
                 return null
             }
 
@@ -488,7 +488,7 @@ object BenbuScheduleParser {
             val beforeBracket = combined.substring(0, bracketIndex).trim()
             val lastSpaceIndex = beforeBracket.lastIndexOf(" ")
             if (lastSpaceIndex <= 0) {
-                LogUtils.d("🔬 ❌ 合并格式未找到教师: $combined")
+                LogUtils.d("parseExperimentDetailFromCombined: teacher not found, combined=$combined")
                 return null
             }
 
@@ -506,13 +506,13 @@ object BenbuScheduleParser {
             val weekPattern = Regex("(\\d+)周第([\\d，]+)节")
             val weekMatch = weekPattern.find(detail)
             if (weekMatch == null) {
-                LogUtils.d("🔬 ❌ 合并格式未找到周次信息: $detail")
+                LogUtils.d("parseExperimentDetailFromCombined: weeks not found, detail=$detail")
                 return null
             }
 
             val weekNum = weekMatch.groupValues[1].toIntOrNull()
             if (weekNum == null) {
-                LogUtils.d("🔬 ❌ 周次解析失败: ${weekMatch.groupValues[1]}")
+                LogUtils.d("parseExperimentDetailFromCombined: weeks parse failed, value=${weekMatch.groupValues[1]}")
                 return null
             }
             course.weeks = mutableListOf(weekNum)
@@ -527,7 +527,7 @@ object BenbuScheduleParser {
                 course.endTime = timeMatch.groupValues[2]      // "18:10"
                 course.begin = -1  // 实验课使用自由时间，标记为-1
                 course.last = -1
-                LogUtils.d("🔬 使用自由时间: ${course.startTime}-${course.endTime}")
+                LogUtils.d("parseExperimentDetailFromCombined: using free time, startTime=${course.startTime}, endTime=${course.endTime}")
             } else {
                 // 回退到使用节次号
                 val periodStr = weekMatch.groupValues[2]
@@ -535,7 +535,7 @@ object BenbuScheduleParser {
                 val endPeriod = begin + duration - 1
                 course.begin = begin
                 course.last = duration
-                LogUtils.d("🔬 使用节次号: 第${begin}-${endPeriod}节")
+                LogUtils.d("parseExperimentDetailFromCombined: using period, begin=$begin, end=$endPeriod")
             }
             course.dow = dow
 
@@ -547,7 +547,7 @@ object BenbuScheduleParser {
             }
 
             val timeDisplay = if (course.startTime != null) "${course.startTime}-${course.endTime}" else "第${course.begin}-${course.begin + course.last - 1}节"
-            LogUtils.d("🔬 ✅ 合并格式解析成功: ${course.name} 周${course.weeks} 星期${dow} $timeDisplay ${course.teacher} @${course.classroom}")
+            LogUtils.d("parseExperimentDetailFromCombined: parsed, name=${course.name}, weeks=${course.weeks}, dow=$dow, time=$timeDisplay, teacher=${course.teacher}, room=${course.classroom}")
             return course
         } catch (e: Exception) {
             LogUtils.e("parseExperimentDetailFromCombined failed: combined=$combined", e)
@@ -624,10 +624,10 @@ object BenbuScheduleParser {
             }
 
             val duration = endPeriod - beginPeriod + 1
-            LogUtils.d("🔬 时间解析: $timeStr ($courseStartMin-$courseEndMin min) → 第${beginPeriod}-${endPeriod}节 (持续${duration}节)")
+            LogUtils.d("parsePeriodFromTime: timeStr=$timeStr, rangeMin=$courseStartMin-$courseEndMin, period=${beginPeriod}-${endPeriod}, duration=${duration}")
             return beginPeriod to duration
         } catch (e: Exception) {
-            LogUtils.e("🔬 时间解析失败: $timeStr", e)
+            LogUtils.e("parsePeriodFromTime: failed, timeStr=$timeStr", e)
             return parsePeriodRange("7，8") // 解析失败返回默认值
         }
     }

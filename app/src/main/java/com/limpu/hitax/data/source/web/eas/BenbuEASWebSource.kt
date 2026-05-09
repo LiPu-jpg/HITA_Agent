@@ -126,7 +126,7 @@ class BenbuEASWebSource : EASService {
                 val timetableFetch = fetchTermDoc(token, "$hostName/kbcx/queryGrkb", "xnxq")
 
                 if (scoreFetch.authExpired && timetableFetch.authExpired) {
-                    LogUtils.w( "getAllTerms auth expired on both term pages")
+                    LogUtils.w("getAllTerms: auth expired on both term pages")
                     result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
                     return@execute
                 }
@@ -149,8 +149,8 @@ class BenbuEASWebSource : EASService {
 
                 val visibleTerms = terms.filterVisibleTerms().toMutableList()
 
-                LogUtils.d( "getAllTerms score=${scoreTerms.map { it.getCode() }} timetable=${timetableTerms.map { it.getCode() }}")
-                LogUtils.d( "getAllTerms parsed=${visibleTerms.map { "${it.getCode()}:${it.name}:current=${it.isCurrent}" }}")
+                LogUtils.d("getAllTerms: score=${scoreTerms.map { it.getCode() }} timetable=${timetableTerms.map { it.getCode() }}")
+                LogUtils.d("getAllTerms: parsed=${visibleTerms.map { "${it.getCode()}:${it.name}:current=${it.isCurrent}" }}")
                 if (visibleTerms.isEmpty()) {
                     result.postValue(DataState(DataState.STATE.FETCH_FAILED, "未获取到学期列表"))
                 } else {
@@ -171,7 +171,7 @@ class BenbuEASWebSource : EASService {
         executor.execute {
             try {
                 val start = inferTermStartDate(term)
-                LogUtils.d( "getStartDate term=${term.getCode()} inferredStart=${start.time} termName=${term.termName} label=${term.name}")
+                LogUtils.d("getStartDate: term=${term.getCode()} inferredStart=${start.time} termName=${term.termName} label=${term.name}")
                 result.postValue(DataState(start, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "获取开学日期失败"))
@@ -217,7 +217,7 @@ class BenbuEASWebSource : EASService {
                 cachedCourses = null
                 result.postValue(DataState(courses))
             } catch (e: Exception) {
-                LogUtils.e("getTimetableOfTerm failed", e)
+                LogUtils.e("getTimetableOfTerm: failed", e)
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }
@@ -245,7 +245,7 @@ class BenbuEASWebSource : EASService {
                 }
                 result.postValue(DataState(resolved, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
-                LogUtils.w( "getScheduleStructure fallback to default: ${e.message}")
+                LogUtils.w("getScheduleStructure: fallback to default: ${e.message}")
                 result.postValue(DataState(defaultScheduleStructure(), DataState.STATE.SUCCESS))
             }
         }
@@ -410,7 +410,7 @@ class BenbuEASWebSource : EASService {
             if (hasSelect) return doc
             val title = doc.title().trim()
             val sample = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.take(120).orEmpty()
-            LogUtils.w( "fetchTermDoc missing selector=$selectName url=$url title=$title sample=$sample")
+            LogUtils.w("fetchTermDoc: missing selector=$selectName url=$url title=$title sample=$sample")
             return null
         }
 
@@ -420,12 +420,12 @@ class BenbuEASWebSource : EASService {
             var authExpired = isBenbuAuthExpiredResponse(response, response.body())
 
             if (doc == null) {
-                LogUtils.d( "fetchTermDoc retry by missing selector select=$selectName url=$url status=${response.statusCode()}")
+                LogUtils.d("fetchTermDoc: retry by missing selector select=$selectName url=$url status=${response.statusCode()}")
                 authExpired = true
             }
 
             if (authExpired) {
-                LogUtils.w( "fetchTermDoc auth expired url=$url select=$selectName status=${response.statusCode()}")
+                LogUtils.w("fetchTermDoc: auth expired url=$url select=$selectName status=${response.statusCode()}")
                 TermDocFetchResult(null, true)
             } else if (doc == null) {
                 TermDocFetchResult(null, false)
@@ -433,7 +433,7 @@ class BenbuEASWebSource : EASService {
                 TermDocFetchResult(doc, false)
             }
         } catch (e: Exception) {
-            LogUtils.w( "fetchTermDoc failed url=$url select=$selectName err=${e.message}")
+            LogUtils.w("fetchTermDoc: failed url=$url select=$selectName err=${e.message}")
             TermDocFetchResult(null, false)
         }
     }
@@ -538,7 +538,7 @@ class BenbuEASWebSource : EASService {
         val experimentCourses = try {
             getExperimentCourses(term, token)
         } catch (e: Exception) {
-            LogUtils.w( "Failed to fetch experiment courses: ${e.message}")
+            LogUtils.w("getTimetableOfTermSync: failed to fetch experiment courses, message=${e.message}")
             emptyList()
         }
 
@@ -546,7 +546,7 @@ class BenbuEASWebSource : EASService {
         val electronicExperimentCourses = try {
             getElectronicExperimentCourses(term, token)
         } catch (e: Exception) {
-            LogUtils.w( "Failed to fetch electronic experiment courses: ${e.message}")
+            LogUtils.w("getTimetableOfTermSync: failed to fetch electronic experiment courses, message=${e.message}")
             emptyList()
         }
 
@@ -555,7 +555,7 @@ class BenbuEASWebSource : EASService {
         val mergedCourses = mergeAdjacentCourses(allCourses)
 
         LogUtils.d(
-            "getTimetableOfTermSync term=${term.getCode()} " +
+            "getTimetableOfTermSync: term=${term.getCode()} " +
             "regular=${regularCourses.size} " +
             "experiment=${experimentCourses.size} " +
             "electronicExp=${electronicExperimentCourses.size} " +
@@ -648,6 +648,7 @@ class BenbuEASWebSource : EASService {
             LogUtils.w("getElectronicExpCourses: JWT token is empty, skipping")
             return emptyList()
         }
+        LogUtils.d("getElectronicExpCourses: JWT token ready, length=${jwtToken.length}")
 
         try {
             val url = "$electronicExpHostName/api/stu/viewCKKB?sf_request_type=ajax"
@@ -669,8 +670,9 @@ class BenbuEASWebSource : EASService {
                 .method(Connection.Method.POST)
                 .execute()
 
+            LogUtils.d("getElectronicExpCourses: HTTP ${response.statusCode()}, body length=${response.body().length}")
             if (response.statusCode() != 200) {
-                LogUtils.e("getElectronicExpCourses: HTTP ${response.statusCode()}")
+                LogUtils.e("getElectronicExpCourses: request failed")
                 return emptyList()
             }
 
@@ -846,7 +848,7 @@ class BenbuEASWebSource : EASService {
         val title = doc.title().trim()
         val sampleText = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.take(160).orEmpty()
         LogUtils.w(
-            "unexpected timetable response term=${term.getCode()} status=$statusCode hasTermSelector=$hasTermSelector title=$title sample=$sampleText"
+            "ensureTimetableResponse: unexpected response, term=${term.getCode()} status=$statusCode hasTermSelector=$hasTermSelector title=$title sample=$sampleText"
         )
         throw IllegalStateException(
             if (hasTermSelector) "课表页返回异常，未找到课表表格"
@@ -874,15 +876,8 @@ class BenbuEASWebSource : EASService {
             }
         val bodySample = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.take(240).orEmpty()
         LogUtils.w(
-            "empty timetable details term=${term.getCode()} rows=${rows.size} rowSummaries=$rowSummaries formFields=$formInputs sample=$bodySample"
+            "logEmptyTimetableDetails: empty timetable, term=${term.getCode()} rows=${rows.size} rowSummaries=$rowSummaries formFields=$formInputs sample=$bodySample"
         )
-    }
-
-    private fun cookieFingerprintSummary(cookies: Map<String, String>): String {
-        val keys = listOf("JSESSIONID", "HIT", "TWFID")
-        return keys.joinToString(prefix = "[", postfix = "]") { key ->
-            "$key=${cookies[key]?.take(8) ?: "-"}"
-        }
     }
 
     private fun mergeAdjacentCourses(courses: List<CourseItem>): List<CourseItem> {
@@ -1246,7 +1241,7 @@ class BenbuEASWebSource : EASService {
                 )
             }
         }
-        LogUtils.d( "requestBenbuScores term=${term.getCode()} name=${term.termName} testType=$testType path=$path params=$params")
+        LogUtils.d( "requestBenbuScores: term=${term.getCode()} name=${term.termName} testType=$testType path=$path params=$params")
 
         fun executeOnce(): Connection.Response {
             val resp = Jsoup.connect(hostName + path)
@@ -1360,7 +1355,7 @@ class BenbuEASWebSource : EASService {
         val termSnippets = parsed.take(8).map { it.termName.orEmpty() }
         val sampleCourses = parsed.take(8).map { "${it.courseName.orEmpty()}|${it.termName.orEmpty()}|${it.finalScores}" }
         LogUtils.d(
-            "$stage term=${term.getCode()} name=${term.termName} testType=$testType status=$statusCode parsed=${parsed.size} filtered=${filtered.size} title=$title forms=$forms tables=$tables termSnippets=$termSnippets sampleCourses=$sampleCourses"
+            "$stage: term=${term.getCode()} name=${term.termName} testType=$testType status=$statusCode parsed=${parsed.size} filtered=${filtered.size} title=$title forms=$forms tables=$tables termSnippets=$termSnippets sampleCourses=$sampleCourses"
         )
     }
 
@@ -1375,7 +1370,7 @@ class BenbuEASWebSource : EASService {
         val title = doc.title().trim()
         val sample = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.take(200).orEmpty()
         LogUtils.w(
-            "$stage failed term=${term.getCode()} name=${term.termName} testType=$testType status=$statusCode title=$title sample=$sample"
+            "$stage: failed, term=${term.getCode()} name=${term.termName} testType=$testType status=$statusCode title=$title sample=$sample"
         )
     }
 

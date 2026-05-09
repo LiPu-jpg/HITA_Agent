@@ -40,21 +40,21 @@ class WeihaiEASWebSource : EASService {
 
         executor.execute {
             try {
-                LogUtils.w( "=== 🔐 Weihai login START ===")
-                LogUtils.w( "username length=${username.length}")
+                LogUtils.d("login: Weihai login START")
+                LogUtils.d("login: username length=${username.length}")
 
                 val cookiesMap = parseCookiesFromJson(username)
-                LogUtils.w( "parsed cookies: ${cookiesMap.keys} count=${cookiesMap.size}")
-                LogUtils.w( "key cookies: HIT=${cookiesMap["HIT"]?.take(8)} JSESSIONID=${cookiesMap["JSESSIONID"]?.take(8)} ticket=${cookiesMap.keys.find { it.contains("vpn_ticket", ignoreCase = true) }?.take(20)}")
+                LogUtils.d("login: parsed cookies=${cookiesMap.keys}, count=${cookiesMap.size}")
+                LogUtils.d("login: key cookies, HIT=${cookiesMap["HIT"]?.take(8)}, JSESSIONID=${cookiesMap["JSESSIONID"]?.take(8)}")
 
                 if (cookiesMap.isEmpty()) {
-                    LogUtils.e( "❌ cookies EMPTY")
+                    LogUtils.e("login: cookies EMPTY")
                     result.postValue(DataState(DataState.STATE.FETCH_FAILED, "cookies 为空"))
                     return@execute
                 }
 
                 val url = "$hostName/kjscx/queryJxlListBySjid?sf_request_type=ajax"
-                LogUtils.w( "validating cookies with: $url")
+                LogUtils.d("login: validating cookies, url=$url")
 
                 val response = Jsoup.connect(url)
                     .cookies(cookiesMap)
@@ -69,7 +69,7 @@ class WeihaiEASWebSource : EASService {
                     .method(Connection.Method.POST)
                     .execute()
 
-                LogUtils.w( "response statusCode=${response.statusCode()} body=${response.body().take(100)}")
+                LogUtils.d("login: validation response, status=${response.statusCode()}")
 
                 if (response.statusCode() == 200) {
                     val token = EASToken().apply {
@@ -78,15 +78,14 @@ class WeihaiEASWebSource : EASService {
                         this.username = extractLoginIdentity(cookiesMap)
                         this.password = password.ifBlank { username }
                     }
-                    LogUtils.w( "✅ Weihai login SUCCESS! username=${token.username}")
+                    LogUtils.success("login: Weihai login ok, username=${token.username}")
                     result.postValue(DataState(token, DataState.STATE.SUCCESS))
                 } else {
-                    LogUtils.e( "❌ Weihai login FAILED statusCode=${response.statusCode()}")
+                    LogUtils.e("login: Weihai login failed, status=${response.statusCode()}")
                     result.postValue(DataState(DataState.STATE.FETCH_FAILED, "登录验证失败 HTTP ${response.statusCode()}"))
                 }
             } catch (e: Exception) {
-                LogUtils.e("❌ Weihai login EXCEPTION: ${e.javaClass.simpleName} ${e.message}")
-                LogUtils.e("Failed to login to Weihai EAS", e)
+                LogUtils.e("login: Weihai login exception", e)
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "登录失败"))
             }
         }
@@ -136,7 +135,7 @@ class WeihaiEASWebSource : EASService {
                 }
             } catch (e: Exception) {
                 // 威海校区：即使reAuth失败，也认为登录成功（因为WebView已确认）
-                LogUtils.w("Weihai loginCheck exception, treating as success: ${e.message}")
+                LogUtils.d("loginCheck: exception, treating as success, message=${e.message}")
                 result.postValue(DataState(Pair(true, token), DataState.STATE.SUCCESS))
             }
         }
@@ -154,7 +153,7 @@ class WeihaiEASWebSource : EASService {
                 val timetableFetch = fetchTermDoc(token, "$hostName/kbcx/queryGrkb", "xnxq")
 
                 if (scoreFetch.authExpired && timetableFetch.authExpired) {
-                    LogUtils.w( "getAllTerms auth expired on both term pages")
+                    LogUtils.w("getAllTerms: auth expired on both term pages")
                     result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
                     return@execute
                 }
@@ -177,8 +176,8 @@ class WeihaiEASWebSource : EASService {
 
                 val visibleTerms = terms.filterVisibleTerms().toMutableList()
 
-                LogUtils.d( "getAllTerms score=${scoreTerms.map { it.getCode() }} timetable=${timetableTerms.map { it.getCode() }}")
-                LogUtils.d( "getAllTerms parsed=${visibleTerms.map { "${it.getCode()}:${it.name}:current=${it.isCurrent}" }}")
+                LogUtils.d("getAllTerms: score=${scoreTerms.map { it.getCode() }} timetable=${timetableTerms.map { it.getCode() }}")
+                LogUtils.d("getAllTerms: parsed=${visibleTerms.map { "${it.getCode()}:${it.name}:current=${it.isCurrent}" }}")
                 if (visibleTerms.isEmpty()) {
                     result.postValue(DataState(DataState.STATE.FETCH_FAILED, "未获取到学期列表"))
                 } else {
@@ -199,7 +198,7 @@ class WeihaiEASWebSource : EASService {
         executor.execute {
             try {
                 val start = inferTermStartDate(term)
-                LogUtils.d( "getStartDate term=${term.getCode()} inferredStart=${start.time} termName=${term.termName} label=${term.name}")
+                LogUtils.d("getStartDate: term=${term.getCode()} inferredStart=${start.time} termName=${term.termName} label=${term.name}")
                 result.postValue(DataState(start, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "获取开学日期失败"))
@@ -227,7 +226,7 @@ class WeihaiEASWebSource : EASService {
         executor.execute {
             try {
                 val termCode = term.getCode()
-                LogUtils.d( "getTimetableOfTerm request path=/kbcx/queryGrkb params={fhlj=kbcx/queryGrkb,xnxq=$termCode}")
+                LogUtils.d("getTimetableOfTerm: request path=/kbcx/queryGrkb params={fhlj=kbcx/queryGrkb,xnxq=$termCode}")
                 val response = Jsoup.connect("$hostName/kbcx/queryGrkb")
                     .cookies(token.cookies)
                     .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
@@ -245,11 +244,11 @@ class WeihaiEASWebSource : EASService {
                 val body = response.body()
                 val hasTimetableTable = Jsoup.parse(body).selectFirst("table.addlist_01") != null
                 LogUtils.d(
-                    "getTimetableOfTerm response term=$termCode status=$statusCode hasAddlist01=$hasTimetableTable cookieKeys=${token.cookies.keys.sorted()} ${cookieFingerprintSummary(token.cookies)}"
+                    "getTimetableOfTerm: response, term=$termCode status=$statusCode hasAddlist01=$hasTimetableTable cookieKeys=${token.cookies.keys.sorted()} ${cookieFingerprintSummary(token.cookies)}"
                 )
 
                 if (isWeihaiAuthExpiredResponse(response, body)) {
-                    LogUtils.w( "getTimetableOfTerm auth expired term=$termCode status=$statusCode")
+                    LogUtils.w("getTimetableOfTerm: auth expired, term=$termCode status=$statusCode")
                     result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
                     return@execute
                 }
@@ -263,7 +262,7 @@ class WeihaiEASWebSource : EASService {
                 val parsedCourses = BenbuScheduleParser.parseScheduleHtml(body)
                 val courses = mergeAdjacentCourses(parsedCourses)
                 logEmptyTimetableDetails(term, body, courses)
-                LogUtils.d( "getTimetableOfTerm parsed term=$termCode rawCourseCount=${parsedCourses.size} mergedCourseCount=${courses.size}")
+                LogUtils.d("getTimetableOfTerm: parsed, term=$termCode rawCourseCount=${parsedCourses.size} mergedCourseCount=${courses.size}")
                 result.postValue(DataState(courses))
             } catch (e: Exception) {
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
@@ -291,10 +290,10 @@ class WeihaiEASWebSource : EASService {
                 } else {
                     schedule
                 }
-                LogUtils.d( "getScheduleStructure term=${term.getCode()} courseCount=${courses.size} maxPeriod=$maxPeriod resolvedSize=${resolved.size}")
+                LogUtils.d("getScheduleStructure: term=${term.getCode()} courseCount=${courses.size} maxPeriod=$maxPeriod resolvedSize=${resolved.size}")
                 result.postValue(DataState(resolved, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
-                LogUtils.w( "getScheduleStructure fallback to default: ${e.message}")
+                LogUtils.w("getScheduleStructure: fallback to default: ${e.message}")
                 result.postValue(DataState(defaultScheduleStructure(), DataState.STATE.SUCCESS))
             }
         }
@@ -450,7 +449,7 @@ class WeihaiEASWebSource : EASService {
             if (hasSelect) return doc
             val title = doc.title().trim()
             val sample = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.take(120).orEmpty()
-            LogUtils.w( "fetchTermDoc missing selector=$selectName url=$url title=$title sample=$sample")
+            LogUtils.w("fetchTermDoc: missing selector=$selectName url=$url title=$title sample=$sample")
             return null
         }
 
@@ -460,12 +459,12 @@ class WeihaiEASWebSource : EASService {
             var authExpired = isWeihaiAuthExpiredResponse(response, response.body())
 
             if (doc == null) {
-                LogUtils.d( "fetchTermDoc retry by missing selector select=$selectName url=$url status=${response.statusCode()}")
+                LogUtils.d("fetchTermDoc: retry by missing selector select=$selectName url=$url status=${response.statusCode()}")
                 authExpired = true
             }
 
             if (authExpired) {
-                LogUtils.w( "fetchTermDoc auth expired url=$url select=$selectName status=${response.statusCode()}")
+                LogUtils.w("fetchTermDoc: auth expired url=$url select=$selectName status=${response.statusCode()}")
                 TermDocFetchResult(null, true)
             } else if (doc == null) {
                 TermDocFetchResult(null, false)
@@ -473,7 +472,7 @@ class WeihaiEASWebSource : EASService {
                 TermDocFetchResult(doc, false)
             }
         } catch (e: Exception) {
-            LogUtils.w( "fetchTermDoc failed url=$url select=$selectName err=${e.message}")
+            LogUtils.w("fetchTermDoc: failed url=$url select=$selectName err=${e.message}")
             TermDocFetchResult(null, false)
         }
     }
@@ -591,7 +590,7 @@ class WeihaiEASWebSource : EASService {
         val parsedCourses = BenbuScheduleParser.parseScheduleHtml(body)
         val courses = mergeAdjacentCourses(parsedCourses)
         logEmptyTimetableDetails(term, body, courses)
-        LogUtils.d( "getTimetableOfTermSync term=${term.getCode()} rawCourseCount=${parsedCourses.size} mergedCourseCount=${courses.size} cookieKeys=${token.cookies.keys.sorted()} ${cookieFingerprintSummary(token.cookies)}")
+        LogUtils.d( "getTimetableOfTermSync: term=${term.getCode()} rawCourseCount=${parsedCourses.size} mergedCourseCount=${courses.size} cookieKeys=${token.cookies.keys.sorted()} ${cookieFingerprintSummary(token.cookies)}")
         return courses
     }
 
@@ -605,7 +604,7 @@ class WeihaiEASWebSource : EASService {
         val title = doc.title().trim()
         val sampleText = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.take(160).orEmpty()
         LogUtils.w(
-            "unexpected timetable response term=${term.getCode()} status=$statusCode hasTermSelector=$hasTermSelector title=$title sample=$sampleText"
+            "ensureTimetableResponse: unexpected response, term=${term.getCode()} status=$statusCode hasTermSelector=$hasTermSelector title=$title sample=$sampleText"
         )
         throw IllegalStateException(
             if (hasTermSelector) "课表页返回异常，未找到课表表格"
@@ -634,7 +633,7 @@ class WeihaiEASWebSource : EASService {
             }
         val bodySample = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.take(240).orEmpty()
         LogUtils.w(
-            "empty timetable details term=${term.getCode()} hasAddlist01=${table != null} rows=${rows.size} headerCells=$headerRowCellCount rowSummaries=$rowSummaries formFields=$formInputs sample=$bodySample"
+            "logEmptyTimetableDetails: empty timetable, term=${term.getCode()} hasAddlist01=${table != null} rows=${rows.size} headerCells=$headerRowCellCount rowSummaries=$rowSummaries formFields=$formInputs sample=$bodySample"
         )
     }
 
@@ -808,7 +807,7 @@ class WeihaiEASWebSource : EASService {
                     buildingCandidates.add("")
 
                     LogUtils.d(
-                        "queryEmptyClassroom xiaoqu=$xiaoqu remoteBuildings=${remoteBuildings.size} matchedRemote=$matchedRemoteCodes buildingCandidates=$buildingCandidates"
+                        "queryEmptyClassroom: xiaoqu=$xiaoqu remoteBuildings=${remoteBuildings.size} matchedRemote=$matchedRemoteCodes buildingCandidates=$buildingCandidates"
                     )
 
                     for (lhdm in buildingCandidates) {
@@ -822,7 +821,7 @@ class WeihaiEASWebSource : EASService {
                                 "pageCddm" to cddm
                             )
                             LogUtils.d(
-                                "queryEmptyClassroom term=${term.getCode()} building=${building.id} weeks=$weekStart-$weekEnd path=/kjscx/queryKjs pageXiaoqu=${params["pageXiaoqu"]} pageLhdm=${params["pageLhdm"]} pageCddm=${params["pageCddm"]}"
+                                "queryEmptyClassroom: term=${term.getCode()}, building=${building.id} weeks=$weekStart-$weekEnd path=/kjscx/queryKjs pageXiaoqu=${params["pageXiaoqu"]} pageLhdm=${params["pageLhdm"]} pageCddm=${params["pageCddm"]}"
                             )
 
                             val response = Jsoup.connect("$hostName/kjscx/queryKjs?$WEBVPN_JWTS_QUERY_HINT")
@@ -847,7 +846,7 @@ class WeihaiEASWebSource : EASService {
                             val body = response.body()
                             if (isWeihaiAuthExpiredResponse(response, body)) {
                                 LogUtils.w(
-                                    "queryEmptyClassroom auth expired term=${term.getCode()} building=${building.id} weeks=$weekStart-$weekEnd status=${response.statusCode()}"
+                                    "queryEmptyClassroom: auth expired, term=${term.getCode()} building=${building.id} weeks=$weekStart-$weekEnd status=${response.statusCode()}"
                                 )
                                 result.postValue(DataState(DataState.STATE.NOT_LOGGED_IN))
                                 return@execute
@@ -862,7 +861,7 @@ class WeihaiEASWebSource : EASService {
                             val tableCount = doc.select("table").size
                             val firstNames = classrooms.take(6).map { it.name }
                             LogUtils.d(
-                                "queryEmptyClassroom parsed=${classrooms.size} title=$title tables=$tableCount first=$firstNames pageXiaoqu=$xiaoqu pageLhdm=$lhdm pageCddm=$cddm"
+                                "queryEmptyClassroom: parsed=${classrooms.size} title=$title tables=$tableCount first=$firstNames pageXiaoqu=$xiaoqu pageLhdm=$lhdm pageCddm=$cddm"
                             )
 
                             lastResponse = response
@@ -902,7 +901,7 @@ class WeihaiEASWebSource : EASService {
                             "${element.tagName()}[name=${element.attr("name")},value=${element.`val`().take(20)}]"
                         }
                     LogUtils.w(
-                        "queryEmptyClassroom empty details pageXiaoqu=$lastXiaoqu pageLhdm=$lastLhdm pageCddm=$lastCddm rows=$rowSummaries formFields=$headerInputs"
+                        "queryEmptyClassroom: empty details pageXiaoqu=$lastXiaoqu pageLhdm=$lastLhdm pageCddm=$lastCddm rows=$rowSummaries formFields=$headerInputs"
                     )
                 }
                 result.postValue(DataState(lastClassrooms))
@@ -1236,7 +1235,7 @@ class WeihaiEASWebSource : EASService {
                 )
             }
         }
-        LogUtils.d( "requestWeihaiScores term=${term.getCode()} name=${term.termName} testType=$testType path=$path params=$params")
+        LogUtils.d( "requestWeihaiScores: term=${term.getCode()} name=${term.termName} testType=$testType path=$path params=$params")
 
         fun executeOnce(): Connection.Response {
             val resp = Jsoup.connect(hostName + path)
@@ -1370,7 +1369,7 @@ class WeihaiEASWebSource : EASService {
         val termSnippets = parsed.take(8).map { it.termName.orEmpty() }
         val sampleCourses = parsed.take(8).map { "${it.courseName.orEmpty()}|${it.termName.orEmpty()}|${it.finalScores}" }
         LogUtils.d(
-            "$stage term=${term.getCode()} name=${term.termName} testType=$testType status=$statusCode parsed=${parsed.size} filtered=${filtered.size} title=$title forms=$forms tables=$tables termSnippets=$termSnippets sampleCourses=$sampleCourses"
+            "$stage: term=${term.getCode()} name=${term.termName} testType=$testType status=$statusCode parsed=${parsed.size} filtered=${filtered.size} title=$title forms=$forms tables=$tables termSnippets=$termSnippets sampleCourses=$sampleCourses"
         )
     }
 
@@ -1385,7 +1384,7 @@ class WeihaiEASWebSource : EASService {
         val title = doc.title().trim()
         val sample = doc.body()?.text()?.replace(Regex("\\s+"), " ")?.take(200).orEmpty()
         LogUtils.w(
-            "$stage failed term=${term.getCode()} name=${term.termName} testType=$testType status=$statusCode title=$title sample=$sample"
+            "$stage: failed, term=${term.getCode()} name=${term.termName} testType=$testType status=$statusCode title=$title sample=$sample"
         )
     }
 
