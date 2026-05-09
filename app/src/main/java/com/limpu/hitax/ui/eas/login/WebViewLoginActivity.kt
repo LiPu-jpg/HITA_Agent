@@ -198,7 +198,18 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                     val easJsessionid = currentCookies.containsKey("JSESSIONID")
                     LogUtils.i( "🍪 Current cookies: VPN ticket=$vpnTicket, JSESSIONID=$easJsessionid, total=${currentCookies.size}")
 
-                    if (finished) return
+                    if (finished) {
+                        LogUtils.w( "⚠️ Already finished, ignoring page finished event")
+                        return
+                    }
+
+                    // 详细页面分析
+                    LogUtils.d( "🔍 Page analysis:")
+                    LogUtils.d( "  isPortalHomePage: ${isPortalHomePage(url)}")
+                    LogUtils.d( "  isJwtsPage: ${isJwtsPage(url)}")
+                    LogUtils.d( "  isSuccessPage: ${isSuccessPage(url)}")
+                    LogUtils.d( "  contains eelabinfo: ${url.contains("eelabinfo")}")
+                    LogUtils.d( "  autoOpeningJwts: $autoOpeningJwts")
 
                     when {
                         isPortalHomePage(url) -> {
@@ -208,13 +219,16 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                         isSuccessPage(url) -> {
                             // 已进入成功页面
                             autoOpeningJwts = false
+                            LogUtils.i( "✅ Success page detected")
 
                             // 如果是电子实验中心页面，尝试提取JWT token并完成登录
                             if (url.contains("eelabinfo")) {
                                 LogUtils.i( "✅ Electronic experiment center page detected, extracting JWT token")
                                 binding.webview.postDelayed({
+                                    LogUtils.d( "🔑 Starting JWT token extraction...")
                                     extractElectronicExpToken()
                                     // 提取token后完成登录
+                                    LogUtils.d( "🔑 JWT extraction completed, handling success page")
                                     handleSuccessPage()
                                 }, 2000) // 等待2秒让页面完全加载
                             } else {
@@ -370,15 +384,21 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     }
 
     private fun handleSuccessPage() {
-        if (finished) return
-        LogUtils.i( "🎯 Handling success page, collecting cookies campus=${config.campus}")
+        if (finished) {
+            LogUtils.w( "⚠️ handleSuccessPage: already finished, ignoring")
+            return
+        }
+
+        LogUtils.i( "🎯 === handleSuccessPage START === campus=${config.campus}")
         val cookies = collectCookies()
         // 当前页面URL，用于调试和日志记录
         val currentUrl = binding.webview.url.orEmpty()
         LogUtils.d( "当前URL: $currentUrl")
+        LogUtils.d( "URL contains eelabinfo: ${currentUrl.contains("eelabinfo")}")
 
         // 如果是电子实验中心页面，尝试提取JWT token
         if (currentUrl.contains("eelabinfo")) {
+            LogUtils.i( "🔑 正在从电子实验中心页面提取JWT token...")
             extractElectronicExpToken()
         }
 
@@ -407,10 +427,16 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         } else if (config.campus == EASToken.Campus.BENBU && !currentUrl.contains("eelabinfo")) {
             // 本部校区：如果还没有访问电子实验中心，自动导航去获取JWT token
             LogUtils.i( "🔬 Benbu: auto navigating to electronic experiment center to get JWT token")
+            LogUtils.i( "🔬 Current URL: $currentUrl")
+            LogUtils.i( "🔬 Target URL: ${CampusUrls.ELECTRONIC_EXP_LOGIN}")
             navigateToElectronicExperimentCenter()
         } else {
             // 其他校区或已经访问过电子实验中心，直接完成
             LogUtils.i( "🍪 Finishing with ${cookies.size} cookies ${fingerprintSummary(cookies)} campus=${config.campus}")
+            if (config.campus == EASToken.Campus.BENBU && currentUrl.contains("eelabinfo")) {
+                LogUtils.i( "🍪 Benbu on eelabinfo, checking JWT token status...")
+                LogUtils.i( "🍪 JWT token: ${if (electronicExpToken != null) "found (${electronicExpToken?.take(30)}...)" else "NOT FOUND"}")
+            }
             finishWithCookies(cookies)
         }
     }
@@ -652,12 +678,16 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
      * 导航到电子实验中心获取JWT token
      */
     private fun navigateToElectronicExperimentCenter() {
-        LogUtils.i( "🔬 导航到电子实验中心: ${CampusUrls.ELECTRONIC_EXP_LOGIN}")
+        LogUtils.i( "🔬 === navigateToElectronicExperimentCenter START ===")
+        LogUtils.i( "🔬 Target URL: ${CampusUrls.ELECTRONIC_EXP_LOGIN}")
+        LogUtils.i( "🔬 Current finished state: $finished")
 
         // 标记正在导航到电子实验中心，避免重复导航
         autoOpeningJwts = true
 
+        LogUtils.i( "🔬 Loading URL in WebView...")
         binding.webview.loadUrl(CampusUrls.ELECTRONIC_EXP_LOGIN)
+        LogUtils.i( "🔬 URL load command sent")
     }
 
     private fun parseCookies(cookieString: String?): Map<String, String> {
@@ -783,40 +813,54 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
      * 从WebView中提取电子实验中心的JWT token
      */
     private fun extractElectronicExpToken() {
-        LogUtils.d("🔍 尝试从WebView提取电子实验中心JWT token")
+        LogUtils.i( "🔍 === extractElectronicExpToken START ===")
 
         val getTokenScript = """
             (function() {
+                console.log('[Token Extractor] Starting token extraction...');
+
                 if (window.electronicExpToken) {
+                    console.log('[Token Extractor] Found token in window.electronicExpToken');
                     return window.electronicExpToken;
                 }
+
                 // 尝试从localStorage中获取
                 try {
                     const token = localStorage.getItem('electronicExpToken') ||
                                    localStorage.getItem('jwt_token') ||
                                    localStorage.getItem('token');
                     if (token) {
+                        console.log('[Token Extractor] Found token in localStorage');
                         return token;
                     }
                 } catch (e) {
-                    console.error('读取localStorage失败:', e);
+                    console.error('[Token Extractor] Read localStorage failed:', e);
                 }
+
+                console.log('[Token Extractor] No token found');
                 return null;
             })();
         """.trimIndent()
 
+        LogUtils.d( "🔍 Executing JavaScript to extract token...")
         binding.webview.evaluateJavascript(getTokenScript) { result ->
+            LogUtils.d( "🔍 JavaScript result: ${result?.take(100)}")
+
             if (result != null && result != "null" && result.isNotEmpty()) {
                 // 去除引号
                 val token = result.removeSurrounding("\"")
+                LogUtils.d( "🔍 Token after removing quotes: ${token.take(50)}...")
+                LogUtils.d( "🔍 Token length: ${token.length}")
+
                 if (token.length > 50) {
                     electronicExpToken = token
-                    LogUtils.d("✅ 成功提取电子实验中心JWT token: ${token.take(30)}...")
+                    LogUtils.i( "✅ 成功提取电子实验中心JWT token: ${token.take(30)}...")
                 } else {
-                    LogUtils.w("⚠️ JWT token长度异常: $token")
+                    LogUtils.w( "⚠️ JWT token长度异常: $token")
                 }
             } else {
-                LogUtils.d("ℹ️ 未找到电子实验中心JWT token")
+                LogUtils.w( "ℹ️ 未找到电子实验中心JWT token")
+                LogUtils.w( "ℹ️ JavaScript返回: $result")
             }
         }
     }

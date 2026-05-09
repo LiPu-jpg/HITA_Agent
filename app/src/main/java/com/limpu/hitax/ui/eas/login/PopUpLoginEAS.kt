@@ -136,17 +136,6 @@ class PopUpLoginEAS :
             if (it.state == DataState.STATE.SUCCESS) {
                 val token = viewModel.easRepo.getEasToken()
                 LogUtils.d( "popup loginCheck success savedToken campus=${token.campus} isLogin=${token.isLogin()} cookieKeys=${token.cookies.keys.sorted()}")
-
-                // 检查本部校区是否有电子实验中心token
-                if (token.campus == EASToken.Campus.BENBU && token.electronicExpToken == null) {
-                    LogUtils.w( "popup 本部登录成功，但未检测到电子实验中心JWT token")
-                    Toast.makeText(
-                        requireContext(),
-                        "登录成功（未包含电子实验课，可在浏览器访问电子实验中心）",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-
                 onResponseListener?.onSuccess(this)
 
             } else {
