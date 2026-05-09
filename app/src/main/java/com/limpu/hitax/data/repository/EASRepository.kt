@@ -358,7 +358,11 @@ class EASRepository @Inject constructor(
                         }
                         Thread {
                             try {
-                                val meta = fetchSelectedSubjectMeta(term, easToken)
+                                val meta = if (easToken.campus == EASToken.Campus.SHENZHEN) {
+                                    fetchSelectedSubjectMeta(term, easToken)
+                                } else {
+                                    SelectedSubjectMeta(emptyMap(), emptyMap(), emptyMap(), emptyMap(), emptyMap())
+                                }
                                 val teacherMap = meta.teacherMap
                                 val creditMap = meta.creditMap
                                 val maxPeriod = courseItems.maxOfOrNull { item ->

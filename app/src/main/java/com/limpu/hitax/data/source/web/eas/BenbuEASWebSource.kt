@@ -22,9 +22,14 @@ import java.util.concurrent.Executors
 
 class BenbuEASWebSource : EASService {
     private val hostName = "http://jwts-hit-edu-cn.ivpn.hit.edu.cn:1080"
-    private val experimentHostName = "http://sjjx-hit-edu-cn.ivpn.hit.edu.cn:1080" // 实验教学中心
+    private val experimentHostName = "http://sjjx-hit-edu-cn.ivpn.hit.edu.cn:1080"
+    private val electronicExpHostName = "http://eelabinfo-hit-edu-cn.ivpn.hit.edu.cn:1080"
     private val timeout = AppConstants.Network.READ_TIMEOUT.toInt()
     private val executor = Executors.newCachedThreadPool()
+
+    // Cache to avoid double-fetching in import flow (getScheduleStructure + getTimetableOfTerm)
+    @Volatile private var cachedTermCode: String? = null
+    @Volatile private var cachedCourses: List<CourseItem>? = null
 
     companion object {
         private val SAFE_PERSONAL_INFO_LABELS = setOf("姓名", "学号", "院系", "学院", "系", "专业", "年级", "班级")
@@ -184,6 +189,20 @@ class BenbuEASWebSource : EASService {
         }
     }
 
+    private fun getCachedOrFetchCourses(term: TermItem, token: EASToken): List<CourseItem> {
+        val termCode = term.getCode()
+        if (cachedTermCode == termCode && cachedCourses != null) {
+            val cached = cachedCourses!!
+            cachedTermCode = null
+            cachedCourses = null
+            return cached
+        }
+        val courses = getTimetableOfTermSync(term, token)
+        cachedTermCode = termCode
+        cachedCourses = courses
+        return courses
+    }
+
     override fun getTimetableOfTerm(
         term: TermItem,
         token: EASToken
@@ -193,8 +212,9 @@ class BenbuEASWebSource : EASService {
 
         executor.execute {
             try {
-                // 使用同步方法获取所有课程（包括实验课）
-                val courses = getTimetableOfTermSync(term, token)
+                val courses = getCachedOrFetchCourses(term, token)
+                cachedTermCode = null
+                cachedCourses = null
                 result.postValue(DataState(courses))
             } catch (e: Exception) {
                 LogUtils.e("getTimetableOfTerm failed", e)
@@ -215,7 +235,7 @@ class BenbuEASWebSource : EASService {
 
         executor.execute {
             try {
-                val courses = getTimetableOfTermSync(term, token)
+                val courses = getCachedOrFetchCourses(term, token)
                 val maxPeriod = courses.maxOfOrNull { it.begin + it.last - 1 } ?: 0
                 val schedule = defaultScheduleStructure()
                 val resolved = if (maxPeriod in 1 until schedule.size) {
@@ -223,7 +243,6 @@ class BenbuEASWebSource : EASService {
                 } else {
                     schedule
                 }
-                LogUtils.d( "getScheduleStructure term=${term.getCode()} courseCount=${courses.size} maxPeriod=$maxPeriod resolvedSize=${resolved.size}")
                 result.postValue(DataState(resolved, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
                 LogUtils.w( "getScheduleStructure fallback to default: ${e.message}")
@@ -624,8 +643,6 @@ class BenbuEASWebSource : EASService {
     }
 
     private fun getElectronicExperimentCourses(term: TermItem, token: EASToken): List<CourseItem> {
-        val electronicExpHostName = "http://eelabinfo-hit-edu-cn.ivpn.hit.edu.cn:1080"
-
         val jwtToken = token.electronicExpToken
         if (jwtToken.isNullOrBlank()) {
             LogUtils.w("getElectronicExpCourses: JWT token is empty, skipping")
@@ -707,6 +724,8 @@ class BenbuEASWebSource : EASService {
                 return courses
             }
 
+            val termStartDate = inferTermStartDate(term)
+
             for (i in 0 until dataArray.length()) {
                 try {
                     val item = dataArray.getJSONObject(i)
@@ -728,7 +747,7 @@ class BenbuEASWebSource : EASService {
 
                     if (subjectName.isEmpty()) continue
 
-                    val (dow, weekNum) = parseDateToWeekAndDow(classDate, term)
+                    val (dow, weekNum) = parseDateToWeekAndDow(classDate, termStartDate)
                     if (dow == -1 || weekNum == -1) {
                         LogUtils.w("parseElectronicExpJson: date parse failed for '$classDate'")
                         continue
@@ -786,15 +805,14 @@ class BenbuEASWebSource : EASService {
      * @param term 学期信息，用于推断开学日期
      * @return Pair(星期几, 周数)，星期几：1=周一, 7=周日
      */
-    private fun parseDateToWeekAndDow(dateStr: String, term: TermItem): Pair<Int, Int> {
+    private fun parseDateToWeekAndDow(dateStr: String, termStartDate: Calendar): Pair<Int, Int> {
         try {
-            val startDate = inferTermStartDate(term)
             val currentDate = SimpleDateFormat("yyyy-MM-dd").parse(dateStr)
             val currentCalendar = Calendar.getInstance().apply {
                 time = currentDate
             }
 
-            val diffMillis = currentCalendar.timeInMillis - startDate.timeInMillis
+            val diffMillis = currentCalendar.timeInMillis - termStartDate.timeInMillis
             val diffDays = diffMillis / (1000 * 60 * 60 * 24)
             val weekNum = (diffDays / 7).toInt() + 1
 
@@ -922,7 +940,7 @@ class BenbuEASWebSource : EASService {
         val leftEndPeriod = left.begin + left.last - 1
         if (leftEndPeriod + 1 != right.begin) return false
 
-        val schedule = defaultScheduleStructure()
+        val schedule = defaultSchedule
         if (leftEndPeriod !in 1..schedule.size || right.begin !in 1..schedule.size) return false
 
         val leftEndTime = schedule[leftEndPeriod - 1].to
@@ -945,45 +963,6 @@ class BenbuEASWebSource : EASService {
         return true
     }
 
-    private fun mergeBlockReason(left: CourseItem, right: CourseItem): String {
-        if (left.dow != right.dow) return "dow mismatch ${left.dow} vs ${right.dow}"
-        val leftName = normalized(left.name)
-        val rightName = normalized(right.name)
-        if (leftName != rightName) return "name mismatch '$leftName' vs '$rightName'"
-        val leftTeacher = normalized(left.teacher)
-        val rightTeacher = normalized(right.teacher)
-        if (leftTeacher != rightTeacher) return "teacher mismatch '$leftTeacher' vs '$rightTeacher'"
-        val leftWeeks = left.weeks.sorted()
-        val rightWeeks = right.weeks.sorted()
-        if (leftWeeks != rightWeeks) return "weeks mismatch $leftWeeks vs $rightWeeks"
-
-        val leftEndPeriod = left.begin + left.last - 1
-        if (leftEndPeriod + 1 != right.begin) return "period not adjacent ${left.begin}-${leftEndPeriod} vs ${right.begin}"
-
-        val schedule = defaultScheduleStructure()
-        if (leftEndPeriod !in 1..schedule.size || right.begin !in 1..schedule.size) {
-            return "period out of schedule range leftEnd=$leftEndPeriod rightBegin=${right.begin}"
-        }
-
-        val leftEndTime = schedule[leftEndPeriod - 1].to
-        val rightStartTime = schedule[right.begin - 1].from
-        val gapMinutes = leftEndTime.getDistanceInMinutes(rightStartTime)
-        if (gapMinutes < 0 || gapMinutes >= 30) return "time gap=$gapMinutes"
-
-        val leftClassroom = normalized(left.classroom)
-        val rightClassroom = normalized(right.classroom)
-        if (leftClassroom.isNotEmpty() && rightClassroom.isNotEmpty() && leftClassroom != rightClassroom) {
-            return "classroom mismatch '$leftClassroom' vs '$rightClassroom'"
-        }
-
-        val leftCode = normalized(left.code)
-        val rightCode = normalized(right.code)
-        if (leftCode.isNotEmpty() && rightCode.isNotEmpty() && leftCode != rightCode) {
-            return "code mismatch '$leftCode' vs '$rightCode'"
-        }
-
-        return "unknown"
-    }
 
     private fun normalized(value: String?): String {
         return value?.trim().orEmpty()
@@ -1002,8 +981,8 @@ class BenbuEASWebSource : EASService {
         }
     }
 
-    private fun defaultScheduleStructure(): MutableList<TimePeriodInDay> {
-        return mutableListOf(
+    private val defaultSchedule by lazy {
+        mutableListOf(
             TimePeriodInDay(TimeInDay(8, 0), TimeInDay(8, 50)),
             TimePeriodInDay(TimeInDay(8, 55), TimeInDay(9, 45)),
             TimePeriodInDay(TimeInDay(10, 0), TimeInDay(10, 50)),
@@ -1017,6 +996,10 @@ class BenbuEASWebSource : EASService {
             TimePeriodInDay(TimeInDay(20, 30), TimeInDay(21, 20)),
             TimePeriodInDay(TimeInDay(21, 25), TimeInDay(22, 15))
         )
+    }
+
+    private fun defaultScheduleStructure(): MutableList<TimePeriodInDay> {
+        return mutableListOf(*defaultSchedule.toTypedArray())
     }
 
     override fun queryEmptyClassroom(

@@ -335,7 +335,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                     navigatingToEelab = false
                     finishWithCookies(cookies)
                 }
-            }, 20000)
+            }, 25000)
             binding.webview.loadUrl(CampusUrls.EELABINFO_URL + "/api/cas/loginSuccess")
         } else {
             finishWithCookies(cookies)
