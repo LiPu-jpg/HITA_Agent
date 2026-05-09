@@ -53,9 +53,6 @@ class EASRepository @Inject constructor(
     private var subjectDao = AppDatabase.getDatabase(application).subjectDao()
     private val easTokenLiveData = MutableLiveData(easPreferenceSource.getEasToken())
 
-    private val DEBUG_WEEK = 7
-    private val DEBUG_DOW = setOf(5, 6)
-
     private fun getService(campus: EASToken.Campus): EASService {
         return when (campus) {
             EASToken.Campus.SHENZHEN -> shenzhenService
@@ -130,9 +127,9 @@ class EASRepository @Inject constructor(
      */
     fun loginCheck(): LiveData<DataState<Boolean>> {
         val token = easPreferenceSource.getEasToken()
-        LogUtils.d("🔐 loginCheck: isLogin=${token.isLogin()}, campus=${token.campus}, token=${token.accessToken?.take(8)}...")
+        LogUtils.d("loginCheck: isLogin=${token.isLogin()}, campus=${token.campus}")
         if (!token.isLogin()) {
-            LogUtils.w("⚠️ loginCheck: not logged in")
+            LogUtils.w("loginCheck: not logged in")
             return LiveDataUtils.getMutableLiveData(DataState(false))
         }
 
@@ -149,7 +146,7 @@ class EASRepository @Inject constructor(
 
             val (isValid, checkedToken) = state.data!!
             if (!isValid) {
-                LogUtils.w("⚠️ loginCheck: token invalid, keeping cookies for retry")
+                LogUtils.w("loginCheck: token invalid, keeping cookies for retry")
                 // Don't clear token on first failure - cookies might still be valid
                 // clearEasToken()
                 result.value = DataState(false, DataState.STATE.SUCCESS).apply {
@@ -158,7 +155,7 @@ class EASRepository @Inject constructor(
                 return@addSource
             }
 
-            LogUtils.d("✅ loginCheck: token valid, fetching user info")
+            LogUtils.d("loginCheck: token valid, fetching user info")
             // 验证成功后，获取用户信息（包括姓名）
             val enrichSource = getService(token.campus).getSafePersonalInfo(checkedToken)
             result.addSource(enrichSource) { enrichedState ->
@@ -170,7 +167,7 @@ class EASRepository @Inject constructor(
                 } else {
                     checkedToken
                 }
-                LogUtils.d("✅ loginCheck: saving enriched token name=${finalToken.name}")
+                LogUtils.d("loginCheck: saving enriched token name=${finalToken.name}")
                 saveEasToken(finalToken)
                 result.value = DataState(true, DataState.STATE.SUCCESS)
                 result.removeSource(enrichSource)
@@ -185,11 +182,11 @@ class EASRepository @Inject constructor(
      */
     fun getStartDateOfTerm(term: TermItem): LiveData<DataState<Calendar>> {
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "📅 getStartDateOfTerm: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
+        LogUtils.d("getStartDateOfTerm: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getStartDate(easToken, term)
         }
-        LogUtils.w("EASRepository", "⚠️ getStartDateOfTerm: not logged in")
+        LogUtils.w("getStartDateOfTerm: not logged in")
         return LiveDataUtils.getMutableLiveData<DataState<Calendar>>(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -199,11 +196,11 @@ class EASRepository @Inject constructor(
      */
     fun getAllTerms(): LiveData<DataState<List<TermItem>>> {
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "📚 getAllTerms: isLogin=${easToken.isLogin()}, campus=${easToken.campus}, token=${easToken.accessToken?.take(8)}...")
+        LogUtils.d("getAllTerms: isLogin=${easToken.isLogin()}, campus=${easToken.campus}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getAllTerms(easToken)
         }
-        LogUtils.w("EASRepository", "⚠️ getAllTerms: not logged in")
+        LogUtils.w("getAllTerms: not logged in")
         return LiveDataUtils.getMutableLiveData<DataState<List<TermItem>>>(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -215,11 +212,11 @@ class EASRepository @Inject constructor(
         isUndergraduate: Boolean? = null
     ): LiveData<DataState<MutableList<TimePeriodInDay>>> {
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "🏗️ getScheduleStructure: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
+        LogUtils.d("getScheduleStructure: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getScheduleStructure(term, isUndergraduate, easToken)
         }
-        LogUtils.w("EASRepository", "⚠️ getScheduleStructure: not logged in")
+        LogUtils.w("getScheduleStructure: not logged in")
         return LiveDataUtils.getMutableLiveData<DataState<MutableList<TimePeriodInDay>>>(
             DataState(
                 DataState.STATE.NOT_LOGGED_IN
@@ -233,11 +230,11 @@ class EASRepository @Inject constructor(
      */
     fun getTeachingBuildings(): LiveData<DataState<List<BuildingItem>>> {
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "🏢 getTeachingBuildings: isLogin=${easToken.isLogin()}")
+        LogUtils.d("getTeachingBuildings: isLogin=${easToken.isLogin()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getTeachingBuildings(easToken)
         }
-        LogUtils.w("EASRepository", "⚠️ getTeachingBuildings: not logged in")
+        LogUtils.w("getTeachingBuildings: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
 
     }
@@ -251,7 +248,7 @@ class EASRepository @Inject constructor(
         week: Int
     ): LiveData<DataState<List<ClassroomItem>>> {
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "🏫 queryEmptyClassroom: isLogin=${easToken.isLogin()}, term=${term.getCode()}, building=${buildingItem.name}")
+        LogUtils.d("queryEmptyClassroom: isLogin=${easToken.isLogin()}, term=${term.getCode()}, building=${buildingItem.name}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).queryEmptyClassroom(
                 easToken,
@@ -260,7 +257,7 @@ class EASRepository @Inject constructor(
                 listOf(week.toString())
             )
         }
-        LogUtils.w("EASRepository", "⚠️ queryEmptyClassroom: not logged in")
+        LogUtils.w("queryEmptyClassroom: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -272,11 +269,11 @@ class EASRepository @Inject constructor(
         testType: EASService.TestType
     ): LiveData<DataState<List<CourseScoreItem>>> {
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "📊 getPersonalScores: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
+        LogUtils.d("getPersonalScores: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getPersonalScores(term, easToken, testType)
         }
-        LogUtils.w("EASRepository", "⚠️ getPersonalScores: not logged in")
+        LogUtils.w("getPersonalScores: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -285,7 +282,7 @@ class EASRepository @Inject constructor(
         testType: EASService.TestType
     ): LiveData<DataState<ScoreQueryResult>> {
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "📊 getPersonalScoresWithSummary: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
+        LogUtils.d("getPersonalScoresWithSummary: isLogin=${easToken.isLogin()}, term=${term.getCode()}")
         if (!easToken.isLogin()) {
             return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
         }
@@ -309,11 +306,11 @@ class EASRepository @Inject constructor(
      */
     fun getExamInfo(term: TermItem? = null): LiveData<DataState<List<ExamItem>>> {
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "📝 getExamInfo: term=${term?.name}, isLogin=${easToken.isLogin()}, campus=${easToken.campus}, token=${easToken.accessToken?.take(8)}...")
+        LogUtils.d("getExamInfo: term=${term?.name}, isLogin=${easToken.isLogin()}, campus=${easToken.campus}")
         if (easToken.isLogin()) {
             return getService(easToken.campus).getExamItems(easToken, term)
         }
-        LogUtils.w("EASRepository", "⚠️ getExamInfo: not logged in")
+        LogUtils.w("getExamInfo: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
     }
 
@@ -332,7 +329,7 @@ class EASRepository @Inject constructor(
         startDate.firstDayOfWeek = Calendar.MONDAY
         startDate.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "📥 startImportTimetableOfTerm: term=${term.getCode()}, campus=${easToken.campus}, isLogin=${easToken.isLogin()}, token=${easToken.accessToken?.take(8)}...")
+        LogUtils.d("startImport: term=${term.getCode()}, campus=${easToken.campus}, isLogin=${easToken.isLogin()}")
         if (easToken.isLogin()) {
             val finished = AtomicBoolean(false)
             val timeoutHandler = Handler(Looper.getMainLooper())
@@ -350,7 +347,7 @@ class EASRepository @Inject constructor(
                 when (it.state) {
                     DataState.STATE.SUCCESS -> {
                         val courseItems = it.data
-                        LogUtils.d( "import timetable response state=${it.state} term=${term.getCode()} courseCount=${courseItems?.size ?: -1} message=${it.message}")
+                        LogUtils.d( "import: timetable response state=${it.state} term=${term.getCode()} courseCount=${courseItems?.size ?: -1}")
                         if (courseItems.isNullOrEmpty()) {
                             if (finished.compareAndSet(false, true)) {
                                 timeoutHandler.removeCallbacks(timeoutRunnable)
@@ -369,7 +366,7 @@ class EASRepository @Inject constructor(
                                 } ?: 0
                                 val safeSchedule = buildSafeSchedule(schedule, maxPeriod)
                                 LogUtils.d(
-                                    "import processing term=${term.getCode()} courseCount=${courseItems.size} maxPeriod=$maxPeriod safeScheduleSize=${safeSchedule.size}"
+                                    "import: processing term=${term.getCode()} courseCount=${courseItems.size} maxPeriod=$maxPeriod"
                                 )
                                 //更新timetable信息
                                 var timetable = timetableDao.getTimetableByEASCodeSync(term.getCode())
@@ -389,17 +386,13 @@ class EASRepository @Inject constructor(
                                 val freeTimeCount = courseItems.count { item ->
                                     !item.startTime.isNullOrBlank() && !item.endTime.isNullOrBlank() && item.begin == -1 && item.last == -1
                                 }
-                                LogUtils.d("📊 [IMPORT] Total courses: ${courseItems.size}, Free time courses: $freeTimeCount, Period courses: ${courseItems.size - freeTimeCount}")
+                                LogUtils.d("import: courses=${courseItems.size} freeTime=$freeTimeCount period=${courseItems.size - freeTimeCount}")
 
                                 for (item in courseItems) {
                                     // Check if this is a free time course (has startTime/EndTime)
                                     val isFreeTimeCourse = !item.startTime.isNullOrBlank() && !item.endTime.isNullOrBlank() && item.begin == -1 && item.last == -1
 
                                     // Debug log for experiment courses
-                                    if (isFreeTimeCourse) {
-                                        LogUtils.d("🔬 [IMPORT] Experiment course: name=${item.name} weeks=${item.weeks} dow=${item.dow} time=${item.startTime}-${item.endTime}")
-                                    }
-
                                     // Skip period-based courses with invalid indices
                                     if (!isFreeTimeCourse) {
                                         val startIndex = item.begin - 1
@@ -525,22 +518,6 @@ class EASRepository @Inject constructor(
                                             !teacherMap[normalizedName].isNullOrBlank() -> "meta_by_name_normalized"
                                             else -> "none"
                                         }
-                                        if (item.dow in DEBUG_DOW && week == DEBUG_WEEK) {
-                                            val periodDisplay = if (isFreeTimeCourse) {
-                                                val startTime = item.startTime
-                                                val endTime = item.endTime
-                                                if (startTime != null && endTime != null) "$startTime-$endTime" else "free time"
-                                            } else {
-                                                val periodEnd = item.begin + item.last - 1
-                                                "${item.begin}-$periodEnd"
-                                            }
-                                            LogUtils.d(
-                                                "[DBG_W7_D56][MAP] week=$week dow=${item.dow} " +
-                                                    "nameRaw=$rawName nameNorm=$normalizedName code=${item.code} period=$periodDisplay " +
-                                                    "itemTeacherRaw=${item.teacher} itemTeacher=$itemTeacher mappedTeacher=$mappedTeacher source=$teacherSource " +
-                                                    "teacherMapByCode=${if (code.isBlank()) null else teacherMap[code]} teacherMapByNameRaw=${teacherMap[rawName]} teacherMapByNameNorm=${teacherMap[normalizedName]}"
-                                            )
-                                        }
                                         e.teacher = mappedTeacher
                                         e.place = item.classroom
                                         e.timetableId = timetable.id
@@ -549,7 +526,7 @@ class EASRepository @Inject constructor(
                                     }
                                 }
                                 if (events.isEmpty()) {
-                                    LogUtils.w( "import generated empty events for term=${term.getCode()}")
+                                    LogUtils.w("import: empty events for term=${term.getCode()}")
                                     if (finished.compareAndSet(false, true)) {
                                         timeoutHandler.removeCallbacks(timeoutRunnable)
                                         importTimetableLiveData.postValue(
@@ -558,7 +535,7 @@ class EASRepository @Inject constructor(
                                     }
                                     return@Thread
                                 }
-                                LogUtils.d( "import saving ${events.size} events for term=${term.getCode()}")
+                                LogUtils.d( "import: saving ${events.size} events for term=${term.getCode()}")
                                 eventItemDao.saveEvents(events)
 
                                 //更新timetable对象
@@ -571,11 +548,11 @@ class EASRepository @Inject constructor(
 
                                 if (finished.compareAndSet(false, true)) {
                                     timeoutHandler.removeCallbacks(timeoutRunnable)
-                                    LogUtils.d( "import success term=${term.getCode()} timetable=${timetable.name} events=${events.size}")
+                                    LogUtils.success("import: term=${term.getCode()} events=${events.size}")
                                     importTimetableLiveData.postValue(DataState(true, DataState.STATE.SUCCESS))
                                 }
                             } catch (e: Exception) {
-                                LogUtils.e( "import failed term=${term.getCode()}: ${e.message}", e)
+                                LogUtils.e( "import: failed for term=${term.getCode()}", e)
                                 if (finished.compareAndSet(false, true)) {
                                     timeoutHandler.removeCallbacks(timeoutRunnable)
                                     importTimetableLiveData.postValue(
@@ -586,7 +563,7 @@ class EASRepository @Inject constructor(
                         }.start()
                     }
                     DataState.STATE.FETCH_FAILED, DataState.STATE.NOT_LOGGED_IN -> {
-                        LogUtils.w( "import timetable fetch failed term=${term.getCode()} message=${it.message}")
+                        LogUtils.w( "import: timetable fetch failed for term=${term.getCode()} message=${it.message}")
                         if (finished.compareAndSet(false, true)) {
                             timeoutHandler.removeCallbacks(timeoutRunnable)
                             importTimetableLiveData.value =
@@ -597,7 +574,7 @@ class EASRepository @Inject constructor(
                 }
             }
         } else {
-            LogUtils.e("❌ startImportTimetableOfTerm: not logged in, cannot import")
+            LogUtils.e("startImport: not logged in, cannot import")
             importTimetableLiveData.value = DataState(DataState.STATE.NOT_LOGGED_IN)
         }
     }
@@ -700,7 +677,7 @@ class EASRepository @Inject constructor(
         Thread {
             val service = getService(token.campus)
             val termsState = awaitLiveData(service.getAllTerms(token), 6)
-            LogUtils.d( "autoImport terms state=${termsState.state} count=${termsState.data?.size ?: -1} message=${termsState.message}")
+            LogUtils.d( "autoImport: terms state=${termsState.state} count=${termsState.data?.size ?: -1}")
             val term = termsState.data?.firstOrNull { it.isCurrent } ?: termsState.data?.firstOrNull()
             if (term == null) {
                 onResult?.invoke(false)
@@ -708,13 +685,13 @@ class EASRepository @Inject constructor(
             }
             val startState = awaitLiveData(service.getStartDate(token, term), 6)
             val startDate = startState.data
-            LogUtils.d( "autoImport startDate state=${startState.state} value=${startDate?.time} message=${startState.message}")
+            LogUtils.d( "autoImport: startDate state=${startState.state}")
             val scheduleState = awaitLiveData(
                 service.getScheduleStructure(term, isUndergraduate, token),
                 6
             )
             val schedule = scheduleState.data ?: timetablePreferenceSource.getSchedule()
-            LogUtils.d( "autoImport schedule state=${scheduleState.state} size=${schedule.size} message=${scheduleState.message}")
+            LogUtils.d( "autoImport: schedule state=${scheduleState.state} size=${schedule.size}")
             if (startDate == null) {
                 onResult?.invoke(false)
                 return@Thread
@@ -792,12 +769,4 @@ class EASRepository @Inject constructor(
     }
 
 
-}
-
-private fun List<EventItem>.getIds(): List<String> {
-    val res = mutableListOf<String>()
-    for (e in this) {
-        res.add(e.id)
-    }
-    return res
 }

@@ -172,61 +172,38 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
             webViewClient = object : WebViewClient() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     super.onPageStarted(view, url, favicon)
-                    LogUtils.d("🌐 Page loading started: ${url?.take(80)}... campus=${config.campus}")
                 }
 
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
-                    val hasJsessionid = url.contains("jsessionid", ignoreCase = true)
-                    LogUtils.i( "📄 Page finished: ${url.take(80)}... jsessionid=$hasJsessionid campus=${config.campus}")
-
-                    // 打印当前 cookie 状态
-                    val currentCookies = collectCookies()
-                    val vpnTicket = hasWeihaiVpnTicket(currentCookies)
-                    val easJsessionid = currentCookies.containsKey("JSESSIONID")
-                    LogUtils.i( "🍪 Current cookies: VPN ticket=$vpnTicket, JSESSIONID=$easJsessionid, total=${currentCookies.size}")
 
                     if (finished) {
-                        LogUtils.w( "⚠️ Already finished, ignoring page finished event")
                         return
                     }
 
                     // Handle eelabinfo navigation for JWT token
                     if (navigatingToEelab) {
-                        LogUtils.i( "📍 eelabinfo navigation: page finished url=${url.take(80)}")
                         if (url.contains("eelabinfo") && !url.contains("ids.hit.edu.cn") && !eelabTokenFetching) {
                             eelabTokenFetching = true
-                            LogUtils.i( "📍 eelabinfo page loaded, fetching JWT token via HTTP...")
+                            LogUtils.d("eelabinfo page loaded, fetching JWT token...")
                             binding.webview.postDelayed({ fetchEelabTokenViaHttp() }, 2000)
                         }
                         return
                     }
 
-                    // 详细页面分析
-                    LogUtils.d( "🔍 Page analysis:")
-                    LogUtils.d( "  isPortalHomePage: ${isPortalHomePage(url)}")
-                    LogUtils.d( "  isJwtsPage: ${isJwtsPage(url)}")
-                    LogUtils.d( "  isSuccessPage: ${isSuccessPage(url)}")
-
                     when {
                         isPortalHomePage(url) -> {
-                            LogUtils.i( "🏠 Portal home detected, auto open jwts campus=${config.campus}")
+                            LogUtils.d("portal home detected, auto open jwts campus=${config.campus}")
                             autoOpenJwts(view)
                         }
                         isSuccessPage(url) -> {
-                            // 已进入成功页面
                             autoOpeningJwts = false
-                            LogUtils.i( "✅ Success page detected, finishing login campus=${config.campus}")
+                            LogUtils.success("login success page detected campus=${config.campus}")
                             handleSuccessPage()
                         }
                         isJwtsPage(url) -> {
                             autoOpeningJwts = false
-                            LogUtils.i( "🔐 Login page detected, waiting for user action campus=${config.campus}")
-                            // 登录页面，启动定时检测
                             startCookiePolling()
-                        }
-                        else -> {
-                            LogUtils.d( "⏳ Other page, waiting... url=$url campus=${config.campus}")
                         }
                     }
                 }
@@ -274,7 +251,6 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                                          cookies.containsKey("TWFID")
 
                 if (hasRequiredCookies) {
-                    LogUtils.i( "✅ Benbu: all required cookies present, treating as success")
                     return true
                 }
 
@@ -297,7 +273,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     private fun autoOpenJwts(webView: WebView) {
         if (autoOpeningJwts) return
         autoOpeningJwts = true
-        LogUtils.i( "🔄 Auto opening JWTS campus=${config.campus}")
+        LogUtils.d("auto opening JWTS campus=${config.campus}")
         webView.loadUrl(config.jwtsUrl)
     }
 
@@ -315,34 +291,23 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         if (finished) return
 
         val cookies = collectCookies()
-        // 当前URL，用于调试（暂时未使用）
-        // val currentUrl = binding.webview.url.orEmpty()
         val hasVpnTicket = hasWeihaiVpnTicket(cookies)
         val hasJsessionid = cookies.containsKey("JSESSIONID")
 
-        LogUtils.i( "🔍 Cookie check #$cookieRetryCount: VPN ticket=$hasVpnTicket, JSESSIONID=$hasJsessionid, total=${cookies.size}")
-
-        // 威海校区：只要有 VPN ticket 和 JSESSIONID 就完成
         if (config.campus == EASToken.Campus.WEIHAI && hasVpnTicket && hasJsessionid) {
-            LogUtils.i( "✅ Cookies ready, finishing campus=${config.campus}")
-
-            // 调用 VPN API 获取完整 cookies
             fetchVpnEasCookies { vpnCookies ->
                 val mergedCookies = LinkedHashMap(cookies)
                 vpnCookies.forEach { (key, value) -> mergedCookies.putIfAbsent(key, value) }
-                LogUtils.i( "🍪 Final cookies: ${mergedCookies.keys} ${fingerprintSummary(mergedCookies)}")
                 finishWithCookies(mergedCookies)
             }
             return
         }
 
-        // 超时检查
         if (cookieRetryCount >= COOKIE_RETRY_COUNT) {
-            LogUtils.w( "⏱️ Cookie polling timeout, staying on page campus=${config.campus}")
+            LogUtils.w("cookie polling timeout campus=${config.campus}")
             return
         }
 
-        // 继续轮询
         cookieRetryCount++
         binding.webview.postDelayed({
             checkCookiesAndFinish()
@@ -350,54 +315,29 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     }
 
     private fun handleSuccessPage() {
-        if (finished) {
-            LogUtils.w( "⚠️ handleSuccessPage: already finished, ignoring")
-            return
-        }
+        if (finished) return
 
-        LogUtils.i( "🎯 === handleSuccessPage START === campus=${config.campus}")
         val cookies = collectCookies()
-        val currentUrl = binding.webview.url.orEmpty()
-        LogUtils.d( "当前URL: $currentUrl")
 
-        LogUtils.i( "🔍 Cookie validation before finish:")
-        LogUtils.i( "  - VPN ticket: ${hasWeihaiVpnTicket(cookies)}")
-        LogUtils.i( "  - JSESSIONID: ${cookies.containsKey("JSESSIONID")} (${cookies["JSESSIONID"]?.take(8) ?: "missing"})")
-        LogUtils.i( "  - HIT: ${cookies.containsKey("HIT")} (${cookies["HIT"]?.take(8) ?: "missing"})")
-        LogUtils.i( "  - TWFID: ${cookies.containsKey("TWFID")} (${cookies["TWFID"]?.take(8) ?: "missing"})")
-
-        // 对于威海校区，需要调用 VPN API 获取真实的 EAS session cookies
         if (config.campus == EASToken.Campus.WEIHAI && hasWeihaiVpnTicket(cookies)) {
-            LogUtils.i( "🌐 Weihai: fetching VPN EAS cookies campus=${config.campus}")
             fetchVpnEasCookies { vpnCookies ->
                 val mergedCookies = LinkedHashMap(cookies)
                 vpnCookies.forEach { (key, value) -> mergedCookies.putIfAbsent(key, value) }
-
-                LogUtils.i( "🔍 Cookie validation after VPN merge:")
-                LogUtils.i( "  - VPN ticket: ${hasWeihaiVpnTicket(mergedCookies)}")
-                LogUtils.i( "  - JSESSIONID: ${mergedCookies.containsKey("JSESSIONID")} (${mergedCookies["JSESSIONID"]?.take(8) ?: "missing"})")
-                LogUtils.i( "  - HIT: ${mergedCookies.containsKey("HIT")} (${mergedCookies["HIT"]?.take(8) ?: "missing"})")
-                LogUtils.i( "  - TWFID: ${mergedCookies.containsKey("TWFID")} (${mergedCookies["TWFID"]?.take(8) ?: "missing"})")
-
-                LogUtils.i( "🍪 Weihai merged cookies: ${mergedCookies.keys} ${fingerprintSummary(mergedCookies)} campus=${config.campus}")
                 finishWithCookies(mergedCookies)
             }
         } else if (config.campus == EASToken.Campus.BENBU) {
-            // BENBU: also navigate to eelabinfo to get JWT token for electronic experiment center
             navigatingToEelab = true
             eelabTokenFetching = false
             collectedEasCookies = cookies
-            LogUtils.i( "🎯 Benbu: navigating to eelabinfo for JWT token...")
             binding.webview.postDelayed({
                 if (navigatingToEelab && !finished) {
-                    LogUtils.w( "📍 eelabinfo JWT token fetch timeout, finishing without token")
+                    LogUtils.w("eelabinfo JWT fetch timeout, finishing without token")
                     navigatingToEelab = false
                     finishWithCookies(cookies)
                 }
             }, 20000)
             binding.webview.loadUrl(CampusUrls.EELABINFO_URL + "/api/cas/loginSuccess")
         } else {
-            LogUtils.i( "🍪 Finishing with ${cookies.size} cookies ${fingerprintSummary(cookies)} campus=${config.campus}")
             finishWithCookies(cookies)
         }
     }
@@ -409,10 +349,9 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
             try {
                 val cookieManager = CookieManager.getInstance()
                 val eelabCookies = cookieManager.getCookie(CampusUrls.EELABINFO_URL)
-                LogUtils.d( "📍 eelabinfo cookies from CookieManager: ${eelabCookies?.take(200)}")
 
                 if (eelabCookies.isNullOrBlank() || !eelabCookies.contains("JSESSIONID")) {
-                    LogUtils.w( "📍 eelabinfo JSESSIONID not found in cookies")
+                    LogUtils.w("fetchEelabToken: JSESSIONID not found in eelabinfo cookies")
                     binding.webview.post { eelabTokenFetching = false }
                     return@Thread
                 }
@@ -425,8 +364,6 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                         allCookies[trimmed.substring(0, idx).trim()] = trimmed.substring(idx + 1).trim()
                     }
                 }
-
-                LogUtils.d( "📍 Making HTTP POST to eelabinfo API with ${allCookies.size} cookies: ${allCookies.keys.sorted()}")
 
                 val url = CampusUrls.EELABINFO_URL + "/api/cas/login?sf_request_type=ajax"
                 val response = org.jsoup.Jsoup.connect(url)
@@ -444,8 +381,6 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                     .method(org.jsoup.Connection.Method.POST)
                     .execute()
 
-                LogUtils.d( "📍 eelabinfo API response: status=${response.statusCode()} body=${response.body().take(300)}")
-
                 if (response.statusCode() == 200) {
                     try {
                         val json = JSONObject(response.body())
@@ -454,7 +389,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                             val data = json.optJSONObject("data")
                             val token = data?.optString("token", "") ?: ""
                             if (token.length >= 50) {
-                                LogUtils.i( "📍 ✅ Got eelabinfo JWT token via HTTP, length=${token.length}")
+                                LogUtils.success("fetchEelabToken: got JWT token, length=${token.length}")
                                 binding.webview.post {
                                     if (!finished && navigatingToEelab) {
                                         navigatingToEelab = false
@@ -464,17 +399,17 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                                 return@Thread
                             }
                         }
-                        LogUtils.w( "📍 eelabinfo API returned unexpected response: code=$code body=${response.body().take(200)}")
+                        LogUtils.w("fetchEelabToken: unexpected response code=$code")
                     } catch (e: Exception) {
-                        LogUtils.e( "📍 Failed to parse eelabinfo API response: ${e.message}")
+                        LogUtils.e("fetchEelabToken: parse response failed", e)
                     }
                 } else {
-                    LogUtils.w( "📍 eelabinfo API returned HTTP ${response.statusCode()}")
+                    LogUtils.w("fetchEelabToken: HTTP ${response.statusCode()}")
                 }
 
                 binding.webview.post { eelabTokenFetching = false }
             } catch (e: Exception) {
-                LogUtils.e( "📍 eelabinfo HTTP request failed: ${e.javaClass.simpleName} ${e.message}")
+                LogUtils.e("fetchEelabToken: HTTP request failed", e)
                 binding.webview.post { eelabTokenFetching = false }
             }
         }.start()
@@ -494,7 +429,6 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 // 威海校区：需要 VPN ticket + JSESSIONID
                 val hasVpnTicket = hasWeihaiVpnTicket(cookies)
                 val hasJsession = cookies.containsKey("JSESSIONID")
-                LogUtils.d( "Weihai cookie check: hasVpnTicket=$hasVpnTicket hasJsession=$hasJsession campus=${config.campus}")
                 hasVpnTicket && hasJsession
             }
         }
@@ -516,30 +450,23 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         val cookieManager = CookieManager.getInstance()
         val cookies = LinkedHashMap<String, String>()
 
-        // 先从配置的 probe URLs 收集
         config.cookieProbeUrls.forEach { url ->
             val parsed = parseCookies(cookieManager.getCookie(url))
-            LogUtils.d( "cookies from $url -> ${parsed.keys.sorted()} ${fingerprintSummary(parsed)} campus=${config.campus}")
             parsed.forEach { (key, value) ->
                 cookies.putIfAbsent(key, value)
             }
         }
 
-        // 额外从当前页面 URL 收集 cookie（适用于用户被重定向到其他页面的情况）
         val currentUrl = binding.webview.url
         if (!currentUrl.isNullOrBlank() && currentUrl.startsWith("http")) {
             val parsed = parseCookies(cookieManager.getCookie(currentUrl))
-            LogUtils.d( "cookies from current page $currentUrl -> ${parsed.keys.sorted()} ${fingerprintSummary(parsed)} campus=${config.campus}")
             parsed.forEach { (key, value) ->
                 cookies.putIfAbsent(key, value)
             }
 
-            // 如果 CookieManager 中没有 JSESSIONID，尝试从 URL 中提取
-            // 某些 EAS 系统将 session ID 放在 URL 而不是 cookie 中
             if (!cookies.containsKey("JSESSIONID")) {
                 val jsessionid = extractJsessionidFromUrl(currentUrl)
                 if (jsessionid != null) {
-                    LogUtils.d( "extracted JSESSIONID from URL: $jsessionid campus=${config.campus}")
                     cookies["JSESSIONID"] = jsessionid
                 }
             }
@@ -563,8 +490,6 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 // 调用 VPN cookie API
                 val cookieApiUrl = "https://webvpn.hitwh.edu.cn/wengine-vpn/cookie?method=get&host=$easHost&scheme=http&path=$easPath&vpn_timestamp=${System.currentTimeMillis()}"
 
-                LogUtils.d( "fetching VPN cookies from: $cookieApiUrl campus=${config.campus}")
-
                 // 使用同步 HTTP 请求
                 val connection = URL(cookieApiUrl).openConnection() as javax.net.ssl.HttpsURLConnection
                 connection.connectTimeout = 10000
@@ -576,7 +501,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 val responseCode = connection.responseCode
                 if (responseCode == 200) {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
-                    LogUtils.d( "VPN cookie API response: $response campus=${config.campus}")
+                    LogUtils.d("VPN cookie API response: $response")
 
                     // 解析返回的 cookies（格式：name=value; JSESSIONID=xxx; HIT=yyy）
                     val parts = response.split(";")
@@ -590,16 +515,16 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                                 // 只关心 EAS 相关的 cookies
                                 if (key == "JSESSIONID" || key == "HIT" || key == "TWFID") {
                                     result[key] = value
-                                    LogUtils.d( "parsed VPN cookie: $key=$value campus=${config.campus}")
+                                    LogUtils.d("parsed VPN cookie: $key=$value")
                                 }
                             }
                         }
                     }
                 } else {
-                    LogUtils.w( "VPN cookie API failed with code: $responseCode campus=${config.campus}")
+                    LogUtils.w("VPN cookie API failed with code: $responseCode")
                 }
             } catch (e: Exception) {
-                LogUtils.e( "failed to fetch VPN cookies: ${e.javaClass.simpleName} ${e.message} campus=${config.campus}")
+                LogUtils.e("fetchVpnEasCookies: failed", e)
             }
 
             binding.webview.post {
@@ -671,26 +596,15 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     private fun finishWithCookies(cookies: Map<String, String>, eelabToken: String? = null) {
         if (finished) return
         finished = true
-        LogUtils.d( "finishWithCookies keys=${cookies.keys.sorted()} ${fingerprintSummary(cookies)} campus=${config.campus}")
-
-        // 详细打印所有 cookies
-        LogUtils.i( "=== 📦 FINAL COOKIES (${cookies.size} total) ===")
-        cookies.forEach { (key, value) ->
-            val displayValue = if (value.length > 20) "${value.take(20)}..." else value
-            LogUtils.i( "  ✅ $key = $displayValue")
-        }
-        LogUtils.i( "==========================================")
 
         val cookiesJson = JSONObject(cookies as Map<*, *>).toString()
-        LogUtils.d( "cookies json length=${cookiesJson.length} campus=${config.campus}")
-
         val intent = Intent().apply {
             putExtra("cookies", cookiesJson)
             if (!eelabToken.isNullOrBlank()) {
                 putExtra("electronic_exp_token", eelabToken)
             }
         }
-        LogUtils.i( "✅ Login SUCCESS! Returning RESULT_OK with cookies campus=${config.campus}")
+        LogUtils.success("login complete campus=${config.campus} cookies=${cookies.size} eelabToken=${eelabToken != null}")
         setResult(Activity.RESULT_OK, intent)
         finish()
     }
@@ -726,7 +640,6 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     }
 
     override fun onDestroy() {
-        LogUtils.d( "onDestroy finished=$finished campus=${config.campus}")
         (binding.webview.parent as? ViewGroup)?.removeView(binding.webview)
         binding.webview.stopLoading()
         binding.webview.webChromeClient = WebChromeClient()
