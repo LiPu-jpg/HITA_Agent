@@ -205,10 +205,21 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                             autoOpenJwts(view)
                         }
                         isSuccessPage(url) -> {
-                            // 已进入成功页面，威海校区需要调用 VPN API 获取真实 cookies
+                            // 已进入成功页面
                             autoOpeningJwts = false
-                            LogUtils.i( "✅ Success page detected, finishing login campus=${config.campus}")
-                            handleSuccessPage()
+
+                            // 如果是电子实验中心页面，尝试提取JWT token并完成登录
+                            if (url.contains("eelabinfo")) {
+                                LogUtils.i( "✅ Electronic experiment center page detected, extracting JWT token")
+                                binding.webview.postDelayed({
+                                    extractElectronicExpToken()
+                                    // 提取token后完成登录
+                                    handleSuccessPage()
+                                }, 2000) // 等待2秒让页面完全加载
+                            } else {
+                                LogUtils.i( "✅ Success page detected, finishing login campus=${config.campus}")
+                                handleSuccessPage()
+                            }
                         }
                         isJwtsPage(url) -> {
                             autoOpeningJwts = false
@@ -246,6 +257,10 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
 
     private fun isJwtsPage(url: String): Boolean {
         val urlLower = url.lowercase()
+        // 电子实验中心页面不是登录页面
+        if (urlLower.contains("eelabinfo")) {
+            return false
+        }
         // 威海校区：loginCAS 页面（不管有没有jsessionid，都让 isSuccessPage 判断）
         if (config.campus == EASToken.Campus.WEIHAI) {
             return false // 威海不使用这个判断，全部交给 isSuccessPage
@@ -271,6 +286,12 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 // 如果cookies齐全，不管在什么页面都认为登录成功
                 if (hasRequiredCookies) {
                     LogUtils.i( "✅ Benbu: all required cookies present, treating as success")
+                    return true
+                }
+
+                // 电子实验中心页面也算成功
+                if (host.contains("eelabinfo")) {
+                    LogUtils.i( "✅ Benbu: on electronic experiment center page, treating as success")
                     return true
                 }
 
@@ -382,9 +403,13 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 LogUtils.i( "🍪 Weihai merged cookies: ${mergedCookies.keys} ${fingerprintSummary(mergedCookies)} campus=${config.campus}")
                 finishWithCookies(mergedCookies)
             }
+        } else if (config.campus == EASToken.Campus.BENBU && !currentUrl.contains("eelabinfo")) {
+            // 本部校区：如果还没有访问电子实验中心，自动导航去获取JWT token
+            LogUtils.i( "🔬 Benbu: auto navigating to electronic experiment center to get JWT token")
+            navigateToElectronicExperimentCenter()
         } else {
-            // 其他校区直接完成
-            LogUtils.i( "🍪 Non-Weihai: finishing with ${cookies.size} cookies ${fingerprintSummary(cookies)} campus=${config.campus}")
+            // 其他校区或已经访问过电子实验中心，直接完成
+            LogUtils.i( "🍪 Finishing with ${cookies.size} cookies ${fingerprintSummary(cookies)} campus=${config.campus}")
             finishWithCookies(cookies)
         }
     }
@@ -620,6 +645,18 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         finished = true
         setResult(Activity.RESULT_CANCELED)
         finish()
+    }
+
+    /**
+     * 导航到电子实验中心获取JWT token
+     */
+    private fun navigateToElectronicExperimentCenter() {
+        LogUtils.i( "🔬 导航到电子实验中心: ${CampusUrls.ELECTRONIC_EXP_LOGIN}")
+
+        // 标记正在导航到电子实验中心，避免重复导航
+        autoOpeningJwts = true
+
+        binding.webview.loadUrl(CampusUrls.ELECTRONIC_EXP_LOGIN)
     }
 
     private fun parseCookies(cookieString: String?): Map<String, String> {
