@@ -39,7 +39,21 @@ class UserLocal : Serializable {
     }
 
     override fun toString(): String {
-        return Gson().toJson(this)
+        // 手动构建JSON，避免Gson枚举序列化问题
+        val sb = StringBuilder()
+        sb.append("{")
+        sb.append("\"username\":").append(username?.let { "\"$it\"" } ?: "null").append(",")
+        sb.append("\"id\":").append(id?.let { "\"$it\"" } ?: "null").append(",")
+        sb.append("\"nickname\":").append(nickname?.let { "\"$it\"" } ?: "null").append(",")
+        sb.append("\"signature\":").append(signature?.let { "\"$it\"" } ?: "null").append(",")
+        sb.append("\"gender\":").append(gender?.let { "\"${it.name}\"" } ?: "null").append(",")
+        sb.append("\"avatar\":").append(avatar?.let { "\"$it\"" } ?: "null").append(",")
+        sb.append("\"token\":").append(token?.let { "\"$it\"" } ?: "null").append(",")
+        sb.append("\"publicKey\":").append(publicKey?.let { "\"$it\"" } ?: "null").append(",")
+        sb.append("\"studentId\":").append(studentId?.let { "\"$it\"" } ?: "null").append(",")
+        sb.append("\"school\":").append(school?.let { "\"$it\"" } ?: "null")
+        sb.append("}")
+        return sb.toString()
     }
 
     fun isValid(): Boolean {

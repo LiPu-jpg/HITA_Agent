@@ -539,8 +539,16 @@ class BenbuEASWebSource : EASService {
             emptyList()
         }
 
-        // 合并普通课程和实验课程
-        val allCourses = regularCourses + experimentCourses
+        // 查询电子实验中心课程
+        val electronicExperimentCourses = try {
+            getElectronicExperimentCourses(term, token)
+        } catch (e: Exception) {
+            LogUtils.w( "Failed to fetch electronic experiment courses: ${e.message}")
+            emptyList()
+        }
+
+        // 合并所有课程
+        val allCourses = regularCourses + experimentCourses + electronicExperimentCourses
         val mergedCourses = mergeAdjacentCourses(allCourses)
 
         // Count free time courses in merged result
@@ -552,6 +560,7 @@ class BenbuEASWebSource : EASService {
             "getTimetableOfTermSync term=${term.getCode()} " +
             "regular=${regularCourses.size} " +
             "experiment=${experimentCourses.size} " +
+            "electronicExp=${electronicExperimentCourses.size} " +
             "merged=${mergedCourses.size} " +
             "mergedFreeTime=$mergedFreeTimeCount " +
             "cookieKeys=${token.cookies.keys.sorted()}"
@@ -672,6 +681,216 @@ class BenbuEASWebSource : EASService {
         }
 
         return parsedCourses
+    }
+
+    private fun getElectronicExperimentCourses(term: TermItem, token: EASToken): List<CourseItem> {
+        LogUtils.d("📍 === 🔬 电子实验中心查询 START ===")
+        LogUtils.d("📍 term: code=${term.getCode()}, name=${term.termName}")
+
+        val electronicExpHostName = "http://eelabinfo-hit-edu-cn.ivpn.hit.edu.cn:1080"
+
+        // 尝试从token中获取JWT token（存储在accessToken字段中）
+        val jwtToken = token.accessToken
+        if (jwtToken.isNullOrBlank()) {
+            LogUtils.w("📍 ⚠️ 未找到电子实验中心JWT token，跳过查询")
+            return emptyList()
+        }
+
+        // 步骤1：查询实验课表API
+        LogUtils.d("📍 步骤1: 查询 /api/stu/viewCKKB")
+        try {
+            val response = Jsoup.connect("$electronicExpHostName/api/stu/viewCKKB")
+                .cookies(token.cookies)
+                .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 Safari/605.1.15")
+                .header("Accept", "*/*")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Origin", electronicExpHostName)
+                .header("Referer", "$electronicExpHostName/stu_ckkb.html")
+                .header("X-Requested-With", "XMLHttpRequest")
+                .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
+                .header("VcTchType", "stu")
+                .header("VcTchToken", jwtToken)
+                .timeout(timeout)
+                .ignoreContentType(true)
+                .ignoreHttpErrors(true)
+                .method(Connection.Method.POST)
+                .execute()
+
+            LogUtils.d("📍 API响应 status=${response.statusCode()}")
+            LogUtils.d("📍 API响应 length: ${response.body().length}")
+
+            if (response.statusCode() != 200) {
+                LogUtils.e("📍 ❌ 电子实验中心查询失败 HTTP ${response.statusCode()}")
+                return emptyList()
+            }
+
+            val body = response.body()
+            LogUtils.d("📍 API响应 preview: ${body.take(500)}")
+
+            // 解析JSON响应
+            val parsedCourses = parseElectronicExperimentJson(body)
+
+            LogUtils.d("📍 ✅ 电子实验中心解析完成: count=${parsedCourses.size}")
+            parsedCourses.forEachIndexed { index, course ->
+                val timeDisplay = if (course.startTime != null && course.endTime != null) {
+                    "${course.startTime}-${course.endTime}"
+                } else {
+                    "第${course.begin}-${course.last}节"
+                }
+                LogUtils.d("📍 电子实验#$index: ${course.name} 周${course.weeks} 星期${course.dow} $timeDisplay ${course.teacher} ${course.classroom}")
+            }
+
+            return parsedCourses
+
+        } catch (e: Exception) {
+            LogUtils.e("📍 ❌ 电子实验中心查询异常: ${e.message}")
+            LogUtils.w("📍 这可能需要用户在WebView中完成电子实验中心的登录认证")
+            return emptyList()
+        }
+    }
+
+    /**
+     * 解析电子实验中心返回的JSON数据
+     *
+     * JSON格式：
+     * {
+     *   "code": 0,
+     *   "codeMessage": "成功",
+     *   "data": [
+     *     {
+     *       "subjectName": "电路实验",
+     *       "classDate": "2026-05-12",
+     *       "startTime": "13:00",
+     *       "endTime": "18:10",
+     *       "teacher": "张三",
+     *       "address": "一校区-电机楼-301",
+     *       "labsName": "电路实验室"
+     *     }
+     *   ]
+     * }
+     */
+    private fun parseElectronicExperimentJson(json: String): List<CourseItem> {
+        val courses = mutableListOf<CourseItem>()
+
+        try {
+            val jsonObj = org.json.JSONObject(json)
+            val code = jsonObj.optInt("code", -1)
+
+            if (code != 0) {
+                val message = jsonObj.optString("codeMessage", "未知错误")
+                LogUtils.w("📍 API返回错误: code=$code, message=$message")
+                return courses
+            }
+
+            val dataArray = jsonObj.optJSONArray("data") ?: org.json.JSONArray()
+            LogUtils.d("📍 解析${dataArray.length()}条电子实验数据")
+
+            for (i in 0 until dataArray.length()) {
+                try {
+                    val item = dataArray.getJSONObject(i)
+
+                    val subjectName = item.optString("subjectName", "").trim()
+                    val classDate = item.optString("classDate", "").trim()
+                    val startTime = item.optString("startTime", "").trim()
+                    val endTime = item.optString("endTime", "").trim()
+                    val teacher = item.optString("teacher", "").trim()
+                    val address = item.optString("address", "").trim()
+                    val labsName = item.optString("labsName", "").trim()
+
+                    if (subjectName.isEmpty()) continue
+
+                    // 解析日期：2026-05-12 -> 计算周数和星期
+                    val (dow, weekNum) = parseDateToWeekAndDow(classDate)
+
+                    if (dow == -1 || weekNum == -1) {
+                        LogUtils.w("📍 跳过无效日期: $classDate")
+                        continue
+                    }
+
+                    val course = CourseItem().apply {
+                        name = subjectName
+                        this.dow = dow
+                        weeks = mutableListOf(weekNum)
+                        this.teacher = teacher
+                        classroom = if (labsName.isNotEmpty()) "$address($labsName)" else address
+                        this.startTime = startTime
+                        this.endTime = endTime
+                        begin = -1  // 自由时间课程
+                        last = -1   // 自由时间课程
+                    }
+
+                    courses.add(course)
+
+                } catch (e: Exception) {
+                    LogUtils.e("📍 解析单条数据失败: ${e.message}")
+                }
+            }
+
+        } catch (e: Exception) {
+            LogUtils.e("📍 JSON解析失败: ${e.message}")
+        }
+
+        return courses
+    }
+
+    /**
+     * 设置电子实验中心JWT token
+     *
+     * 此方法用于在WebView登录后设置JWT token，以便查询电子实验中心的课程
+     *
+     * @param token EASToken对象
+     * @param jwtToken JWT token字符串
+     */
+    fun setElectronicExperimentToken(token: EASToken, jwtToken: String) {
+        token.accessToken = jwtToken
+        LogUtils.d("✅ 电子实验中心JWT token已设置: ${jwtToken.take(20)}...")
+    }
+
+    /**
+     * 解析日期字符串为周数和星期
+     *
+     * 需要知道学期的开学日期才能正确计算
+     * 这里使用一个简单的假设：2025年秋季学期开学日期为2025-09-01（周一）
+     *
+     * @param dateStr 日期字符串，格式：2026-05-12
+     * @return Pair(星期几, 周数)，星期几：1=周一, 7=周日
+     */
+    private fun parseDateToWeekAndDow(dateStr: String): Pair<Int, Int> {
+        try {
+            // 假设2025年秋季学期开学日期为2025-09-01（周一）
+            val startDate = Calendar.getInstance().apply {
+                set(2025, Calendar.SEPTEMBER, 1)
+            }
+
+            val currentDate = SimpleDateFormat("yyyy-MM-dd").parse(dateStr)
+            val currentCalendar = Calendar.getInstance().apply {
+                time = currentDate
+            }
+
+            // 计算周数
+            val diffMillis = currentCalendar.timeInMillis - startDate.timeInMillis
+            val diffDays = diffMillis / (1000 * 60 * 60 * 24)
+            val weekNum = (diffDays / 7).toInt() + 1
+
+            // 计算星期几（1=周一, 7=周日）
+            val dow = currentCalendar.get(Calendar.DAY_OF_WEEK)
+            val adjustedDow = when (dow) {
+                Calendar.MONDAY -> 1
+                Calendar.TUESDAY -> 2
+                Calendar.WEDNESDAY -> 3
+                Calendar.THURSDAY -> 4
+                Calendar.FRIDAY -> 5
+                Calendar.SATURDAY -> 6
+                Calendar.SUNDAY -> 7
+                else -> -1
+            }
+
+            return Pair(adjustedDow, weekNum)
+
+        } catch (e: Exception) {
+            LogUtils.e("📍 日期解析失败: ${e.message}")
+            return Pair(-1, -1)
+        }
     }
 
     private fun ensureTimetableResponse(term: TermItem, body: String, statusCode: Int) {
