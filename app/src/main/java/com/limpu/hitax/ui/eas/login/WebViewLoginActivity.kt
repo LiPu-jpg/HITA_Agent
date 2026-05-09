@@ -102,7 +102,8 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
             window?.setDimAmount(0f)
             binding.toolbar.visibility = View.GONE
             binding.progressBar.visibility = View.GONE
-            binding.webview.alpha = 0.02f
+            // 不设置alpha，保持WebView正常渲染
+            // 通过Theme透明化整个Activity，而不是降低WebView透明度
         } else {
             setToolbarActionBack(binding.toolbar)
         }
@@ -164,10 +165,15 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
             }
 
             webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    LogUtils.d("🌐 Page loading started: ${url?.take(80)}... campus=${config.campus}")
+                }
+
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
                     val hasJsessionid = url.contains("jsessionid", ignoreCase = true)
-                    LogUtils.i( "📄 Page: ${url.take(80)}... jsessionid=$hasJsessionid campus=${config.campus}")
+                    LogUtils.i( "📄 Page finished: ${url.take(80)}... jsessionid=$hasJsessionid campus=${config.campus}")
 
                     // 打印当前 cookie 状态
                     val currentCookies = collectCookies()

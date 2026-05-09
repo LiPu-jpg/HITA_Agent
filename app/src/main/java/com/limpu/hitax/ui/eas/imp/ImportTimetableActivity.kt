@@ -394,9 +394,12 @@ class ImportTimetableActivity :
     }
 
     private fun showTermPicker(terms: List<TermItem>) {
-        val names = terms.map { getDisplayTermName(it) }
+        // 使用公共工具类过滤学期：只显示最近的学期
+        val filteredTerms = com.limpu.hitax.utils.TermUtils.filterRecentTerms(terms)
+
+        val names = filteredTerms.map { getDisplayTermName(it) }
         PopUpCheckableList<TermItem>()
-            .setListData(names, terms)
+            .setListData(names, filteredTerms)
             .setTitle(getString(R.string.pick_import_term))
             .setOnConfirmListener(object : PopUpCheckableList.OnConfirmListener<TermItem> {
                 override fun OnConfirm(title: String?, key: TermItem) {

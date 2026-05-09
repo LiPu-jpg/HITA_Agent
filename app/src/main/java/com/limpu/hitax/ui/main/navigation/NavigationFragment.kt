@@ -109,13 +109,13 @@ class NavigationFragment : HiltBaseFragment<FragmentNavigationBinding>() {
         }
         binding?.cardSubjects?.setOnClickListener {
             ActivityUtils.showEasVerifyWindow(
-                requireContext(),
+                requireActivity(),  // 使用requireActivity()而不是requireContext()来避免Hilt FragmentContextWrapper
                 easRepository,
                 directTo = ExamActivity::class.java,
                 onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                     override fun onSuccess(window: PopUpLoginEAS) {
                         ActivityUtils.startActivity(
-                            requireContext(),
+                            requireActivity(),
                             ExamActivity::class.java
                         )
                         window.dismiss()

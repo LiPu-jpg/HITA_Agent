@@ -86,7 +86,8 @@ interface EASService {
      * 获取考试信息
      */
     fun getExamItems(
-        token: EASToken
+        token: EASToken,
+        term: TermItem? = null
     ):LiveData<DataState<List<ExamItem>>>
 
     fun getSafePersonalInfo(token: EASToken): LiveData<DataState<EASToken>>

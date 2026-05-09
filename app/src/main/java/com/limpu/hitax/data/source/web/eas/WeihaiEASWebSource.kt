@@ -993,7 +993,7 @@ class WeihaiEASWebSource : EASService {
         return result
     }
 
-    override fun getExamItems(token: EASToken): LiveData<DataState<List<ExamItem>>> {
+    override fun getExamItems(token: EASToken, term: TermItem?): LiveData<DataState<List<ExamItem>>> {
         val result = MutableLiveData<DataState<List<ExamItem>>>()
         result.value = DataState(DataState.STATE.FETCH_FAILED, "威海暂不支持考试安排查询")
         return result

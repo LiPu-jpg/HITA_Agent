@@ -65,6 +65,19 @@ class EASRepository @Inject constructor(
     }
 
     /**
+     * 获取当前校区
+     * 用于UI层根据校区特性做不同的显示处理
+     *
+     * 注意：不同校区的差异：
+     * - 深圳校区：考试无期中期末分类，所有考试都显示为"期末"
+     * - 本部：有明确的期中期末分类
+     * - 威海：暂不支持考试查询
+     */
+    fun getCurrentCampus(): EASToken.Campus {
+        return easPreferenceSource.getEasToken().campus
+    }
+
+    /**
      * 进行登录
      */
     fun login(username: String, password: String): LiveData<DataState<Boolean>> {
@@ -117,24 +130,54 @@ class EASRepository @Inject constructor(
      */
     fun loginCheck(): LiveData<DataState<Boolean>> {
         val token = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "🔐 loginCheck: isLogin=${token.isLogin()}, campus=${token.campus}, token=${token.accessToken?.take(8)}...")
+        LogUtils.d("🔐 loginCheck: isLogin=${token.isLogin()}, campus=${token.campus}, token=${token.accessToken?.take(8)}...")
         if (!token.isLogin()) {
-            LogUtils.w("EASRepository", "⚠️ loginCheck: not logged in")
+            LogUtils.w("⚠️ loginCheck: not logged in")
             return LiveDataUtils.getMutableLiveData(DataState(false))
         }
-        return getService(token.campus).loginCheck(token).switchMap {
-            LogUtils.d("EASRepository", "🔐 loginCheck result: state=${it.state}, valid=${it.data?.first}")
-            if (it.state == DataState.STATE.SUCCESS && it.data != null) {
-                if (!it.data!!.first) {
-                    LogUtils.w("EASRepository", "⚠️ loginCheck: token invalid, clearing")
-                    clearEasToken()
-                } else {
-                    LogUtils.d("EASRepository", "✅ loginCheck: token valid, saving")
-                    saveEasToken(it.data!!.second)
-                }
+
+        val result = MediatorLiveData<DataState<Boolean>>()
+        val checkSource = getService(token.campus).loginCheck(token)
+        result.addSource(checkSource) { state ->
+            if (state.state == DataState.STATE.NOTHING) {
+                return@addSource
             }
-            return@switchMap MutableLiveData(DataState(it.data?.first == true))
+            if (state.state != DataState.STATE.SUCCESS || state.data == null) {
+                result.value = DataState(false, state.state).apply { message = state.message }
+                return@addSource
+            }
+
+            val (isValid, checkedToken) = state.data!!
+            if (!isValid) {
+                LogUtils.w("⚠️ loginCheck: token invalid, keeping cookies for retry")
+                // Don't clear token on first failure - cookies might still be valid
+                // clearEasToken()
+                result.value = DataState(false, DataState.STATE.SUCCESS).apply {
+                    message = "登录验证失败，请重试"
+                }
+                return@addSource
+            }
+
+            LogUtils.d("✅ loginCheck: token valid, fetching user info")
+            // 验证成功后，获取用户信息（包括姓名）
+            val enrichSource = getService(token.campus).getSafePersonalInfo(checkedToken)
+            result.addSource(enrichSource) { enrichedState ->
+                if (enrichedState.state == DataState.STATE.NOTHING) {
+                    return@addSource
+                }
+                val finalToken = if (enrichedState.state == DataState.STATE.SUCCESS) {
+                    enrichedState.data ?: checkedToken
+                } else {
+                    checkedToken
+                }
+                LogUtils.d("✅ loginCheck: saving enriched token name=${finalToken.name}")
+                saveEasToken(finalToken)
+                result.value = DataState(true, DataState.STATE.SUCCESS)
+                result.removeSource(enrichSource)
+            }
+            result.removeSource(checkSource)
         }
+        return result
     }
 
     /**
@@ -264,11 +307,11 @@ class EASRepository @Inject constructor(
     /**
      * 获取考试信息
      */
-    fun getExamInfo(): LiveData<DataState<List<ExamItem>>> {
+    fun getExamInfo(term: TermItem? = null): LiveData<DataState<List<ExamItem>>> {
         val easToken = easPreferenceSource.getEasToken()
-        LogUtils.d("EASRepository", "📝 getExamInfo: isLogin=${easToken.isLogin()}, campus=${easToken.campus}, token=${easToken.accessToken?.take(8)}...")
+        LogUtils.d("EASRepository", "📝 getExamInfo: term=${term?.name}, isLogin=${easToken.isLogin()}, campus=${easToken.campus}, token=${easToken.accessToken?.take(8)}...")
         if (easToken.isLogin()) {
-            return getService(easToken.campus).getExamItems(easToken)
+            return getService(easToken.campus).getExamItems(easToken, term)
         }
         LogUtils.w("EASRepository", "⚠️ getExamInfo: not logged in")
         return LiveDataUtils.getMutableLiveData(DataState(DataState.STATE.NOT_LOGGED_IN))
@@ -341,14 +384,31 @@ class EASRepository @Inject constructor(
                                 //添加时间表
                                 val events = mutableListOf<EventItem>()
                                 val requireSubjects = mutableMapOf<String, String>()
+
+                                // Count free time courses before processing
+                                val freeTimeCount = courseItems.count { item ->
+                                    item.startTime != null && item.endTime != null && item.begin == -1 && item.last == -1
+                                }
+                                LogUtils.d("📊 [IMPORT] Total courses: ${courseItems.size}, Free time courses: $freeTimeCount, Period courses: ${courseItems.size - freeTimeCount}")
+
                                 for (item in courseItems) {
-                                    val startIndex = item.begin - 1
-                                    val endIndex = item.begin + item.last - 2
-                                    if (startIndex !in safeSchedule.indices || endIndex !in safeSchedule.indices) {
-                                        continue
+                                    // Check if this is a free time course (has startTime/EndTime)
+                                    val isFreeTimeCourse = item.startTime != null && item.endTime != null && item.begin == -1 && item.last == -1
+
+                                    // Debug log for experiment courses
+                                    if (isFreeTimeCourse) {
+                                        LogUtils.d("🔬 [IMPORT] Experiment course: name=${item.name} weeks=${item.weeks} dow=${item.dow} time=${item.startTime}-${item.endTime}")
                                     }
-                                    val spStart = safeSchedule[startIndex]
-                                    val spEnd = safeSchedule[endIndex]
+
+                                    // Skip period-based courses with invalid indices
+                                    if (!isFreeTimeCourse) {
+                                        val startIndex = item.begin - 1
+                                        val endIndex = item.begin + item.last - 2
+                                        if (startIndex !in safeSchedule.indices || endIndex !in safeSchedule.indices) {
+                                            continue
+                                        }
+                                    }
+
                                     val rawName = item.name?.toString().orEmpty().trim()
                                     val normalizedName = CourseNameUtils.normalize(rawName) ?: rawName
 
@@ -420,18 +480,38 @@ class EASRepository @Inject constructor(
                                     for (week in item.weeks) {
                                         val from = getDateAtWOT(startDate, week, item.dow)
                                         val to = getDateAtWOT(startDate, week, item.dow)
-                                        from.set(Calendar.HOUR_OF_DAY, spStart.from.hour)
-                                        from.set(Calendar.MINUTE, spStart.from.minute)
-                                        to.set(Calendar.HOUR_OF_DAY, spEnd.to.hour)
-                                        to.set(Calendar.MINUTE, spEnd.to.minute)
+
+                                        // Handle free time courses (experiment courses with custom times)
+                                        if (isFreeTimeCourse) {
+                                            val startTime = item.startTime
+                                            val endTime = item.endTime
+                                            if (startTime != null && endTime != null) {
+                                                // Parse "HH:MM" format
+                                                val startParts = startTime.split(":")
+                                                val endParts = endTime.split(":")
+                                                from.set(Calendar.HOUR_OF_DAY, startParts[0].toInt())
+                                                from.set(Calendar.MINUTE, startParts[1].toInt())
+                                                to.set(Calendar.HOUR_OF_DAY, endParts[0].toInt())
+                                                to.set(Calendar.MINUTE, endParts[1].toInt())
+                                            }
+                                        } else {
+                                            // Period-based courses
+                                            val spStart = safeSchedule[item.begin - 1]
+                                            val spEnd = safeSchedule[item.begin + item.last - 2]
+                                            from.set(Calendar.HOUR_OF_DAY, spStart.from.hour)
+                                            from.set(Calendar.MINUTE, spStart.from.minute)
+                                            to.set(Calendar.HOUR_OF_DAY, spEnd.to.hour)
+                                            to.set(Calendar.MINUTE, spEnd.to.minute)
+                                        }
+
                                         val e = EventItem()
                                         e.source = EventItem.SOURCE_EAS_IMPORT
                                         // 使用原始完整名称而不是normalized
                                         e.name = rawName
                                         e.from.time = from.timeInMillis
-                                        e.fromNumber = item.begin
+                                        e.fromNumber = if (isFreeTimeCourse) 0 else item.begin
                                         e.subjectId = subject.id
-                                        e.lastNumber = item.last
+                                        e.lastNumber = if (isFreeTimeCourse) 0 else item.last
                                         e.to.time = to.timeInMillis
                                         val itemTeacher = sanitizeImportedTeacher(rawName, item.teacher)
                                         val mappedTeacher = itemTeacher
@@ -446,10 +526,17 @@ class EASRepository @Inject constructor(
                                             else -> "none"
                                         }
                                         if (item.dow in DEBUG_DOW && week == DEBUG_WEEK) {
-                                            val periodEnd = item.begin + item.last - 1
+                                            val periodDisplay = if (isFreeTimeCourse) {
+                                                val startTime = item.startTime
+                                                val endTime = item.endTime
+                                                if (startTime != null && endTime != null) "$startTime-$endTime" else "free time"
+                                            } else {
+                                                val periodEnd = item.begin + item.last - 1
+                                                "${item.begin}-$periodEnd"
+                                            }
                                             LogUtils.d(
                                                 "[DBG_W7_D56][MAP] week=$week dow=${item.dow} " +
-                                                    "nameRaw=$rawName nameNorm=$normalizedName code=${item.code} period=${item.begin}-$periodEnd " +
+                                                    "nameRaw=$rawName nameNorm=$normalizedName code=${item.code} period=$periodDisplay " +
                                                     "itemTeacherRaw=${item.teacher} itemTeacher=$itemTeacher mappedTeacher=$mappedTeacher source=$teacherSource " +
                                                     "teacherMapByCode=${if (code.isBlank()) null else teacherMap[code]} teacherMapByNameRaw=${teacherMap[rawName]} teacherMapByNameNorm=${teacherMap[normalizedName]}"
                                             )
@@ -686,6 +773,11 @@ class EASRepository @Inject constructor(
     }
 
     private fun saveEasToken(token: EASToken) {
+        easPreferenceSource.saveEasToken(token)
+        easTokenLiveData.postValue(token)
+    }
+
+    fun saveEasTokenSync(token: EASToken) {
         easPreferenceSource.saveEasToken(token)
         easTokenLiveData.postValue(token)
     }

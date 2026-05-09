@@ -17,7 +17,7 @@
         <com.google.android.material.appbar.CollapsingToolbarLayout
             android:id="@+id/collapse"
             android:layout_width="match_parent"
-            android:layout_height="160dp"
+            android:layout_height="180dp"
             app:expandedTitleMargin="24dp"
             app:layout_scrollFlags="scroll|exitUntilCollapsed"
             app:statusBarScrim="#00000000"
@@ -33,97 +33,124 @@
                 app:contentInsetStartWithNavigation="0dp"
                 app:layout_collapseMode="pin" />
 
-        </com.google.android.material.appbar.CollapsingToolbarLayout>
-
-        <androidx.cardview.widget.CardView
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:layout_marginStart="16dp"
-            android:layout_marginEnd="16dp"
-            android:layout_marginBottom="8dp"
-            android:padding="8dp"
-            app:cardBackgroundColor="?attr/backgroundColorSecond"
-            app:cardCornerRadius="16dp"
-            app:cardElevation="0dp">
-
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
+                android:layout_height="120dp"
+                android:layout_gravity="bottom"
+                android:layout_marginTop="24dp"
                 android:orientation="vertical"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp">
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingBottom="16dp">
 
+                <!-- 第一行：学期和考试类型选择器 -->
                 <LinearLayout
-                    android:id="@+id/exam_term_layout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:foreground="?attr/selectableItemBackgroundBorderless"
-                    android:orientation="horizontal"
-                    android:padding="8dp">
+                    android:layout_marginBottom="12dp"
+                    android:orientation="horizontal">
 
-                    <TextView
-                        android:id="@+id/exam_term_text"
-                        android:layout_width="wrap_content"
+                    <LinearLayout
+                        android:id="@+id/exam_term_layout"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:text="-"
-                        android:textColor="?attr/textColorPrimary"
-                        android:textSize="16sp" />
+                        android:layout_weight="1"
+                        android:clickable="true"
+                        android:foreground="?attr/selectableItemBackgroundBorderless"
+                        android:orientation="horizontal"
+                        android:paddingTop="8dp"
+                        android:paddingBottom="8dp">
 
-                    <ImageView
-                        android:layout_width="12dp"
+                        <TextView
+                            android:id="@+id/exam_term_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:gravity="center"
+                            android:maxEms="8"
+                            android:ellipsize="end"
+                            android:singleLine="true"
+                            android:text="-"
+                            android:textColor="?attr/textColorPrimary"
+                            android:textSize="28sp" />
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="36dp"
+                            android:layout_gravity="center"
+                            android:layout_marginStart="4dp"
+                            android:tintMode="src_in"
+                            app:srcCompat="@drawable/ic_expand"
+                            app:tint="?attr/colorPrimaryDisabled" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:alpha="0.2"
+                        android:background="?android:attr/dividerHorizontal" />
+
+                    <LinearLayout
+                        android:id="@+id/exam_type_layout"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:tintMode="src_in"
-                        app:srcCompat="@drawable/ic_expand"
-                        app:tint="?attr/colorPrimaryDisabled" />
+                        android:layout_weight="1"
+                        android:clickable="true"
+                        android:foreground="?attr/selectableItemBackgroundBorderless"
+                        android:orientation="horizontal"
+                        android:paddingTop="8dp"
+                        android:paddingBottom="8dp">
+
+                        <TextView
+                            android:id="@+id/exam_type_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_gravity="center"
+                            android:gravity="center"
+                            android:maxEms="8"
+                            android:ellipsize="end"
+                            android:singleLine="true"
+                            android:text="-"
+                            android:textColor="?attr/textColorPrimary"
+                            android:textSize="28sp" />
+
+                        <ImageView
+                            android:layout_width="18dp"
+                            android:layout_height="36dp"
+                            android:layout_gravity="center"
+                            android:layout_marginStart="4dp"
+                            android:tintMode="src_in"
+                            app:srcCompat="@drawable/ic_expand"
+                            app:tint="?attr/colorPrimaryDisabled" />
+                    </LinearLayout>
                 </LinearLayout>
 
+                <!-- 第二行：导入按钮 -->
                 <LinearLayout
-                    android:id="@+id/exam_type_layout"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:foreground="?attr/selectableItemBackgroundBorderless"
-                    android:orientation="horizontal"
-                    android:padding="8dp">
+                    android:gravity="end"
+                    android:orientation="horizontal">
 
-                    <TextView
-                        android:id="@+id/exam_type_text"
+                    <br.com.simplepass.loadingbutton.customViews.CircularProgressButton
+                        android:id="@+id/btn_import_all"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="-"
-                        android:textColor="?attr/textColorPrimary"
-                        android:textSize="16sp" />
-
-                    <ImageView
-                        android:layout_width="12dp"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="6dp"
-                        android:tintMode="src_in"
-                        app:srcCompat="@drawable/ic_expand"
-                        app:tint="?attr/colorPrimaryDisabled" />
+                        android:layout_height="36dp"
+                        android:background="@drawable/element_rounded_button_bg_primary"
+                        android:text="@string/import_all_exams"
+                        android:textColor="@color/white"
+                        android:textSize="15sp"
+                        app:finalCornerAngle="18dp"
+                        app:initialCornerAngle="18dp"
+                        app:spinning_bar_color="@color/white"
+                        app:spinning_bar_padding="4dp"
+                        app:spinning_bar_width="3dp" />
                 </LinearLayout>
-
-                <TextView
-                    android:id="@+id/exam_memo_hint"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="4dp"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:foreground="?attr/selectableItemBackgroundBorderless"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:text="@string/exam_memo_hint"
-                    android:textColor="?attr/textColorSecondary"
-                    android:textSize="12sp" />
-
             </LinearLayout>
 
-        </androidx.cardview.widget.CardView>
+        </com.google.android.material.appbar.CollapsingToolbarLayout>
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.swiperefreshlayout.widget.SwipeRefreshLayout

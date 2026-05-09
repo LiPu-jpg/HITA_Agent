@@ -120,19 +120,40 @@ class EASWebSource internal constructor(
     ): Connection.Response {
         fun executeOnce(): Connection.Response {
             LogUtils.d("EASWebSource", "🌐 authedFormPost: path=$path, token=${token.accessToken?.take(8)}..., cookies=${token.cookies.size}")
-            val req = Jsoup.newSession()
-                .url("$hostName$path")
-                .headers(baseHeaders("bearer ${token.accessToken}"))
-                .cookies(token.cookies)
-                .timeout(timeout)
-                .ignoreContentType(true)
-                .ignoreHttpErrors(true)
-                .method(Connection.Method.POST)
-            data.forEach { (k, v) -> req.data(k, v) }
-            val resp = req.execute()
-            token.cookies.putAll(resp.cookies())
-            LogUtils.d("EASWebSource", "🌐 authedFormPost response: status=${resp.statusCode()}, cookies=${resp.cookies().size}")
-            return resp
+
+            // 强制使用IPv4以避免IPv6连接问题
+            val originalIPv4 = System.getProperty("java.net.preferIPv4Stack")
+            val originalIPv6 = System.getProperty("java.net.preferIPv6Addresses")
+            System.setProperty("java.net.preferIPv4Stack", "true")
+            System.setProperty("java.net.preferIPv6Addresses", "false")
+
+            try {
+                val req = Jsoup.newSession()
+                    .url("$hostName$path")
+                    .headers(baseHeaders("bearer ${token.accessToken}"))
+                    .cookies(token.cookies)
+                    .timeout(timeout)
+                    .ignoreContentType(true)
+                    .ignoreHttpErrors(true)
+                    .method(Connection.Method.POST)
+                data.forEach { (k, v) -> req.data(k, v) }
+                val resp = req.execute()
+                token.cookies.putAll(resp.cookies())
+                LogUtils.d("EASWebSource", "🌐 authedFormPost response: status=${resp.statusCode()}, cookies=${resp.cookies().size}")
+                return resp
+            } finally {
+                // 恢复原始设置
+                if (originalIPv4 != null) {
+                    System.setProperty("java.net.preferIPv4Stack", originalIPv4)
+                } else {
+                    System.clearProperty("java.net.preferIPv4Stack")
+                }
+                if (originalIPv6 != null) {
+                    System.setProperty("java.net.preferIPv6Addresses", originalIPv6)
+                } else {
+                    System.clearProperty("java.net.preferIPv6Addresses")
+                }
+            }
         }
 
         var resp = executeOnce()
@@ -1866,12 +1887,135 @@ class EASWebSource internal constructor(
     }
 
 
-    // ================================================================ 考试信息（暂未找到新接口）
-    override fun getExamItems(token: EASToken): LiveData<DataState<List<ExamItem>>> {
+    // ================================================================ 考试信息（深圳校区新接口）
+    override fun getExamItems(token: EASToken, term: TermItem?): LiveData<DataState<List<ExamItem>>> {
         val res = MutableLiveData<DataState<List<ExamItem>>>()
         Thread {
-            // TODO: 补充新版考试查询接口
-            res.postValue(DataState(emptyList(), DataState.STATE.SUCCESS))
+            try {
+                LogUtils.d("EASWebSource", "=== 📝深圳校区考试查询 START ===")
+                LogUtils.d("EASWebSource", "Token: accessToken=${token.accessToken?.take(12)}..., campus=${token.campus}")
+                LogUtils.d("EASWebSource", "查询学期: term=${term?.name}, yearCode=${term?.yearCode}, termCode=${term?.termCode}")
+
+                // 使用传入的学期参数，如果没有则使用当前学期
+                val xn = term?.yearCode ?: run {
+                    val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+                    val nextYear = currentYear + 1
+                    "$currentYear-$nextYear"
+                }
+                val xq = term?.termCode ?: "2" // 默认查询第2学期
+
+                // 构建请求体
+                val requestBody = org.json.JSONObject().apply {
+                    put("type", "json")
+                    put("xn", xn)
+                    put("xq", xq)
+                    put("kssjddm", "")
+                    put("kcdmorkcmc", "")
+                    put("pageNum", 1)
+                    put("pageSize", 20)
+                }.toString()
+
+                LogUtils.d("EASWebSource", "request body: $requestBody")
+
+                // 发送POST请求到深圳校区考试查询接口
+                val examHost = "https://mjw.hitsz.edu.cn"
+                val url = "$examHost/incoSpringBoot/app/kscx/queryKsxxByXs"
+
+                LogUtils.d("EASWebSource", "calling API: $url")
+
+                val req = Jsoup.newSession()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 15; V2183A Build/AP3A.240905.015.A2; wv) AppleWebKit/537.36")
+                    .header("Accept", "*/*")
+                    .header("Content-Type", "application/json")
+                    .header("_lang", "cn")
+                    .cookies(token.cookies)
+                    .requestBody(requestBody)
+                    .timeout(timeout)
+                    .ignoreContentType(true)
+                    .ignoreHttpErrors(true)
+                    .method(Connection.Method.POST)
+
+                // 添加Bearer Token认证
+                if (!token.accessToken.isNullOrEmpty()) {
+                    LogUtils.d("EASWebSource", "using Bearer token authentication")
+                    req.header("authorization", "bearer ${token.accessToken}")
+                    req.header("rolecode", "06")
+                } else {
+                    LogUtils.d("EASWebSource", "using cookie authentication")
+                }
+
+                val response = req.execute()
+
+                LogUtils.d("EASWebSource", "response status: ${response.statusCode()}")
+                LogUtils.d("EASWebSource", "response body preview: ${response.body().take(300)}")
+
+                if (response.statusCode() == 200) {
+                    val responseBody = response.body()
+                    LogUtils.d("完整响应内容: $responseBody", "EASWebSource")
+
+                    val jsonResponse = org.json.JSONObject(responseBody)
+
+                    LogUtils.d("API response code: ${jsonResponse.optInt("code")}", "EASWebSource")
+
+                    if (jsonResponse.optInt("code") == 200) {
+                        val content = jsonResponse.optJSONObject("content")
+                        val examList = mutableListOf<ExamItem>()
+
+                        // 详细输出content结构
+                        if (content != null) {
+                            LogUtils.d("content结构: total=${content.optInt("total")}, pageNum=${content.optInt("pageNum")}, pageSize=${content.optInt("pageSize")}", "EASWebSource")
+                        } else {
+                            LogUtils.d("content为null，完整响应: $responseBody", "EASWebSource")
+                        }
+
+                        content?.optJSONArray("list")?.let { list ->
+                            LogUtils.d("found ${list.length()} exam items in response", "EASWebSource")
+                            for (i in 0 until list.length()) {
+                                try {
+                                    val examObj = list.getJSONObject(i)
+                                    val examItem = ExamItem().apply {
+                                        courseName = examObj.optString("KCMC") // 课程名称
+                                        examDate = examObj.optString("KSRQ") // 考试日期
+                                        examTime = examObj.optString("KSJTSJ") // 考试时间
+                                        examType = examObj.optString("KSSJDMC") // 考试类型（期末/期中）
+                                        examLocation = "${examObj.optString("JXLMC")} ${examObj.optString("JXCDMC")}" // 教学楼 + 教室
+                                        termName = examObj.optString("XNXQMC") // 学年学期名称（显示用）
+                                        campusName = examObj.optString("XIAOQUBMC") // 校区名称
+
+                                        // **重要**：设置统一的学期ID，用于与TermItem.id匹配
+                                        // 格式：yearCode-termCode，如 "2025-2026-2"
+                                        // 优先使用传入的term参数，否则使用请求参数xn和xq
+                                        // 注意：不要使用API返回的XNXQMC字段生成ID，因为格式可能不一致
+                                        termId = if (term != null) {
+                                            "${term.yearCode}-${term.termCode}"
+                                        } else {
+                                            "$xn-$xq"
+                                        }
+                                    }
+                                    examList.add(examItem)
+                                    LogUtils.d("✅ parsed exam ${i+1}: ${examItem.courseName} ${examItem.examDate} ${examItem.examTime}", "EASWebSource")
+                                } catch (e: Exception) {
+                                    LogUtils.e("❌ Failed to parse exam item $i: ${e.message}", e, "EASWebSource")
+                                }
+                            }
+                        } ?: LogUtils.d("list数组为null", "EASWebSource")
+
+                        LogUtils.d("✅ 深圳校区考试查询 SUCCESS! found ${examList.size} exams", "EASWebSource")
+                        res.postValue(DataState(examList, DataState.STATE.SUCCESS))
+                    } else {
+                        val errorMsg = jsonResponse.optString("msg", "查询失败")
+                        LogUtils.e("❌ 深圳校区考试查询 FAILED: code=${jsonResponse.optInt("code")} msg=$errorMsg", null, "EASWebSource")
+                        res.postValue(DataState(DataState.STATE.FETCH_FAILED, errorMsg))
+                    }
+                } else {
+                    LogUtils.e("❌ 深圳校区考试查询 HTTP ERROR: ${response.statusCode()}", null, "EASWebSource")
+                    res.postValue(DataState(DataState.STATE.FETCH_FAILED, "网络请求失败 HTTP ${response.statusCode()}"))
+                }
+            } catch (e: Exception) {
+                LogUtils.e("❌ 深圳校区考试查询 EXCEPTION: ${e.javaClass.simpleName} ${e.message}", e, "EASWebSource")
+                res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "查询考试失败"))
+            }
         }.start()
         return res
     }

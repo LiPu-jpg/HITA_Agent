@@ -20,6 +20,7 @@ import com.limpu.hitax.databinding.DialogBottomEasVerifyBinding
 import com.limpu.hitax.utils.ImageUtils
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
 import dagger.hilt.android.AndroidEntryPoint
+import org.json.JSONObject
 
 @AndroidEntryPoint
 class PopUpLoginEAS :
@@ -112,6 +113,43 @@ class PopUpLoginEAS :
                 onResponseListener?.onFailed(this)
             }
         }
+
+        // 监听loginCheck结果（用于WebView登录后的验证）
+        viewModel.loginCheckResult.observe(this) {
+            LogUtils.d( "popup observe loginCheckResult state=${it.state} message=${it.message}")
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                binding?.buttonLogin?.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            } else {
+                binding?.buttonLogin?.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+            }
+            binding?.buttonLogin?.isEnabled = true
+            val iconId: Int = if (it.state == DataState.STATE.SUCCESS) {
+                R.drawable.ic_baseline_done_24
+            } else {
+                R.drawable.ic_baseline_error_24
+            }
+            val bitmap = ImageUtils.getResourceBitmap(requireContext(), iconId)
+            binding?.buttonLogin?.doneLoadingAnimation(getColorPrimary(), bitmap)
+            if (it.state == DataState.STATE.SUCCESS) {
+                val token = viewModel.easRepo.getEasToken()
+                LogUtils.d( "popup loginCheck success savedToken campus=${token.campus} isLogin=${token.isLogin()} cookieKeys=${token.cookies.keys.sorted()}")
+                onResponseListener?.onSuccess(this)
+
+            } else {
+                // Log token state after failed loginCheck
+                val token = viewModel.easRepo.getEasToken()
+                LogUtils.e( "popup loginCheck FAILED state=${it.state} message=${it.message} token.isLogin=${token.isLogin()} cookieKeys=${token.cookies.keys.sorted()}")
+                binding?.buttonLogin?.postDelayed({
+                    binding?.buttonLogin?.revertAnimation()
+                }, 600)
+                Toast.makeText(
+                    requireContext(),
+                    it.message ?: "登录验证失败",
+                    Toast.LENGTH_SHORT
+                ).show()
+                onResponseListener?.onFailed(this)
+            }
+        }
         binding?.buttonLogin?.setOnClickListener {
             val campus = getSelectedCampus() ?: return@setOnClickListener
             LogUtils.d( "click login campus=$campus")
@@ -194,9 +232,36 @@ class PopUpLoginEAS :
             silentWebLoginTried = false
 
             if (cookiesJson != null && (campus == EASToken.Campus.BENBU || campus == EASToken.Campus.WEIHAI)) {
-                LogUtils.i( "🚀 Starting EAS login with cookies...")
-                binding?.buttonLogin?.startAnimation()
-                viewModel.startLogin(cookiesJson, "", campus)
+                LogUtils.i( "🚀 Processing cookies from WebView...")
+
+                try {
+                    // 解析cookies JSON
+                    val cookiesJsonObj = JSONObject(cookiesJson)
+                    val cookiesMap = HashMap<String, String>()
+                    val keys = cookiesJsonObj.keys()
+                    while (keys.hasNext()) {
+                        val key = keys.next()
+                        cookiesMap[key] = cookiesJsonObj.getString(key)
+                    }
+
+                    // 获取当前token并更新cookies
+                    val currentToken = viewModel.easRepo.getEasToken()
+                    currentToken.cookies = cookiesMap
+                    currentToken.campus = campus
+
+                    // 保存更新后的token
+                    viewModel.easRepo.saveEasTokenSync(currentToken)
+
+                    LogUtils.i( "✅ Cookies saved, verifying login...")
+
+                    // 验证登录是否有效
+                    binding?.buttonLogin?.startAnimation()
+                    viewModel.startLoginCheck()
+                } catch (e: Exception) {
+                    LogUtils.e( "❌ Failed to parse cookies: ${e.message}")
+                    binding?.buttonLogin?.isEnabled = true
+                    onResponseListener?.onFailed(this)
+                }
             } else {
                 LogUtils.e( "❌ Invalid state: cookiesJson=${cookiesJson != null} campus valid=${campus == EASToken.Campus.BENBU || campus == EASToken.Campus.WEIHAI}")
                 binding?.buttonLogin?.isEnabled = true

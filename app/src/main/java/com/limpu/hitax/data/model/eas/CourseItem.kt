@@ -16,6 +16,9 @@ class CourseItem {
     var dow = -1
     var begin = -1
     var last = -1
+    // 实验课的具体时间（自由时间，不按节次）
+    var startTime: String? = null   // 格式："15:40"
+    var endTime: String? = null     // 格式："18:10"
 
 
     override fun toString(): String {
@@ -35,6 +38,9 @@ class CourseItem {
         if (dow != other.dow) return false
         if (begin != other.begin) return false
         if (last != other.last) return false
+        // Include time fields for free time courses
+        if (startTime != other.startTime) return false
+        if (endTime != other.endTime) return false
 
         return true
     }
@@ -47,6 +53,8 @@ class CourseItem {
         result = 31 * result + dow
         result = 31 * result + begin
         result = 31 * result + last
+        result = 31 * result + (startTime?.hashCode() ?: 0)
+        result = 31 * result + (endTime?.hashCode() ?: 0)
         return result
     }
 }

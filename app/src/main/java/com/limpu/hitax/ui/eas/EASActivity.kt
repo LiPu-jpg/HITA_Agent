@@ -1,12 +1,15 @@
 package com.limpu.hitax.ui.eas
 
 import android.app.Activity
+import android.content.Intent
 import androidx.viewbinding.ViewBinding
 import com.limpu.component.data.DataState
 import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.ui.eas.login.PopUpLoginEAS
+import com.limpu.hitax.ui.eas.login.WebViewLoginActivity
 import com.limpu.hitax.utils.ActivityUtils
+import com.limpu.hitax.utils.LogUtils
 import com.limpu.hitax.ui.base.HiltBaseActivity
 import javax.inject.Inject
 
@@ -14,6 +17,10 @@ import androidx.activity.viewModels
 import dagger.hilt.android.AndroidEntryPoint
 
 abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity<V>() {
+
+    companion object {
+        private const val REQUEST_CODE_SILENT_RELOGIN = 10001
+    }
 
     @Inject
     lateinit var easRepository: EASRepository
@@ -52,12 +59,14 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity
         reloginInProgress = true
         pendingSessionRetryAction = retryAction
         val tokenCampus = easRepository.getEasToken().campus
+
+        // 使用改进的弹窗方式，支持自动静默登录
         ActivityUtils.showEasVerifyWindow<Activity>(
-            getThis(),
+            this,
             easRepository,
             directTo = null,
             autoLaunchWebLogin = true,
-            preferredCampus = if (tokenCampus == EASToken.Campus.BENBU || tokenCampus == EASToken.Campus.WEIHAI) tokenCampus else null,
+            preferredCampus = tokenCampus,
             onResponseListener = object : PopUpLoginEAS.OnResponseListener {
                 override fun onSuccess(window: PopUpLoginEAS) {
                     window.dismiss()
@@ -83,6 +92,29 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity
         reloginInProgress = false
         sessionRetryConsumed = false
         pendingSessionRetryAction = null
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == REQUEST_CODE_SILENT_RELOGIN) {
+            LogUtils.d("📨 Silent relogin result:resultCode=$resultCode")
+            if (resultCode == Activity.RESULT_OK) {
+                // 登录成功，执行重试操作
+                reloginInProgress = false
+                sessionRetryConsumed = true
+                val started = pendingSessionRetryAction?.invoke() == true
+                pendingSessionRetryAction = null
+                if (!started) {
+                    sessionRetryConsumed = false
+                }
+            } else {
+                // 登录失败或取消
+                reloginInProgress = false
+                pendingSessionRetryAction = null
+                LogUtils.d("⚠️ Silent relogin failed or cancelled")
+            }
+        }
     }
 
     override fun initViews() {

@@ -39,21 +39,42 @@ class HApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        applicationScope.launch(Dispatchers.IO) {
-            initPdfCMapResources()
+        try {
+            applicationScope.launch(Dispatchers.IO) {
+                try {
+                    initPdfCMapResources()
+                } catch (e: Exception) {
+                    LogUtils.e("initPdfCMapResources failed", e)
+                }
+            }
+        } catch (e: Exception) {
+            LogUtils.e("Failed to launch pdf init", e)
         }
 
-        val database = AppDatabase.getDatabase(this@HApplication)
-        val timetableDao = database.timetableDao()
-        val subjectDao = database.subjectDao()
-        val eventDao = database.eventItemDao()
+        try {
+            val database = AppDatabase.getDatabase(this@HApplication)
+            val timetableDao = database.timetableDao()
+            val subjectDao = database.subjectDao()
+            val eventDao = database.eventItemDao()
+        } catch (e: Exception) {
+            LogUtils.e("Database initialization failed", e)
+        }
+
         // 注意：在生产环境中应该移除或修改SSL设置
         // handleSSLHandshake()
 
         // 初始化课程提醒（根据用户设置自动调度或取消）
-        CourseReminderScheduler.autoSchedule(this)
+        try {
+            CourseReminderScheduler.autoSchedule(this)
+        } catch (e: Exception) {
+            LogUtils.e("CourseReminderScheduler.autoSchedule failed", e)
+        }
 
-        reportAppVisit()
+        try {
+            reportAppVisit()
+        } catch (e: Exception) {
+            LogUtils.e("reportAppVisit failed", e)
+        }
     }
 
     private fun reportAppVisit() {

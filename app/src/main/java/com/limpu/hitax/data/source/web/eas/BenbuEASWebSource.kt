@@ -22,6 +22,7 @@ import java.util.concurrent.Executors
 
 class BenbuEASWebSource : EASService {
     private val hostName = "http://jwts-hit-edu-cn.ivpn.hit.edu.cn:1080"
+    private val experimentHostName = "http://sjjx-hit-edu-cn.ivpn.hit.edu.cn:1080" // 实验教学中心
     private val timeout = AppConstants.Network.READ_TIMEOUT.toInt()
     private val executor = Executors.newCachedThreadPool()
 
@@ -46,6 +47,10 @@ class BenbuEASWebSource : EASService {
                 val cookiesMap = parseCookiesFromJson(username)
                 LogUtils.w( "parsed cookies: ${cookiesMap.keys} count=${cookiesMap.size}")
                 LogUtils.w( "key cookies: HIT=${cookiesMap["HIT"]?.take(8)} JSESSIONID=${cookiesMap["JSESSIONID"]?.take(8)} TWFID=${cookiesMap["TWFID"]?.take(8)}")
+
+                // 临时调试：输出完整cookies JSON（用于实验课系统测试）
+                val cookiesJson = org.json.JSONObject(cookiesMap as Map<Any?, Any?>).toString(2)
+                LogUtils.d("=== COOKIES JSON (复制此内容到cookies.json文件) ===\n$cookiesJson\n=== END COOKIES JSON ===")
 
                 if (cookiesMap.isEmpty()) {
                     LogUtils.e( "❌ cookies EMPTY")
@@ -204,31 +209,11 @@ class BenbuEASWebSource : EASService {
 
         executor.execute {
             try {
-                val response = Jsoup.connect("$hostName/kbcx/queryGrkb")
-                    .cookies(token.cookies)
-                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
-                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-                    .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
-                    .data("fhlj", "kbcx/queryGrkb")
-                    .data("xnxq", term.getCode())
-                    .timeout(timeout)
-                    .ignoreContentType(true)
-                    .ignoreHttpErrors(true)
-                    .method(Connection.Method.POST)
-                    .execute()
-
-                if (response.statusCode() == 200) {
-                    val body = response.body()
-                    ensureTimetableResponse(term, body, response.statusCode())
-                    val parsedCourses = BenbuScheduleParser.parseScheduleHtml(body)
-                    val courses = mergeAdjacentCourses(parsedCourses)
-                    logEmptyTimetableDetails(term, body, courses)
-                    LogUtils.d( "getTimetableOfTerm term=${term.getCode()} rawCourseCount=${parsedCourses.size} mergedCourseCount=${courses.size} cookieKeys=${token.cookies.keys.sorted()} ${cookieFingerprintSummary(token.cookies)}")
-                    result.postValue(DataState(courses))
-                } else {
-                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "HTTP ${response.statusCode()}"))
-                }
+                // 使用同步方法获取所有课程（包括实验课）
+                val courses = getTimetableOfTermSync(term, token)
+                result.postValue(DataState(courses))
             } catch (e: Exception) {
+                LogUtils.e("getTimetableOfTerm failed", e)
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }
@@ -543,6 +528,39 @@ class BenbuEASWebSource : EASService {
     }
 
     private fun getTimetableOfTermSync(term: TermItem, token: EASToken): List<CourseItem> {
+        // 查询普通课程
+        val regularCourses = getRegularCourses(term, token)
+
+        // 查询实验课程
+        val experimentCourses = try {
+            getExperimentCourses(term, token)
+        } catch (e: Exception) {
+            LogUtils.w( "Failed to fetch experiment courses: ${e.message}")
+            emptyList()
+        }
+
+        // 合并普通课程和实验课程
+        val allCourses = regularCourses + experimentCourses
+        val mergedCourses = mergeAdjacentCourses(allCourses)
+
+        // Count free time courses in merged result
+        val mergedFreeTimeCount = mergedCourses.count {
+            it.startTime != null && it.endTime != null && it.begin == -1 && it.last == -1
+        }
+
+        LogUtils.d(
+            "getTimetableOfTermSync term=${term.getCode()} " +
+            "regular=${regularCourses.size} " +
+            "experiment=${experimentCourses.size} " +
+            "merged=${mergedCourses.size} " +
+            "mergedFreeTime=$mergedFreeTimeCount " +
+            "cookieKeys=${token.cookies.keys.sorted()}"
+        )
+
+        return mergedCourses
+    }
+
+    private fun getRegularCourses(term: TermItem, token: EASToken): List<CourseItem> {
         val response = Jsoup.connect("$hostName/kbcx/queryGrkb")
             .cookies(token.cookies)
             .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
@@ -561,10 +579,99 @@ class BenbuEASWebSource : EASService {
         val body = response.body()
         ensureTimetableResponse(term, body, response.statusCode())
         val parsedCourses = BenbuScheduleParser.parseScheduleHtml(body)
-        val courses = mergeAdjacentCourses(parsedCourses)
-        logEmptyTimetableDetails(term, body, courses)
-        LogUtils.d( "getTimetableOfTermSync term=${term.getCode()} rawCourseCount=${parsedCourses.size} mergedCourseCount=${courses.size} cookieKeys=${token.cookies.keys.sorted()} ${cookieFingerprintSummary(token.cookies)}")
-        return courses
+        logEmptyTimetableDetails(term, body, parsedCourses)
+        return parsedCourses
+    }
+
+    private fun getExperimentCourses(term: TermItem, token: EASToken): List<CourseItem> {
+        LogUtils.d("📍 === 🔬 实验课查询 START ===")
+        LogUtils.d("📍 term: code=${term.getCode()}, name=${term.termName}")
+
+        // 关键发现：需要先通过 /loginsysj/loginSygl 接口建立实验课系统session
+        // 这个接口会返回302重定向到 /to-welcome?id=xxx&mid=xxx，从而建立实验课系统的认证
+
+        val experimentCookies = HashMap<String, String>(token.cookies)
+
+        // 步骤1：通过教务系统跳转到实验课系统
+        LogUtils.d("📍 步骤1: 通过 /loginsysj/loginSygl 建立实验课session")
+        try {
+            val loginResponse = Jsoup.connect("$hostName/loginsysj/loginSygl")
+                .cookies(token.cookies)
+                .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 Safari/605.1.15")
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
+                .header("Upgrade-Insecure-Requests", "1")
+                .timeout(timeout)
+                .ignoreContentType(true)
+                .followRedirects(true)  // 关键：跟随重定向到实验课系统
+                .ignoreHttpErrors(true)
+                .method(Connection.Method.GET)
+                .execute()
+
+            LogUtils.d("📍 认证接口响应 status=${loginResponse.statusCode()}")
+            LogUtils.d("📍 最终URL: ${loginResponse.url()?.toString()?.take(100)}")
+
+            // 收集实验课系统的cookies，但保留原有的教务系统cookies
+            loginResponse.cookies().forEach { (key, value) ->
+                experimentCookies[key] = value
+                LogUtils.d("📍 实验课系统cookie: $key=${value.take(20)}")
+            }
+        } catch (e: Exception) {
+            LogUtils.e("📍 实验课系统认证失败: ${e.message}")
+            LogUtils.w("📍 继续使用原有cookies尝试查询")
+        }
+
+        // 步骤2：GET查询页面（浏览器中GET直接返回数据）
+        LogUtils.d("📍 步骤2: GET查询页面")
+        val getResponse = Jsoup.connect("$experimentHostName/xskb/queryXszkb")
+            .cookies(experimentCookies)
+            .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 Safari/605.1.15")
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
+            .header("Upgrade-Insecure-Requests", "1")
+            .timeout(timeout)
+            .ignoreContentType(true)
+            .ignoreHttpErrors(true)
+            .method(Connection.Method.GET)
+            .execute()
+
+        LogUtils.d("📍 GET响应 status=${getResponse.statusCode()}")
+        LogUtils.d("📍 GET响应 length: ${getResponse.body().length}")
+
+        if (getResponse.statusCode() != 200) {
+            LogUtils.e("📍 ❌ 实验课查询失败 HTTP ${getResponse.statusCode()}")
+            return emptyList()
+        }
+
+        val body = getResponse.body()
+        LogUtils.d("📍 GET响应 preview: ${body.take(500)}")
+        LogUtils.d("📍 GET响应 contains 'table.dataTable': ${body.contains("table.dataTable")}")
+        LogUtils.d("📍 GET响应 contains '学生周课表查询': ${body.contains("学生周课表查询")}")
+
+        // 检查是否包含"页面过期"
+        if (body.contains("页面过期") || body.contains("请重新登录")) {
+            LogUtils.w("📍 ⚠️ 实验课系统session失效，跳过实验课查询")
+            return emptyList()
+        }
+
+        // 检查是否包含实验课表格
+        val hasDataTable = body.contains("table.dataTable")
+        val hasXskbTitle = body.contains("学生周课表查询")
+        LogUtils.d("📍 hasDataTable=$hasDataTable, hasXskbTitle=$hasXskbTitle")
+
+        val parsedCourses = BenbuScheduleParser.parseExperimentHtml(body)
+
+        LogUtils.d("📍 ✅ 实验课解析完成: count=${parsedCourses.size}")
+        parsedCourses.forEachIndexed { index, course ->
+            val timeDisplay = if (course.startTime != null && course.endTime != null) {
+                "${course.startTime}-${course.endTime}"
+            } else {
+                "第${course.begin}-${course.last}节"
+            }
+            LogUtils.d("📍 实验#$index: ${course.name} 周${course.weeks} 星期${course.dow} $timeDisplay ${course.teacher} ${course.classroom}")
+        }
+
+        return parsedCourses
     }
 
     private fun ensureTimetableResponse(term: TermItem, body: String, statusCode: Int) {
@@ -618,7 +725,17 @@ class BenbuEASWebSource : EASService {
 
     private fun mergeAdjacentCourses(courses: List<CourseItem>): List<CourseItem> {
         if (courses.isEmpty()) return courses
-        val sorted = courses.sortedWith(
+
+        // Separate free time courses (experiment courses) from period-based courses
+        val freeTimeCourses = courses.filter {
+            it.startTime != null && it.endTime != null && it.begin == -1 && it.last == -1
+        }
+        val periodCourses = courses.filter {
+            it.startTime == null || it.endTime == null || it.begin != -1 || it.last != -1
+        }
+
+        // Only merge period-based courses
+        val sorted = periodCourses.sortedWith(
             compareBy<CourseItem> { it.dow }
                 .thenBy { it.begin }
                 .thenBy { normalized(it.name) }
@@ -656,6 +773,20 @@ class BenbuEASWebSource : EASService {
                 merged.add(copyCourse(course))
             }
         }
+
+        // Deduplicate free time courses (same name, dow, weeks, teacher, classroom, time)
+        val deduplicatedFreeTime = freeTimeCourses.distinctBy { course ->
+            "${normalized(course.name)}_${course.dow}_${course.weeks.sorted()}_${normalized(course.teacher)}_${course.classroom}_${course.startTime}_${course.endTime}"
+        }
+
+        // Log deduplication
+        if (freeTimeCourses.size != deduplicatedFreeTime.size) {
+            LogUtils.d("🔬 Deduplicated free time courses: ${freeTimeCourses.size} -> ${deduplicatedFreeTime.size}")
+        }
+
+        // Add deduplicated free time courses back
+        merged.addAll(deduplicatedFreeTime)
+
         return merged
     }
 
@@ -902,12 +1033,6 @@ class BenbuEASWebSource : EASService {
             }
         }
 
-        return result
-    }
-
-    override fun getExamItems(token: EASToken): LiveData<DataState<List<ExamItem>>> {
-        val result = MutableLiveData<DataState<List<ExamItem>>>()
-        result.value = DataState(DataState.STATE.FETCH_FAILED, "本部暂不支持考试安排查询")
         return result
     }
 
@@ -1260,6 +1385,231 @@ class BenbuEASWebSource : EASService {
             .replace("*", "")
             .replace(Regex("\\s+"), "")
             .trim()
+    }
+
+    /**
+     * 获取考试信息
+     *
+     * 设计说明：
+     * 1. API需要两个参数：xnxq（学年学期）和kssjd（考试时间段）
+     * 2. 需要调用三次API分别获取期末、期中、补考的考试信息
+     * 3. 解析HTML表格提取考试数据
+     * 4. 转换为统一的ExamItem格式
+     *
+     * @param token 登录凭证
+     * @param term 学期信息
+     * @return 考试列表
+     */
+    override fun getExamItems(
+        token: EASToken,
+        term: TermItem?
+    ): LiveData<DataState<List<ExamItem>>> {
+        val result = MutableLiveData<DataState<List<ExamItem>>>()
+
+        executor.execute {
+            try {
+                LogUtils.d("[📝 本部考试查询] START", "BenbuEASWebSource")
+                LogUtils.d("Token: campus=${token.campus}, cookies=${token.cookies.keys}", "BenbuEASWebSource")
+
+                if (term == null) {
+                    LogUtils.e("❌ term is null", tag = "BenbuEASWebSource")
+                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "学期参数为空"))
+                    return@execute
+                }
+
+                // 解析学期代码：2025-20262 -> xnxq=2025-20262
+                // 格式：yearCode + termCode（去掉横杠）
+                val termCode = "${term.yearCode}${term.termCode}"
+                LogUtils.d("查询学期: termCode=$termCode, termName=${term.name}", "BenbuEASWebSource")
+
+                // 考试时间段映射：01=期末, 02=期中, 03=补考
+                val examTypes = mapOf(
+                    "01" to "期末",
+                    "02" to "期中",
+                    "03" to "补考"
+                )
+
+                val allExamItems = mutableListOf<ExamItem>()
+
+                // 遍历三种考试类型，分别获取数据
+                for ((kssjd, typeName) in examTypes) {
+                    LogUtils.d("正在获取${typeName}考试...", "BenbuEASWebSource")
+
+                    val url = "$hostName/kscx/queryKcForXs1"
+                    val response = Jsoup.connect(url)
+                        .cookies(token.cookies)
+                        .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
+                        .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .data("xnxq", termCode)
+                        .data("kssjd", kssjd)
+                        .timeout(timeout)
+                        .followRedirects(true)
+                        .execute()
+
+                    LogUtils.d("response status: ${response.statusCode()}", "BenbuEASWebSource")
+
+                    if (response.statusCode() == 200) {
+                        val html = response.body()
+                        LogUtils.d("response length: ${html.length}", "BenbuEASWebSource")
+                        LogUtils.d("response preview: ${html.take(1000)}", "BenbuEASWebSource")
+
+                        val examItems = parseExamHtml(html, typeName, term)
+                        LogUtils.d("✅ parsed ${examItems.size} $typeName exams", "BenbuEASWebSource")
+
+                        allExamItems.addAll(examItems)
+                    } else {
+                        LogUtils.e("❌ HTTP ${response.statusCode()}", tag = "BenbuEASWebSource")
+                    }
+                }
+
+                LogUtils.d("✅ 本部考试查询 SUCCESS! found ${allExamItems.size} exams", "BenbuEASWebSource")
+                result.postValue(DataState(allExamItems, DataState.STATE.SUCCESS))
+
+            } catch (e: Exception) {
+                LogUtils.e("❌ 本部考试查询 FAILED: ${e.message}", e, "BenbuEASWebSource")
+                result.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message ?: "查询失败"))
+            }
+        }
+
+        return result
+    }
+
+    /**
+     * 解析考试查询的HTML响应
+     *
+     * HTML格式：
+     * <table>
+     *   <tr>
+     *     <th>序号</th>
+     *     <th>课程名称</th>
+     *     <th>课程代码</th>
+     *     <th>考试地点</th>
+     *     <th>座位号</th>
+     *     <th>考试具体时间</th>
+     *     <th>考试时间段</th>
+     *   </tr>
+     *   <tr>
+     *     <td>1</td>
+     *     <td>数学分析（2）</td>
+     *     <td>22MA15016</td>
+     *     <td>一校区-正心楼-正心21</td>
+     *     <td></td>
+     *     <td>2026年05月09日(第9周     星期六)10:00-11:30</td>
+     *     <td>期中</td>
+     *   </tr>
+     * </table>
+     *
+     * @param html HTML内容
+     * @param examTypeName 考试类型名称（期末/期中/补考）
+     * @param term 学期信息
+     * @return 考试列表
+     */
+    private fun parseExamHtml(html: String, examTypeName: String, term: TermItem): List<ExamItem> {
+        val examItems = mutableListOf<ExamItem>()
+
+        try {
+            val doc = Jsoup.parse(html)
+
+            // 尝试多种选择器查找表格
+            val table = doc.select("table.bot_line").first()
+                ?: doc.select("table").first { it.select("tr").size > 1 }
+
+            if (table == null) {
+                LogUtils.e("❌ 未找到考试数据表格", tag = "BenbuEASWebSource")
+                LogUtils.d("HTML内容预览: ${html.take(1000)}", "BenbuEASWebSource")
+                return examItems
+            }
+
+            val rows = table.select("tr")
+            LogUtils.d("found ${rows.size} rows in table", "BenbuEASWebSource")
+            LogUtils.d("table HTML: ${table.html().take(500)}", "BenbuEASWebSource")
+
+            // 跳过表头行
+            for ((index, row) in rows.withIndex()) {
+                if (index == 0) continue // 跳过表头
+
+                val cells = row.select("td")
+                if (cells.size < 7) continue
+
+                try {
+                    val courseName = cells[1].text().trim()
+                    val courseCode = cells[2].text().trim()
+                    val location = cells[3].text().trim()
+                    val seatNumber = cells[4].text().trim()
+                    val dateTimeStr = cells[5].text().trim()
+                    val type = cells[6].text().trim()
+
+                    // 解析日期时间字符串：2026年05月09日(第9周     星期六)10:00-11:30
+                    val (examDate, examTime) = parseExamDateTime(dateTimeStr)
+
+                    val examItem = ExamItem().apply {
+                        this.courseName = courseName
+                        this.examLocation = location
+                        this.examDate = examDate
+                        this.examTime = examTime
+                        this.examType = examTypeName
+                        this.campusName = "本部"
+                        this.termId = term.id
+                    }
+
+                    examItems.add(examItem)
+                    LogUtils.d("✅ parsed exam: $courseName $examDate $examTime", "BenbuEASWebSource")
+
+                } catch (e: Exception) {
+                    LogUtils.e("❌ 解析行数据失败: ${e.message}", e, "BenbuEASWebSource")
+                }
+            }
+
+        } catch (e: Exception) {
+            LogUtils.e("❌ 解析HTML失败: ${e.message}", e, "BenbuEASWebSource")
+        }
+
+        return examItems
+    }
+
+    /**
+     * 解析考试日期时间字符串
+     *
+     * 输入格式：2026年05月09日(第9周     星期六)10:00-11:30
+     * 输出：Pair(日期字符串, 时间字符串)
+     *   - 日期：2026-05-09
+     *   - 时间：10:00-11:30
+     *
+     * @param dateTimeStr 日期时间字符串
+     * @return Pair(日期, 时间)
+     */
+    private fun parseExamDateTime(dateTimeStr: String): Pair<String, String> {
+        try {
+            // 提取日期部分：2026年05月09日
+            val dateRegex = Regex("""(\d{4})年(\d{2})月(\d{2})日""")
+            val dateMatch = dateRegex.find(dateTimeStr)
+
+            // 提取时间部分：10:00-11:30
+            val timeRegex = Regex("""(\d{2}:\d{2})-(\d{2}:\d{2})""")
+            val timeMatch = timeRegex.find(dateTimeStr)
+
+            val dateStr = if (dateMatch != null) {
+                val year = dateMatch.groupValues[1]
+                val month = dateMatch.groupValues[2]
+                val day = dateMatch.groupValues[3]
+                "$year-$month-$day"
+            } else {
+                ""
+            }
+
+            val timeStr = if (timeMatch != null) {
+                "${timeMatch.groupValues[1]}-${timeMatch.groupValues[2]}"
+            } else {
+                ""
+            }
+
+            return Pair(dateStr, timeStr)
+
+        } catch (e: Exception) {
+            LogUtils.e("❌ 解析日期时间失败: ${e.message}", e, "BenbuEASWebSource")
+            return Pair("", "")
+        }
     }
 
 }

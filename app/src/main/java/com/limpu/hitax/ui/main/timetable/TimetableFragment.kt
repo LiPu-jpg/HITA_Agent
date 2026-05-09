@@ -172,11 +172,11 @@ class TimetableFragment : HiltBaseFragment<FragmentTimetableBinding>() {
                 cdCalendar.timeInMillis = it
                 var minTT: Timetable? = null
                 var minWk = Int.MAX_VALUE
-                val defaultPrefix = getString(R.string.default_timetable_name)
-                //找到距离当前页面最近的学期（排除默认课表）
+                //找到距离当前页面最近的EAS课表（只考虑有EAS代码的课表）
                 for (tt in tts) {
-                    // 跳过默认名称的课表（如"新建课表1"）
-                    if (tt.name?.startsWith(defaultPrefix) == true) continue
+                    // 只使用EAS课表来计算周数（code不为空表示EAS课表）
+                    val isEASTimetable = !tt.code.isNullOrEmpty()
+                    if (!isEASTimetable) continue
 
                     val wk = tt.getWeekNumber(cdCalendar.timeInMillis)
                     if (wk in 1 until minWk) {
@@ -206,11 +206,11 @@ class TimetableFragment : HiltBaseFragment<FragmentTimetableBinding>() {
         }
         var minTT: Timetable? = null
         var minWk = Int.MAX_VALUE
-        val defaultPrefix = getString(R.string.default_timetable_name)
-        //找到距离当前页面最近的学期（排除默认课表）
+        //找到距离当前页面最近的EAS课表（只考虑有EAS代码的课表）
         for (tt in timetables) {
-            // 跳过默认名称的课表（如"新建课表1"）
-            if (tt.name?.startsWith(defaultPrefix) == true) continue
+            // 只使用EAS课表来计算周数（code不为空表示EAS课表）
+            val isEASTimetable = !tt.code.isNullOrEmpty()
+            if (!isEASTimetable) continue
 
             val wk = tt.getWeekNumber(cdCalendar.timeInMillis)
             if (wk in 1 until minWk) {

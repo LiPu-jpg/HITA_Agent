@@ -8,6 +8,7 @@ import android.net.Uri
 import android.view.View
 import android.widget.ImageView
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityOptionsCompat
 import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.EASToken
@@ -30,7 +31,6 @@ import com.limpu.hitax.ui.timetable.detail.TimetableDetailActivity
 import com.limpu.hitax.ui.timetable.manager.TimetableManagerActivity
 import com.limpu.hitauser.data.model.CheckUpdateResult
 import com.limpu.hitauser.data.repository.LocalUserRepository
-import androidx.appcompat.app.AppCompatActivity
 import com.limpu.style.widgets.PopUpText
 import com.limpu.style.widgets.PopUpUpdate
 import java.net.URLEncoder
@@ -117,12 +117,22 @@ object ActivityUtils {
         preferredCampus: EASToken.Campus? = null,
         onResponseListener: PopUpLoginEAS.OnResponseListener
     ) {
-        LogUtils.d("showEasVerifyWindow called, from is AppCompatActivity=${from is AppCompatActivity}")
-        if (from is AppCompatActivity) {
+        LogUtils.d("=== 🔍 showEasVerifyWindow START ===")
+        LogUtils.d("Original context type: ${from.javaClass.name}")
+        LogUtils.d("Original context class hierarchy: ${getContextHierarchy(from)}")
+
+        // 解包Hilt的Context包装器，获取底层的AppCompatActivity
+        val activity = unwrapContextToActivity(from)
+
+        LogUtils.d("Unwrapped activity: ${activity?.javaClass?.name}, is AppCompatActivity=${activity is AppCompatActivity}")
+
+        if (activity is AppCompatActivity) {
+            LogUtils.d("✅ Successfully unwrapped to AppCompatActivity: ${activity.javaClass.simpleName}")
             if (easRepository.getEasToken().isLogin()) {
                 directTo?.let {
-                    val i = Intent(from, directTo)
-                    from.startActivity(i)
+                    LogUtils.d("User already logged in, starting direct activity: ${directTo.simpleName}")
+                    val i = Intent(activity, directTo)
+                    activity.startActivity(i)
                     return
                 }
             }
@@ -132,10 +142,148 @@ object ActivityUtils {
             window.autoLaunchWebLogin = autoLaunchWebLogin
             window.preferredCampus = preferredCampus
             window.onResponseListener = onResponseListener
-            window.show(from.supportFragmentManager, "verify")
+            window.show(activity.supportFragmentManager, "verify")
         } else {
-            LogUtils.e("showEasVerifyWindow failed: from is not AppCompatActivity, actual type=${from.javaClass.name}")
+            LogUtils.e("❌ showEasVerifyWindow FAILED: unable to extract AppCompatActivity from context")
+            LogUtils.e("Original context type: ${from.javaClass.name}")
+            LogUtils.e("Context hierarchy: ${getContextHierarchy(from)}")
+            LogUtils.e("This usually means the context is not properly initialized or is a wrong type")
         }
+    }
+
+    /**
+     * 从可能被包装的Context中提取底层的Activity
+     * 支持Hilt的FragmentContextWrapper和其他Context包装器
+     */
+    private fun unwrapContextToActivity(context: Context): AppCompatActivity? {
+        var currentContext: Context? = context
+
+        LogUtils.d("=== 🔧 Starting context unwrapping ===")
+        LogUtils.d("Initial context: ${currentContext?.javaClass?.name}")
+
+        // 最多解包5层，避免无限循环
+        repeat(5) {
+            val ctx = currentContext ?: run {
+                LogUtils.d("❌ Context became null at iteration $it")
+                return null
+            }
+
+            LogUtils.d("Iteration $it: context type = ${ctx.javaClass.name}")
+
+            when (ctx) {
+                is AppCompatActivity -> {
+                    LogUtils.d("✅ Found AppCompatActivity: ${ctx.javaClass.simpleName}")
+                    return ctx
+                }
+                is Activity -> {
+                    LogUtils.d("⚠️ Found Activity (not AppCompatActivity): ${ctx.javaClass.simpleName}")
+                    // 如果是Activity但不是AppCompatActivity，尝试转换
+                    return ctx as? AppCompatActivity
+                }
+                is android.view.ContextThemeWrapper -> {
+                    LogUtils.d("📦 Unwrapping ContextThemeWrapper")
+                    currentContext = ctx.baseContext
+                    LogUtils.d("   -> baseContext: ${currentContext?.javaClass?.name}")
+                }
+                else -> {
+                    LogUtils.d("🔍 Attempting to unwrap custom wrapper: ${ctx.javaClass.simpleName}")
+                    // 尝试多种方式获取baseContext
+                    var unwrapped = false
+
+                    // 方法1: 尝试反射获取baseContext字段
+                    try {
+                        val baseContextField = ctx.javaClass.getDeclaredField("baseContext")
+                        baseContextField.isAccessible = true
+                        val baseCtx = baseContextField.get(ctx) as? Context
+                        if (baseCtx != null && baseCtx != ctx) {
+                            LogUtils.d("   -> [reflection] baseContext: ${baseCtx.javaClass.name}")
+                            currentContext = baseCtx
+                            unwrapped = true
+                        }
+                    } catch (e: Exception) {
+                        LogUtils.d("   -> [reflection] Failed: ${e.message}")
+                    }
+
+                    // 方法2: 尝试获取activity字段（针对FragmentContextWrapper）
+                    if (!unwrapped) {
+                        try {
+                            val activityField = ctx.javaClass.getDeclaredField("activity")
+                            activityField.isAccessible = true
+                            val activity = activityField.get(ctx) as? Activity
+                            if (activity != null) {
+                                LogUtils.d("   -> [activity field] Found activity: ${activity.javaClass.name}")
+                                return activity as? AppCompatActivity
+                            }
+                        } catch (e: Exception) {
+                            LogUtils.d("   -> [activity field] Failed: ${e.message}")
+                        }
+                    }
+
+                    // 方法3: 尝试通过getActivity方法（如果有）
+                    if (!unwrapped) {
+                        try {
+                            val getActivityMethod = ctx.javaClass.getDeclaredMethod("getActivity")
+                            getActivityMethod.isAccessible = true
+                            val activity = getActivityMethod.invoke(ctx) as? Activity
+                            if (activity != null) {
+                                LogUtils.d("   -> [getActivity method] Found activity: ${activity.javaClass.name}")
+                                return activity as? AppCompatActivity
+                            }
+                        } catch (e: Exception) {
+                            LogUtils.d("   -> [getActivity method] Failed: ${e.message}")
+                        }
+                    }
+
+                    if (!unwrapped) {
+                        LogUtils.d("❌ Could not unwrap context, stopping")
+                        currentContext = null
+                    }
+                }
+            }
+        }
+
+        LogUtils.d("❌ Context unwrapping failed after 5 iterations")
+        return null
+    }
+
+    /**
+     * 获取Context的继承层次结构，用于debug
+     */
+    private fun getContextHierarchy(context: Context?): String {
+        if (context == null) return "null"
+
+        val hierarchy = mutableListOf<String>()
+        var current: Any? = context
+        var depth = 0
+        val maxDepth = 10
+
+        while (current != null && depth < maxDepth) {
+            hierarchy.add("${current.javaClass.name}")
+            when (current) {
+                is android.view.ContextThemeWrapper -> {
+                    current = current.baseContext
+                }
+                is Context -> {
+                    // 尝试通过反射获取baseContext
+                    try {
+                        val baseContextField = current.javaClass.getDeclaredField("baseContext")
+                        baseContextField.isAccessible = true
+                        val baseCtx = baseContextField.get(current) as? Context
+                        if (baseCtx != null && baseCtx != current) {
+                            current = baseCtx
+                        } else {
+                            break
+                        }
+                    } catch (e: Exception) {
+                        break
+                    }
+                }
+                else -> break
+            }
+            depth++
+        }
+
+        return hierarchy.joinToString(" -> ")
     }
 
 
