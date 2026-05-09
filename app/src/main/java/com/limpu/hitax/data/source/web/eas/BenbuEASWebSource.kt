@@ -697,9 +697,9 @@ class BenbuEASWebSource : EASService {
         }
 
         // 步骤1：查询实验课表API
-        LogUtils.d("📍 步骤1: 查询 /api/stu/viewCKKB")
+        LogUtils.d("📍 步骤1: 查询 /api/stu/viewCKKB?sf_request_type=ajax")
         try {
-            val response = Jsoup.connect("$electronicExpHostName/api/stu/viewCKKB")
+            val response = Jsoup.connect("$electronicExpHostName/api/stu/viewCKKB?sf_request_type=ajax")
                 .cookies(token.cookies)
                 .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.3.1 Safari/605.1.15")
                 .header("Accept", "*/*")
