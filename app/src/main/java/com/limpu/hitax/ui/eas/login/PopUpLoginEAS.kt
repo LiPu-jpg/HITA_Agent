@@ -48,6 +48,9 @@ class PopUpLoginEAS :
     companion object {
         private const val REQUEST_CODE_WEBVIEW_LOGIN = 1001
         private const val TAG = "BenbuWebLogin"
+
+        // 导入WebViewLoginActivity的常量
+        private const val EXTRA_ELECTRONIC_EXP_TOKEN = "electronic_exp_token"
     }
 
     override fun initViews(view: View) {
@@ -222,10 +225,12 @@ class PopUpLoginEAS :
             }
 
             val cookiesJson = data?.getStringExtra("cookies")
+            val electronicExpToken = data?.getStringExtra(EXTRA_ELECTRONIC_EXP_TOKEN)
             val campus = pendingWebViewCampus
             LogUtils.i( "✅ WebView returned RESULT_OK")
             LogUtils.i( "cookiesJson length=${cookiesJson?.length ?: 0}")
             LogUtils.i( "cookiesJson preview=${cookiesJson?.take(200)}")
+            LogUtils.i( "electronicExpToken: ${electronicExpToken?.take(50) ?: "null"}...")
             LogUtils.i( "pendingCampus=$campus selectedCampus=${getSelectedCampus()}")
 
             pendingWebViewCampus = null
@@ -249,10 +254,18 @@ class PopUpLoginEAS :
                     currentToken.cookies = cookiesMap
                     currentToken.campus = campus
 
+                    // 如果有电子实验中心JWT token，也保存
+                    if (electronicExpToken != null && electronicExpToken.isNotEmpty()) {
+                        currentToken.electronicExpToken = electronicExpToken
+                        LogUtils.i( "✅ 电子实验中心JWT token已保存: ${electronicExpToken.take(30)}...")
+                    } else {
+                        LogUtils.i( "ℹ️  未检测到电子实验中心JWT token")
+                    }
+
                     // 保存更新后的token
                     viewModel.easRepo.saveEasTokenSync(currentToken)
 
-                    LogUtils.i( "✅ Cookies saved, verifying login...")
+                    LogUtils.i( "✅ Cookies saved${if (electronicExpToken != null) " and JWT token saved" else ""}, verifying login...")
 
                     // 验证登录是否有效
                     binding?.buttonLogin?.startAnimation()

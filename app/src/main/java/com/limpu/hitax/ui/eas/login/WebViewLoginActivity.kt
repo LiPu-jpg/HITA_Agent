@@ -35,11 +35,17 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         const val EXTRA_SILENT_MODE = "silent_mode"
         const val EXTRA_CAMPUS = "campus"
 
+        // 电子实验中心相关
+        const val EXTRA_ELECTRONIC_EXP_TOKEN = "electronic_exp_token"
+
         // 校园网络URL常量
         private object CampusUrls {
             // 本部校区URL
             private const val BENBU_BASE = "http://i-hit-edu-cn.ivpn.hit.edu.cn:1080"
             private const val JWTS_BASE = "http://jwts-hit-edu-cn.ivpn.hit.edu.cn:1080"
+
+            // 电子实验中心URL
+            private const val ELECTRONIC_EXP_BASE = "http://eelabinfo-hit-edu-cn.ivpn.hit.edu.cn:1080"
 
             // 威海校区URL
             private const val WEIHAI_BASE = "https://webvpn.hitwh.edu.cn"
@@ -52,6 +58,10 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 "$BENBU_BASE/",
                 "$BENBU_BASE/portal/home/"
             )
+
+            // 电子实验中心相关URL
+            val ELECTRONIC_EXP_LOGIN = "$ELECTRONIC_EXP_BASE/api/cas/loginSuccess"
+            val ELECTRONIC_EXP_SUCCESS = "$ELECTRONIC_EXP_BASE/stu_ckkb.html"
 
             val WEIHAI_LOGIN = "$WEIHAI_BASE/"
             val WEIHAI_JWTS = "$WEIHAI_EAS_PREFIX/loginCAS"
@@ -82,6 +92,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     private var cookieRetryCount = 0
     private var autoOpeningJwts = false
     private var silentMode = false
+    private var electronicExpToken: String? = null  // 电子实验中心JWT token
     private lateinit var config: CampusWebConfig
 
     override fun initViewBinding(): ActivityWebviewLoginBinding =
@@ -168,6 +179,11 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     LogUtils.d("🌐 Page loading started: ${url?.take(80)}... campus=${config.campus}")
+
+                    // 注入JavaScript来拦截电子实验中心的API响应
+                    if (url?.contains("eelabinfo-hit-edu-cn.ivpn.hit.edu.cn") == true) {
+                        injectJavaScriptForTokenInterception()
+                    }
                 }
 
                 override fun onPageFinished(view: WebView, url: String) {
@@ -338,6 +354,11 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         // 当前页面URL，用于调试和日志记录
         val currentUrl = binding.webview.url.orEmpty()
         LogUtils.d( "当前URL: $currentUrl")
+
+        // 如果是电子实验中心页面，尝试提取JWT token
+        if (currentUrl.contains("eelabinfo")) {
+            extractElectronicExpToken()
+        }
 
         LogUtils.i( "🔍 Cookie validation before finish:")
         LogUtils.i( "  - VPN ticket: ${hasWeihaiVpnTicket(cookies)}")
@@ -569,13 +590,27 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         }
         LogUtils.i( "==========================================")
 
+        // 打印电子实验中心JWT token
+        if (electronicExpToken != null) {
+            LogUtils.i( "=== 🔑 ELECTRONIC EXP JWT TOKEN ===")
+            LogUtils.i( "  ✅ Token: ${electronicExpToken?.take(50)}...")
+            LogUtils.i( "  ✅ Length: ${electronicExpToken?.length}")
+            LogUtils.i( "=====================================")
+        } else {
+            LogUtils.i( "ℹ️  未检测到电子实验中心JWT token")
+        }
+
         val cookiesJson = JSONObject(cookies as Map<*, *>).toString()
         LogUtils.d( "cookies json length=${cookiesJson.length} campus=${config.campus}")
 
         val intent = Intent().apply {
             putExtra("cookies", cookiesJson)
+            // 如果有电子实验中心JWT token，也一起返回
+            electronicExpToken?.let {
+                putExtra(EXTRA_ELECTRONIC_EXP_TOKEN, it)
+            }
         }
-        LogUtils.i( "✅ Login SUCCESS! Returning RESULT_OK with cookies campus=${config.campus}")
+        LogUtils.i( "✅ Login SUCCESS! Returning RESULT_OK with cookies${if (electronicExpToken != null) " and JWT token" else ""} campus=${config.campus}")
         setResult(Activity.RESULT_OK, intent)
         finish()
     }
@@ -599,6 +634,153 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 if (key.isBlank()) null else key to value
             }
             .toMap()
+    }
+
+    /**
+     * 注入JavaScript来拦截电子实验中心的API响应
+     * 拦截 /api/cas/login 和 /api/stu/viewCKKB 的请求，提取JWT token
+     */
+    private fun injectJavaScriptForTokenInterception() {
+        LogUtils.d("🔌 注入电子实验中心token拦截脚本")
+
+        val javascript = """
+            (function() {
+                console.log('🔌 电子实验中心token拦截脚本已加载');
+
+                // 拦截 fetch 请求
+                const originalFetch = window.fetch;
+                window.fetch = function(...args) {
+                    return originalFetch.apply(this, args).then(async response => {
+                        const url = args[0];
+
+                        // 检查是否是登录或查询API
+                        if (typeof url === 'string' &&
+                            (url.includes('/api/cas/login') || url.includes('/api/stu/viewCKKB'))) {
+
+                            console.log('🔍 拦截到API请求:', url);
+
+                            // 克隆响应以便读取
+                            const clonedResponse = response.clone();
+
+                            try {
+                                // 尝试读取响应体
+                                const contentType = response.headers.get('content-type');
+                                console.log('📄 Content-Type:', contentType);
+
+                                if (contentType && contentType.includes('application/json')) {
+                                    const data = await clonedResponse.json();
+                                    console.log('📦 API响应数据:', data);
+
+                                    // 提取JWT token
+                                    if (data.code === 0 && data.data && data.data.token) {
+                                        console.log('🔑 找到JWT token:', data.data.token.substring(0, 50) + '...');
+                                        window.electronicExpToken = data.data.token;
+                                    } else if (data.code === 0 && data.obj) {
+                                        // 另一种可能的响应格式
+                                        console.log('🔑 找到token in obj:', data.obj.substring ? data.obj.substring(0, 50) + '...' : data.obj);
+                                        window.electronicExpToken = data.obj;
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('❌ 解析响应失败:', e);
+                            }
+                        }
+
+                        return response;
+                    });
+                };
+
+                // 拦截 XMLHttpRequest
+                const originalOpen = XMLHttpRequest.prototype.open;
+                const originalSend = XMLHttpRequest.prototype.send;
+
+                XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+                    this._url = url;
+                    return originalOpen.call(this, method, url, ...rest);
+                };
+
+                XMLHttpRequest.prototype.send = function(body) {
+                    this.addEventListener('load', function() {
+                        if (this._url &&
+                            (this._url.includes('/api/cas/login') || this._url.includes('/api/stu/viewCKKB'))) {
+
+                            console.log('🔍 XHR拦截到API请求:', this._url);
+
+                            try {
+                                const contentType = this.getResponseHeader('content-type');
+                                console.log('📄 Content-Type:', contentType);
+
+                                if (contentType && contentType.includes('application/json')) {
+                                    const data = JSON.parse(this.responseText);
+                                    console.log('📦 API响应数据:', data);
+
+                                    // 提取JWT token
+                                    if (data.code === 0 && data.data && data.data.token) {
+                                        console.log('🔑 找到JWT token:', data.data.token.substring(0, 50) + '...');
+                                        window.electronicExpToken = data.data.token;
+                                    } else if (data.code === 0 && data.obj) {
+                                        console.log('🔑 找到token in obj:', data.obj.substring ? data.obj.substring(0, 50) + '...' : data.obj);
+                                        window.electronicExpToken = data.obj;
+                                    }
+                                }
+                            } catch (e) {
+                                console.error('❌ 解析响应失败:', e);
+                            }
+                        }
+                    });
+
+                    return originalSend.call(this, body);
+                };
+
+                console.log('✅ 电子实验中心token拦截脚本注入完成');
+            })();
+        """.trimIndent()
+
+        binding.webview.evaluateJavascript(javascript) { result ->
+            LogUtils.d("🔌 JavaScript注入结果: $result")
+        }
+    }
+
+    /**
+     * 从WebView中提取电子实验中心的JWT token
+     */
+    private fun extractElectronicExpToken() {
+        LogUtils.d("🔍 尝试从WebView提取电子实验中心JWT token")
+
+        val getTokenScript = """
+            (function() {
+                if (window.electronicExpToken) {
+                    return window.electronicExpToken;
+                }
+                // 尝试从localStorage中获取
+                try {
+                    const token = localStorage.getItem('electronicExpToken') ||
+                                   localStorage.getItem('jwt_token') ||
+                                   localStorage.getItem('token');
+                    if (token) {
+                        return token;
+                    }
+                } catch (e) {
+                    console.error('读取localStorage失败:', e);
+                }
+                return null;
+            })();
+        """.trimIndent()
+
+        binding.webview.evaluateJavascript(getTokenScript) { result ->
+            if (result != null && result != "null" && result.isNotEmpty()) {
+                // 去除引号
+                val token = result.removeSurrounding("\"")
+                if (token.length > 50) {
+                    electronicExpToken = token
+                    LogUtils.d("✅ 成功提取电子实验中心JWT token: ${token.take(30)}...")
+                } else {
+                    LogUtils.w("⚠️ JWT token长度异常: $token")
+                }
+            } else {
+                LogUtils.d("ℹ️ 未找到电子实验中心JWT token")
+            }
+        }
     }
 
     @Suppress("DEPRECATION")
