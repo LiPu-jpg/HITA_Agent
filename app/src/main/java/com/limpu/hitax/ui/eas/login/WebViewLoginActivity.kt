@@ -89,6 +89,9 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     private var collectedEasCookies: Map<String, String>? = null
     private var eelabTokenFetching = false
 
+    // IVPN-proxied CAS URL (same proxy pattern as EAS)
+    private val casIvpnUrl = "https://ids-hit-edu-cn.ivpn.hit.edu.cn:1080"
+
     override fun initViewBinding(): ActivityWebviewLoginBinding =
         ActivityWebviewLoginBinding.inflate(layoutInflater)
 
@@ -326,8 +329,9 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 finishWithCookies(mergedCookies)
             }
         } else if (config.campus == EASToken.Campus.BENBU) {
+            // Try pure HTTP first (no WebView navigation needed)
             navigatingToEelab = true
-            eelabTokenFetching = false
+            eelabTokenFetching = true
             collectedEasCookies = cookies
             binding.webview.postDelayed({
                 if (navigatingToEelab && !finished) {
@@ -336,10 +340,186 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                     finishWithCookies(cookies)
                 }
             }, 25000)
-            binding.webview.loadUrl(CampusUrls.EELABINFO_URL + "/api/cas/loginSuccess")
+            fetchEelabTokenViaHttpOnly()
         } else {
             finishWithCookies(cookies)
         }
+    }
+
+    /**
+     * Pure HTTP approach: use CAS TGT from CookieManager to authenticate to eelabinfo
+     * without WebView navigation. Follows the CAS redirect chain manually.
+     */
+    private fun fetchEelabTokenViaHttpOnly() {
+        Thread {
+            try {
+                val cookieManager = CookieManager.getInstance()
+
+                // Collect ALL cookies from CookieManager across all relevant domains
+                val allCookies = mutableMapOf<String, String>()
+                val domains = listOf(
+                    CampusUrls.EELABINFO_URL,
+                    casIvpnUrl,
+                    "http://i-hit-edu-cn.ivpn.hit.edu.cn:1080",
+                    "http://jwts-hit-edu-cn.ivpn.hit.edu.cn:1080"
+                )
+                for (domain in domains) {
+                    val raw = cookieManager.getCookie(domain) ?: continue
+                    parseCookieString(raw).forEach { (k, v) -> allCookies.putIfAbsent(k, v) }
+                }
+
+                if (allCookies.isEmpty()) {
+                    LogUtils.w("fetchEelabTokenHttpOnly: no cookies in CookieManager")
+                    fallbackToWebViewEelab()
+                    return@Thread
+                }
+
+                LogUtils.d("fetchEelabTokenHttpOnly: collected ${allCookies.size} cookies, attempting CAS auth")
+
+                // Step 1: GET eelabinfo CAS login → should redirect to CAS
+                val step1 = org.jsoup.Jsoup.connect(CampusUrls.EELABINFO_URL + "/api/cas/login")
+                    .cookies(allCookies)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/134.0.6998.135 Mobile Safari/537.36")
+                    .followRedirects(false)
+                    .ignoreHttpErrors(true)
+                    .timeout(10000)
+                    .execute()
+
+                val casRedirectUrl = step1.header("Location")
+                if (casRedirectUrl.isNullOrBlank()) {
+                    // No redirect — maybe already authenticated or got an error
+                    if (step1.statusCode() == 200) {
+                        // Already have a session, try to get JWT directly
+                        val jwt = tryGetJwtFromApi(allCookies)
+                        if (jwt != null) {
+                            finishWithEelabToken(jwt)
+                            return@Thread
+                        }
+                    }
+                    LogUtils.w("fetchEelabTokenHttpOnly: no CAS redirect, status=${step1.statusCode()}")
+                    fallbackToWebViewEelab()
+                    return@Thread
+                }
+
+                LogUtils.d("fetchEelabTokenHttpOnly: CAS redirect to ${casRedirectUrl.take(100)}")
+
+                // Step 2: Follow CAS redirect — CAS should auto-redirect back if TGT is valid
+                val casCookies = parseCookieString(cookieManager.getCookie(casIvpnUrl) ?: "")
+                val mergedForCas = LinkedHashMap(allCookies)
+                casCookies.forEach { (k, v) -> mergedForCas[k] = v }
+
+                val step2 = org.jsoup.Jsoup.connect(casRedirectUrl)
+                    .cookies(mergedForCas)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/134.0.6998.135 Mobile Safari/537.36")
+                    .followRedirects(false)
+                    .ignoreHttpErrors(true)
+                    .timeout(10000)
+                    .execute()
+
+                val backRedirectUrl = step2.header("Location")
+                if (backRedirectUrl.isNullOrBlank()) {
+                    LogUtils.w("fetchEelabTokenHttpOnly: CAS did not redirect back, status=${step2.statusCode()}")
+                    fallbackToWebViewEelab()
+                    return@Thread
+                }
+
+                LogUtils.d("fetchEelabTokenHttpOnly: CAS redirected back to ${backRedirectUrl.take(100)}")
+
+                // Step 3: Follow redirect back to eelabinfo with service ticket
+                val step3 = org.jsoup.Jsoup.connect(backRedirectUrl)
+                    .cookies(allCookies)
+                    .header("User-Agent", "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/134.0.6998.135 Mobile Safari/537.36")
+                    .followRedirects(true)
+                    .ignoreHttpErrors(true)
+                    .timeout(10000)
+                    .execute()
+
+                // Collect any new cookies from the response
+                val step3Cookies: Map<String, String> = step3.cookies()
+                step3Cookies.forEach { (k, v) -> allCookies[k] = v }
+
+                // Step 4: Try to get JWT token
+                val jwt = tryGetJwtFromApi(allCookies)
+                if (jwt != null) {
+                    finishWithEelabToken(jwt)
+                } else {
+                    LogUtils.w("fetchEelabTokenHttpOnly: failed to get JWT after CAS auth")
+                    fallbackToWebViewEelab()
+                }
+
+            } catch (e: Exception) {
+                LogUtils.e("fetchEelabTokenHttpOnly: failed", e)
+                fallbackToWebViewEelab()
+            }
+        }.also { it.name = "eelab-http-only" }
+    }
+
+    private fun tryGetJwtFromApi(cookies: Map<String, String>): String? {
+        return try {
+            val url = CampusUrls.EELABINFO_URL + "/api/cas/login?sf_request_type=ajax"
+            val response = org.jsoup.Jsoup.connect(url)
+                .cookies(cookies)
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 Chrome/134.0.6998.135 Mobile Safari/537.36")
+                .header("Accept", "*/*")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .header("Origin", CampusUrls.EELABINFO_URL)
+                .header("X-Requested-With", "XMLHttpRequest")
+                .ignoreContentType(true)
+                .ignoreHttpErrors(true)
+                .timeout(10000)
+                .method(org.jsoup.Connection.Method.POST)
+                .execute()
+
+            if (response.statusCode() != 200) {
+                LogUtils.w("tryGetJwtFromApi: HTTP ${response.statusCode()}")
+                return null
+            }
+
+            val json = JSONObject(response.body())
+            val code = json.optInt("code", -1)
+            if (code != 0) {
+                LogUtils.w("tryGetJwtFromApi: API code=$code")
+                return null
+            }
+
+            val token = json.optJSONObject("data")?.optString("token", "") ?: ""
+            if (token.length >= 50) token else null
+        } catch (e: Exception) {
+            LogUtils.e("tryGetJwtFromApi: failed", e)
+            null
+        }
+    }
+
+    private fun finishWithEelabToken(token: String) {
+        binding.webview.post {
+            if (!finished && navigatingToEelab) {
+                navigatingToEelab = false
+                eelabTokenFetching = false
+                LogUtils.success("fetchEelabTokenHttpOnly: got JWT, length=${token.length}")
+                finishWithCookies(collectedEasCookies ?: collectCookies(), token)
+            }
+        }
+    }
+
+    private fun fallbackToWebViewEelab() {
+        binding.webview.post {
+            if (finished || !navigatingToEelab) return@post
+            LogUtils.d("fetchEelabTokenHttpOnly: falling back to WebView navigation")
+            eelabTokenFetching = false
+            binding.webview.loadUrl(CampusUrls.EELABINFO_URL + "/api/cas/loginSuccess")
+        }
+    }
+
+    private fun parseCookieString(raw: String): Map<String, String> {
+        val result = mutableMapOf<String, String>()
+        raw.split(";").forEach { part ->
+            val trimmed = part.trim()
+            if (trimmed.contains("=")) {
+                val idx = trimmed.indexOf('=')
+                result[trimmed.substring(0, idx).trim()] = trimmed.substring(idx + 1).trim()
+            }
+        }
+        return result
     }
 
     private fun fetchEelabTokenViaHttp() {
