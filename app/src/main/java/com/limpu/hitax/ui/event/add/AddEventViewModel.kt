@@ -184,7 +184,6 @@ class AddEventViewModel @Inject constructor(
         val done = when (mode) {
             AddMode.BATCH_PERIOD -> {
                 baseReady
-                    && (subjectLiveData.value?.state == DataState.STATE.SUCCESS || subjectLiveData.value?.state == DataState.STATE.SPECIAL)
                     && timeRangeLiveDate.value?.state == DataState.STATE.SUCCESS
             }
 

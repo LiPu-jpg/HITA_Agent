@@ -101,6 +101,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
 
         viewModel.addModeLiveData.observe(this) { mode ->
             applyModeUi(mode)
+            binding?.pickSubject?.visibility = View.GONE
             refreshTeacherVisibility(viewModel.teacherLiveData.value)
             refreshTimeTextByMode(mode)
         }
@@ -422,10 +423,6 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
         if (isFreeMode) {
             binding?.pickTeacherCancel?.visibility = View.GONE
         }
-    }
-
-    private fun refreshSubjectVisibility(state: DataState<TermSubject>?) {
-        binding?.pickSubject?.visibility = View.GONE
     }
 
     private fun refreshTimeTextByMode(mode: AddEventViewModel.AddMode) {
