@@ -240,8 +240,12 @@ class AddEventViewModel @Inject constructor(
                         subject.name = nameLiveData.value ?: ""
                         subject.timetableId = timetable.id
                         if (addSubject) subjectRepo.actionSaveSubjectInfo(subject)
-                    } else {
+                    } else if (subjectLiveData.value?.state == DataState.STATE.SUCCESS) {
                         subject = subjectLiveData.value?.data
+                    } else {
+                        subject = TermSubject()
+                        subject.name = nameLiveData.value ?: ""
+                        subject.timetableId = timetable.id
                     }
                     timeRangeLiveDate.value?.data?.let { range ->
                         subject?.let {
