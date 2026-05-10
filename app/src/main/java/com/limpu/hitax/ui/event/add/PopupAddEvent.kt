@@ -21,7 +21,6 @@ import com.limpu.hitax.data.model.timetable.TermSubject
 import com.limpu.hitax.data.model.timetable.TimeInDay
 import com.limpu.hitax.data.model.timetable.TimePeriodInDay
 import com.limpu.hitax.data.model.timetable.Timetable
-import com.limpu.hitax.data.repository.SubjectRepository
 import com.limpu.hitax.data.repository.TeacherInfoRepository
 import com.limpu.hitax.data.repository.TimetableRepository
 import com.limpu.hitax.databinding.DialogBottomAddEventBinding
@@ -102,7 +101,6 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
 
         viewModel.addModeLiveData.observe(this) { mode ->
             applyModeUi(mode)
-            refreshSubjectVisibility(viewModel.subjectLiveData.value)
             refreshTeacherVisibility(viewModel.teacherLiveData.value)
             refreshTimeTextByMode(mode)
         }
@@ -173,18 +171,8 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
         }
 
         viewModel.subjectLiveData.observe(this) {
-            refreshSubjectVisibility(it)
             if (it.state == DataState.STATE.SUCCESS) {
-                binding?.pickSubjectIcon?.setColorFilter(getColorPrimary())
-                binding?.pickSubjectText?.setTextColor(getColorPrimary())
-                binding?.pickSubject?.setCardBackgroundColor(getColorPrimary())
-                binding?.pickSubjectText?.text = it.data?.name
                 binding?.name?.setText(it.data?.name)
-            } else {
-                binding?.pickSubjectText?.text = getString(R.string.ade_pick_subject)
-                binding?.pickSubject?.setCardBackgroundColor(getTextColorSecondary())
-                binding?.pickSubjectText?.setTextColor(getTextColorSecondary())
-                binding?.pickSubjectIcon?.clearColorFilter()
             }
         }
 
@@ -269,29 +257,6 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
                         viewModel.timetableLiveData.value = DataState(key)
                     }
                 }).show(childFragmentManager, "set_timetable")
-        }
-
-        binding?.pickSubject?.setOnClickListener {
-            DialogSelectableLiveList<TermSubject>().setTitle(R.string.ade_pick_subject)
-                .setInitValue(viewModel.subjectLiveData.value?.data)
-                .setDataLoader(object : DialogSelectableLiveList.DataLoader<TermSubject> {
-                    override fun loadData(): LiveData<List<DialogSelectableLiveList.ItemData<TermSubject>>> {
-                        return SubjectRepository(activity!!.application)
-                            .getSubjects(viewModel.timetableLiveData.value?.data?.id ?: "")
-                            .switchMap {
-                                val res = mutableListOf<DialogSelectableLiveList.ItemData<TermSubject>>()
-                                for (data: TermSubject in it) {
-                                    res.add(DialogSelectableLiveList.ItemData(data.name, data))
-                                }
-                                MutableLiveData(res)
-                            }
-                    }
-                }).setOnConfirmListener(object :
-                    DialogSelectableLiveList.OnConfirmListener<TermSubject> {
-                    override fun onConfirm(title: String?, key: TermSubject) {
-                        viewModel.subjectLiveData.value = DataState(key)
-                    }
-                }).show(childFragmentManager, "set_subject")
         }
 
         binding?.pickDate?.setOnClickListener {
@@ -460,9 +425,7 @@ class PopupAddEvent(private val addSubjectMode: Boolean = false) :
     }
 
     private fun refreshSubjectVisibility(state: DataState<TermSubject>?) {
-        val isFreeMode = viewModel.addModeLiveData.value == AddEventViewModel.AddMode.FREE_RANGE
-        val hiddenByState = state?.state == DataState.STATE.FETCH_FAILED || state?.state == DataState.STATE.SPECIAL
-        binding?.pickSubject?.visibility = if (isFreeMode || hiddenByState) View.GONE else View.VISIBLE
+        binding?.pickSubject?.visibility = View.GONE
     }
 
     private fun refreshTimeTextByMode(mode: AddEventViewModel.AddMode) {
