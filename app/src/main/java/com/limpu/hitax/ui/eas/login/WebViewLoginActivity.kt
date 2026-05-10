@@ -186,7 +186,11 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                         if (url.contains("eelabinfo") && !url.contains("ids.hit.edu.cn") && !eelabTokenFetching) {
                             eelabTokenFetching = true
                             LogUtils.d("eelabinfo page loaded, fetching JWT token...")
-                            binding.webview.postDelayed({ fetchEelabTokenViaHttp() }, 2000)
+                            binding.webview.postDelayed({ fetchEelabTokenViaHttp() }, 1000)
+                        } else if (!url.contains("eelabinfo") && !eelabTokenFetching) {
+                            LogUtils.w("navigated away from eelabinfo, finishing without token, url=$url")
+                            navigatingToEelab = false
+                            finishWithCookies(collectedEasCookies ?: collectCookies())
                         }
                         return
                     }
@@ -331,11 +335,11 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
             collectedEasCookies = cookies
             binding.webview.postDelayed({
                 if (navigatingToEelab && !finished) {
-                    LogUtils.w("eelabinfo JWT fetch timeout, finishing without token")
+                    LogUtils.w("eelabinfo timeout, finishing without token")
                     navigatingToEelab = false
                     finishWithCookies(cookies)
                 }
-            }, 25000)
+            }, 10000)
             binding.webview.loadUrl(CampusUrls.EELABINFO_URL + "/api/cas/loginSuccess")
         } else {
             finishWithCookies(cookies)
@@ -351,8 +355,13 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 val eelabCookies = cookieManager.getCookie(CampusUrls.EELABINFO_URL)
 
                 if (eelabCookies.isNullOrBlank() || !eelabCookies.contains("JSESSIONID")) {
-                    LogUtils.w("fetchEelabToken: JSESSIONID not found in eelabinfo cookies")
-                    binding.webview.post { eelabTokenFetching = false }
+                    LogUtils.w("fetchEelabToken: JSESSIONID not found, student likely has no eelab access")
+                    binding.webview.post {
+                        if (!finished && navigatingToEelab) {
+                            navigatingToEelab = false
+                            finishWithCookies(collectedEasCookies ?: collectCookies())
+                        }
+                    }
                     return@Thread
                 }
 
@@ -375,7 +384,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .header("X-Requested-With", "XMLHttpRequest")
                     .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
-                    .timeout(15000)
+                    .timeout(5000)
                     .ignoreContentType(true)
                     .ignoreHttpErrors(true)
                     .method(org.jsoup.Connection.Method.POST)
@@ -407,10 +416,20 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                     LogUtils.w("fetchEelabToken: HTTP ${response.statusCode()}")
                 }
 
-                binding.webview.post { eelabTokenFetching = false }
+                binding.webview.post {
+                    if (!finished && navigatingToEelab) {
+                        navigatingToEelab = false
+                        finishWithCookies(collectedEasCookies ?: collectCookies())
+                    }
+                }
             } catch (e: Exception) {
                 LogUtils.e("fetchEelabToken: HTTP request failed", e)
-                binding.webview.post { eelabTokenFetching = false }
+                binding.webview.post {
+                    if (!finished && navigatingToEelab) {
+                        navigatingToEelab = false
+                        finishWithCookies(collectedEasCookies ?: collectCookies())
+                    }
+                }
             }
         }.start()
     }

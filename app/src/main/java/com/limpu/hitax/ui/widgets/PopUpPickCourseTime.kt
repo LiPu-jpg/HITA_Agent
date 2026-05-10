@@ -79,7 +79,7 @@ class PopUpPickCourseTime(val timetable: Timetable) :
         val dows: MutableList<String> = ArrayList()
         for (str in requireActivity().resources.getStringArray(R.array.dow2)) dows.add(str)
         binding.pickdow.setEntries(dows)
-        listAdapter = PickWeekListAdapter(requireActivity() as BaseActivity<*, *>)
+        listAdapter = PickWeekListAdapter(requireActivity())
         binding.weekList.adapter = listAdapter
         binding.weekList.layoutManager = GridLayoutManager(context, 5)
         listAdapter?.onItemCheckListener = object : PickWeekListAdapter.OnItemCheckListener {
@@ -190,8 +190,14 @@ class PopUpPickCourseTime(val timetable: Timetable) :
     }
 
 
-    internal class PickWeekListAdapter(val mContext: BaseActivity<*, *>) :
+    internal class PickWeekListAdapter(val mContext: android.content.Context) :
         RecyclerView.Adapter<PickWeekListAdapter.mViewHolder?>() {
+
+        private fun resolveColor(attr: Int): Int {
+            val typedValue = android.util.TypedValue()
+            mContext.theme.resolveAttribute(attr, typedValue, true)
+            return typedValue.data
+        }
 
         var onItemCheckListener: OnItemCheckListener? = null
 
@@ -227,10 +233,10 @@ class PopUpPickCourseTime(val timetable: Timetable) :
             holder.text.text = (position + 1).toString() + ""
             if (position == weeks.size) {
                 holder.card.setCardBackgroundColor(
-                    mContext.getTextColorSecondary()
+                    resolveColor(com.limpu.style.R.attr.textColorSecondary)
                 )
                 holder.text.setTextColor(
-                    mContext.getTextColorSecondary()
+                    resolveColor(com.limpu.style.R.attr.textColorSecondary)
                 )
                 holder.text.text = "＋"
                 holder.card.setOnClickListener {
@@ -243,14 +249,14 @@ class PopUpPickCourseTime(val timetable: Timetable) :
             } else {
                 if (!weeks[position]) {
                     holder.card.setCardBackgroundColor(
-                        mContext.getTextColorSecondary()
+                        resolveColor(com.limpu.style.R.attr.textColorSecondary)
                     )
                     holder.text.setTextColor(
-                        mContext.getTextColorSecondary()
+                        resolveColor(com.limpu.style.R.attr.textColorSecondary)
                     )
                 } else {
-                    holder.card.setCardBackgroundColor(mContext.getColorPrimary())
-                    holder.text.setTextColor(mContext.getColorPrimary())
+                    holder.card.setCardBackgroundColor(resolveColor(com.limpu.style.R.attr.colorPrimary))
+                    holder.text.setTextColor(resolveColor(com.limpu.style.R.attr.colorPrimary))
                 }
                 holder.card.setOnClickListener {
                     weeks[position] = !weeks[position]

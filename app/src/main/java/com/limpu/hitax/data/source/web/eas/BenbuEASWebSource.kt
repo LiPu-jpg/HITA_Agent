@@ -664,7 +664,7 @@ class BenbuEASWebSource : EASService {
                 .header("Accept-Language", "zh-CN,zh-Hans;q=0.9")
                 .header("VcTchType", "stu")
                 .header("VcTchToken", jwtToken)
-                .timeout(timeout)
+                .timeout(5000)
                 .ignoreContentType(true)
                 .ignoreHttpErrors(true)
                 .method(Connection.Method.POST)
