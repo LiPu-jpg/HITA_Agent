@@ -4,10 +4,8 @@ import android.app.Activity
 import android.content.Intent
 import androidx.viewbinding.ViewBinding
 import com.limpu.component.data.DataState
-import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.ui.eas.login.PopUpLoginEAS
-import com.limpu.hitax.ui.eas.login.WebViewLoginActivity
 import com.limpu.hitax.utils.ActivityUtils
 import com.limpu.hitax.utils.LogUtils
 import com.limpu.hitax.ui.base.HiltBaseActivity
@@ -20,6 +18,7 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity
 
     companion object {
         private const val REQUEST_CODE_SILENT_RELOGIN = 10001
+        private const val MAX_SESSION_RETRIES = 2
     }
 
     @Inject
@@ -27,7 +26,7 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity
 
     protected abstract val viewModel: T
     private var reloginInProgress = false
-    private var sessionRetryConsumed = false
+    private var sessionRetryCount = 0
     private var pendingSessionRetryAction: (() -> Boolean)? = null
 
     protected open fun shouldRefreshOnStart(): Boolean = true
@@ -53,14 +52,14 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity
     open fun onLoginCheckFailed() {}
 
     protected fun handleSessionExpired(retryAction: () -> Boolean): Boolean {
-        if (reloginInProgress || sessionRetryConsumed) {
+        if (reloginInProgress || sessionRetryCount >= MAX_SESSION_RETRIES) {
             return false
         }
+        sessionRetryCount++
         reloginInProgress = true
         pendingSessionRetryAction = retryAction
         val tokenCampus = easRepository.getEasToken().campus
 
-        // 使用改进的弹窗方式，支持自动静默登录
         ActivityUtils.showEasVerifyWindow<Activity>(
             this,
             easRepository,
@@ -71,11 +70,10 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity
                 override fun onSuccess(window: PopUpLoginEAS) {
                     window.dismiss()
                     reloginInProgress = false
-                    sessionRetryConsumed = true
                     val started = pendingSessionRetryAction?.invoke() == true
                     pendingSessionRetryAction = null
                     if (!started) {
-                        sessionRetryConsumed = false
+                        sessionRetryCount = 0
                     }
                 }
 
@@ -90,7 +88,7 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity
 
     protected fun resetSessionRetryState() {
         reloginInProgress = false
-        sessionRetryConsumed = false
+        sessionRetryCount = 0
         pendingSessionRetryAction = null
     }
 
@@ -98,21 +96,17 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity
         super.onActivityResult(requestCode, resultCode, data)
 
         if (requestCode == REQUEST_CODE_SILENT_RELOGIN) {
-            LogUtils.d("📨 Silent relogin result:resultCode=$resultCode")
+            LogUtils.d("silentReloginResult: resultCode=$resultCode")
             if (resultCode == Activity.RESULT_OK) {
-                // 登录成功，执行重试操作
                 reloginInProgress = false
-                sessionRetryConsumed = true
                 val started = pendingSessionRetryAction?.invoke() == true
                 pendingSessionRetryAction = null
                 if (!started) {
-                    sessionRetryConsumed = false
+                    sessionRetryCount = 0
                 }
             } else {
-                // 登录失败或取消
                 reloginInProgress = false
                 pendingSessionRetryAction = null
-                LogUtils.d("⚠️ Silent relogin failed or cancelled")
             }
         }
     }

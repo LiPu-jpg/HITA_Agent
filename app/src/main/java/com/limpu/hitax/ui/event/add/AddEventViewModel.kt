@@ -246,6 +246,7 @@ class AddEventViewModel @Inject constructor(
                         subject = TermSubject()
                         subject.name = nameLiveData.value ?: ""
                         subject.timetableId = timetable.id
+                        subjectRepo.actionSaveSubjectInfo(subject)
                     }
                     timeRangeLiveDate.value?.data?.let { range ->
                         subject?.let {
