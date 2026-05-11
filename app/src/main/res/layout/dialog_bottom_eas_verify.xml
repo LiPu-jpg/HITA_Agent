@@ -129,6 +129,22 @@
         android:visibility="gone"
         tools:visibility="gone" />
 
+    <TextView
+        android:id="@+id/agreement_check"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="16dp"
+        android:gravity="center_vertical"
+        android:text="@string/user_agreement_hint"
+        android:textColor="?attr/textColorSecondary"
+        android:textSize="12sp"
+        android:drawableStart="@android:drawable/btn_radio"
+        android:drawablePadding="8dp"
+        android:clickable="true"
+        android:focusable="true" />
+
 </LinearLayout>
 
 

@@ -35,6 +35,7 @@ class PopUpLoginEAS :
     private var pendingWebViewCampus: EASToken.Campus? = null
     private var autoLaunchTriggered = false
     private var silentWebLoginTried = false
+    private var agreementChecked = false
 
     private val hiltViewModel: LoginEASViewModel by viewModels()
 
@@ -46,22 +47,6 @@ class PopUpLoginEAS :
     private fun markUserAgreementAccepted() {
         requireContext().getSharedPreferences("user_agreement", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("accepted", true).apply()
-    }
-
-    private fun ensureAgreementThen(action: () -> Unit) {
-        if (isUserAgreementAccepted()) {
-            action()
-            return
-        }
-        UserAgreementDialog().apply {
-            onResponseListener = object : UserAgreementDialog.OnResponseListener {
-                override fun onAgree() {
-                    markUserAgreementAccepted()
-                    action()
-                }
-                override fun onRefuse() {}
-            }
-        }.show(childFragmentManager, "user_agreement_first")
     }
 
     override fun getViewModelClass(): Class<LoginEASViewModel> {
@@ -182,10 +167,32 @@ class PopUpLoginEAS :
             val campus = getSelectedCampus() ?: return@setOnClickListener
             LogUtils.d( "click login campus=$campus")
             it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            ensureAgreementThen {
-                performLogin(campus)
+            if (!agreementChecked && !isUserAgreementAccepted()) {
+                Toast.makeText(requireContext(), R.string.user_agreement_required, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            markUserAgreementAccepted()
+            performLogin(campus)
+        }
+
+        val alreadyAccepted = isUserAgreementAccepted()
+        agreementChecked = alreadyAccepted
+        binding?.agreementCheck?.apply {
+            if (alreadyAccepted) {
+                visibility = View.GONE
+            } else {
+                updateAgreementDrawable(false)
+                setOnClickListener {
+                    agreementChecked = !agreementChecked
+                    updateAgreementDrawable(agreementChecked)
+                }
+                setOnLongClickListener {
+                    UserAgreementDialog().show(childFragmentManager, "user_agreement_view")
+                    true
+                }
             }
         }
+
         binding?.username?.addTextChangedListener(textWatcher)
         binding?.password?.addTextChangedListener(textWatcher)
         textWatcher.afterTextChanged(null)
@@ -198,6 +205,14 @@ class PopUpLoginEAS :
             R.id.campus_weihai -> EASToken.Campus.WEIHAI
             else -> null
         }
+    }
+
+    private fun updateAgreementDrawable(checked: Boolean) {
+        val resId = if (checked)
+            android.R.drawable.btn_radio_on
+        else
+            android.R.drawable.btn_radio
+        binding?.agreementCheck?.setCompoundDrawablesWithIntrinsicBounds(resId, 0, 0, 0)
     }
 
     fun isFormValid(): Boolean {
