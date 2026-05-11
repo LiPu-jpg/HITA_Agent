@@ -52,7 +52,7 @@ class BenbuEASWebSource : EASService {
                     return@execute
                 }
 
-                val requiredCookies = listOf("JSESSIONID", "HIT", "TWFID")
+                val requiredCookies = listOf("JSESSIONID", "HIT")
                 val missingCookies = requiredCookies.filter { !cookiesMap.containsKey(it) }
                 if (missingCookies.isNotEmpty()) {
                     LogUtils.e("login: missing required cookies: $missingCookies")

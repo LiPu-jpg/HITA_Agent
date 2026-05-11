@@ -68,7 +68,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         private const val COOKIE_RETRY_COUNT = 30
         private const val COOKIE_RETRY_DELAY_MS = 500L
         private const val SILENT_TIMEOUT_MS = 18000L
-        private val BENBU_REQUIRED_COOKIES = setOf("JSESSIONID", "HIT", "TWFID")
+        private val BENBU_REQUIRED_COOKIES = setOf("JSESSIONID", "HIT")
         private const val WEIHAI_TICKET_COOKIE_PREFIX = "wengine_vpn_ticket"
         private val WEIHAI_EAS_SESSION_COOKIE_HINTS = listOf("JSESSIONID", "HIT", "TWFID")
     }
@@ -88,6 +88,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     private var navigatingToEelab = false
     private var collectedEasCookies: Map<String, String>? = null
     private var eelabTokenFetching = false
+    private var lastPageHadError = false
 
     override fun initViewBinding(): ActivityWebviewLoginBinding =
         ActivityWebviewLoginBinding.inflate(layoutInflater)
@@ -195,6 +196,9 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                         return
                     }
 
+                    val uri = Uri.parse(url)
+                    LogUtils.d("onPageFinished: host=${uri.host} path=${uri.path} autoOpeningJwts=$autoOpeningJwts")
+
                     when {
                         isPortalHomePage(url) -> {
                             LogUtils.d("portal home detected, auto open jwts campus=${config.campus}")
@@ -207,7 +211,16 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                         }
                         isJwtsPage(url) -> {
                             autoOpeningJwts = false
+                            LogUtils.d("jwts login page detected, starting cookie polling")
                             startCookiePolling()
+                        }
+                        autoOpeningJwts && uri.host?.contains("jwts") == true -> {
+                            autoOpeningJwts = false
+                            LogUtils.d("jwts domain (non-loginCAS), starting cookie polling: path=${uri.path}")
+                            startCookiePolling()
+                        }
+                        else -> {
+                            LogUtils.d("unhandled page: host=${uri.host} path=${uri.path}")
                         }
                     }
                 }
@@ -228,18 +241,20 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         val uri = Uri.parse(url)
         val normalizedPath = uri.path?.trimEnd('/') ?: ""
         return when (config.campus) {
-            EASToken.Campus.BENBU -> uri.host == "i-hit-edu-cn.ivpn.hit.edu.cn" && normalizedPath == "/portal/home"
+            EASToken.Campus.BENBU -> uri.host == "i-hit-edu-cn.ivpn.hit.edu.cn" &&
+                (normalizedPath == "/portal/home" || normalizedPath == "/portal")
             EASToken.Campus.WEIHAI -> uri.host == "webvpn.hitwh.edu.cn" && (normalizedPath.isBlank() || normalizedPath == "/portal/home")
             EASToken.Campus.SHENZHEN -> false
         }
     }
 
     private fun isJwtsPage(url: String): Boolean {
-        val urlLower = url.lowercase()
         if (config.campus == EASToken.Campus.WEIHAI) {
             return false
         }
-        return urlLower.contains("logincas") || urlLower.contains("login")
+        val uri = Uri.parse(url)
+        return uri.host?.contains("jwts") == true &&
+            (url.lowercase().contains("logincas") || url.lowercase().contains("login"))
     }
 
     private fun isSuccessPage(url: String): Boolean {
@@ -251,8 +266,7 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
             EASToken.Campus.BENBU -> {
                 val cookies = collectCookies()
                 val hasRequiredCookies = cookies.containsKey("JSESSIONID") &&
-                                         cookies.containsKey("HIT") &&
-                                         cookies.containsKey("TWFID")
+                                         cookies.containsKey("HIT")
 
                 if (hasRequiredCookies) {
                     return true
@@ -282,21 +296,23 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     }
 
     private fun startCookiePolling() {
-        // 威海校区：启动定时检测，等待用户输入账号密码
-        if (config.campus == EASToken.Campus.WEIHAI) {
-            cookieRetryCount = 0
-            binding.webview.postDelayed({
-                checkCookiesAndFinish()
-            }, COOKIE_RETRY_DELAY_MS)
-        }
+        cookieRetryCount = 0
+        binding.webview.postDelayed({
+            checkCookiesAndFinish()
+        }, COOKIE_RETRY_DELAY_MS)
     }
 
     private fun checkCookiesAndFinish() {
         if (finished) return
 
         val cookies = collectCookies()
+        val currentUrl = binding.webview.url ?: ""
         val hasVpnTicket = hasWeihaiVpnTicket(cookies)
         val hasJsessionid = cookies.containsKey("JSESSIONID")
+
+        if (cookieRetryCount == 0 || cookieRetryCount % 10 == 0) {
+            LogUtils.d("checkCookies: retry=$cookieRetryCount keys=${cookies.keys.sorted()} host=${Uri.parse(currentUrl).host}")
+        }
 
         if (config.campus == EASToken.Campus.WEIHAI && hasVpnTicket && hasJsessionid) {
             fetchVpnEasCookies { vpnCookies ->
@@ -304,6 +320,12 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                 vpnCookies.forEach { (key, value) -> mergedCookies.putIfAbsent(key, value) }
                 finishWithCookies(mergedCookies)
             }
+            return
+        }
+
+        if ((config.campus == EASToken.Campus.BENBU || config.campus == EASToken.Campus.SHENZHEN)
+            && hasRequiredCookies(cookies, currentUrl)) {
+            finishWithCookies(cookies)
             return
         }
 
@@ -437,12 +459,9 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
     private fun hasRequiredCookies(cookies: Map<String, String>, currentUrl: String): Boolean {
         return when (config.campus) {
             EASToken.Campus.BENBU, EASToken.Campus.SHENZHEN -> {
-                // 本部校区：需要所有三个 cookies（JSESSIONID, HIT, TWFID）
-                // 如果 URL 中有 jsessionid，将其视为 JSESSIONID cookie
                 val hasJsession = cookies.containsKey("JSESSIONID") || hasUrlJsession(currentUrl)
                 val hasHit = cookies.containsKey("HIT")
-                val hasTmfid = cookies.containsKey("TWFID")
-                hasJsession && hasHit && hasTmfid
+                hasJsession && hasHit
             }
             EASToken.Campus.WEIHAI -> {
                 // 威海校区：需要 VPN ticket + JSESSIONID

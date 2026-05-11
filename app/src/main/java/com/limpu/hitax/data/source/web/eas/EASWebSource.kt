@@ -414,7 +414,7 @@ class EASWebSource internal constructor(
                 }
                 res.postValue(DataState(token, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
-                LogUtils.e("Failed to login to EAS", e)
+                LogUtils.e("login: failed, error=${e.message}", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -519,7 +519,7 @@ class EASWebSource internal constructor(
                 }
                 res.postValue(DataState(terms, DataState.STATE.SUCCESS))
 } catch (e: Exception) {
-                LogUtils.e("Failed to fetch scores with summary", e)
+                LogUtils.e("getAllTerms: failed, error=${e.message}", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -555,7 +555,7 @@ class EASWebSource internal constructor(
                 }
                 res.postValue(DataState(calendar))
             } catch (e: Exception) {
-                LogUtils.e("Failed to get term start date", e)
+                LogUtils.e("getStartDate: failed, error=${e.message}", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -638,7 +638,7 @@ class EASWebSource internal constructor(
                 }
                 res.postValue(DataState(result))
             } catch (e: Exception) {
-                LogUtils.e("Failed to fetch selected courses", e)
+                LogUtils.e("getSubjectsOfTerm: failed, error=${e.message}", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -806,7 +806,7 @@ class EASWebSource internal constructor(
                     res.postValue(DataState(mergedAdjacent, DataState.STATE.SUCCESS))
                 }
             } catch (e: Exception) {
-                LogUtils.e("Failed to fetch timetable", e)
+                LogUtils.e("getTimetableOfTerm: failed, error=${e.message}", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -1605,7 +1605,7 @@ class EASWebSource internal constructor(
                 }
                 res.postValue(DataState(result))
             } catch (e: Exception) {
-                LogUtils.e("Failed to build schedule structure", e)
+                LogUtils.e("getScheduleStructure: failed, error=${e.message}", e)
                 res.postValue(DataState(defaultScheduleStructure()))
             }
         }.start()
@@ -1673,7 +1673,7 @@ class EASWebSource internal constructor(
                     res.postValue(DataState(DataState.STATE.FETCH_FAILED))
                 }
             } catch (e: Exception) {
-                LogUtils.e("Failed to fetch scores", e)
+                LogUtils.e("getPersonalScores: failed, error=${e.message}", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -1723,7 +1723,7 @@ class EASWebSource internal constructor(
                     res.postValue(DataState(DataState.STATE.FETCH_FAILED))
                 }
             } catch (e: Exception) {
-                LogUtils.e("Failed to fetch scores with summary", e)
+                LogUtils.e("getPersonalScoresWithSummary: failed, error=${e.message}", e)
                 res.postValue(DataState(DataState.STATE.FETCH_FAILED, e.message))
             }
         }.start()
@@ -1855,7 +1855,7 @@ class EASWebSource internal constructor(
                 }
                 result.postValue(DataState(resMap.values.toList()))
             } catch (e: Exception) {
-                LogUtils.e("Failed to query empty classroom", e)
+                LogUtils.e("queryEmptyClassroom: failed, error=${e.message}", e)
                 result.postValue(DataState(DataState.STATE.FETCH_FAILED))
             }
         }.start()
@@ -2114,7 +2114,7 @@ class EASWebSource internal constructor(
             }
             result.takeIf { it.isNotEmpty() }
         } catch (e: Exception) {
-            LogUtils.e("fetchTimetableFromOverview failed", e)
+            LogUtils.e("fetchTimetableFromOverview: failed, error=${e.message}", e)
             null
         }
     }
@@ -2145,7 +2145,7 @@ class EASWebSource internal constructor(
             }
             result
         } catch (e: Exception) {
-            LogUtils.e("fetchDaySchedule failed", e)
+            LogUtils.e("fetchDaySchedule: failed, error=${e.message}", e)
             emptyList()
         }
     }

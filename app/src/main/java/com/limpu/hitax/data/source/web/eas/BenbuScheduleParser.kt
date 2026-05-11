@@ -36,7 +36,7 @@ object BenbuScheduleParser {
                 }
             }
         } catch (e: Exception) {
-            LogUtils.e("parseScheduleHtml failed", e)
+            LogUtils.e("parseScheduleHtml: failed", e)
             throw e
         }
         return result
@@ -331,7 +331,7 @@ object BenbuScheduleParser {
             }
             LogUtils.d("parseExperimentHtml: END, total=${result.size}")
         } catch (e: Exception) {
-            LogUtils.e("parseExperimentHtml failed", e)
+            LogUtils.e("parseExperimentHtml: failed", e)
         }
         return result
     }
@@ -465,7 +465,7 @@ object BenbuScheduleParser {
             LogUtils.d("parseExperimentDetail: parsed, name=${course.name}, weeks=${course.weeks}, dow=$dow, time=$timeDisplay, teacher=${course.teacher}, room=${course.classroom}")
             return course
         } catch (e: Exception) {
-            LogUtils.e("parseExperimentDetail failed: courseName=$courseName, detail=$detail", e)
+            LogUtils.e("parseExperimentDetail: failed, courseName=$courseName, detail=$detail", e)
             return null
         }
     }
@@ -550,7 +550,7 @@ object BenbuScheduleParser {
             LogUtils.d("parseExperimentDetailFromCombined: parsed, name=${course.name}, weeks=${course.weeks}, dow=$dow, time=$timeDisplay, teacher=${course.teacher}, room=${course.classroom}")
             return course
         } catch (e: Exception) {
-            LogUtils.e("parseExperimentDetailFromCombined failed: combined=$combined", e)
+            LogUtils.e("parseExperimentDetailFromCombined: failed, combined=$combined", e)
             return null
         }
     }

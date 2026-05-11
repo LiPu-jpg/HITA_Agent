@@ -177,16 +177,13 @@ class PopUpLoginEAS :
 
         val alreadyAccepted = isUserAgreementAccepted()
         agreementChecked = alreadyAccepted
-        if (alreadyAccepted) {
-            binding?.agreementContainer?.visibility = View.GONE
-        } else {
-            binding?.agreementContainer?.visibility = View.VISIBLE
-            binding?.agreementCheckbox?.setOnCheckedChangeListener { _, isChecked ->
-                agreementChecked = isChecked
-                if (isChecked) markUserAgreementAccepted()
-            }
-            setupAgreementText()
+        binding?.agreementContainer?.visibility = View.VISIBLE
+        binding?.agreementCheckbox?.isChecked = alreadyAccepted
+        binding?.agreementCheckbox?.setOnCheckedChangeListener { _, isChecked ->
+            agreementChecked = isChecked
+            if (isChecked) markUserAgreementAccepted()
         }
+        setupAgreementText()
 
         binding?.username?.addTextChangedListener(textWatcher)
         binding?.password?.addTextChangedListener(textWatcher)
