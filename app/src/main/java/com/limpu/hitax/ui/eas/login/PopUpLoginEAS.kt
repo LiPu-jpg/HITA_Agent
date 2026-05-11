@@ -54,7 +54,7 @@ class PopUpLoginEAS :
             return
         }
         UserAgreementDialog().apply {
-            onResponseListener = object : OnResponseListener {
+            onResponseListener = object : UserAgreementDialog.OnResponseListener {
                 override fun onAgree() {
                     markUserAgreementAccepted()
                     action()
