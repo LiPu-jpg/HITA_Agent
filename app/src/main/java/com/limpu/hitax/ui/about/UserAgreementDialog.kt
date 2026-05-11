@@ -8,12 +8,25 @@ import android.widget.TextView
 import androidx.viewpager.widget.PagerAdapter
 import com.limpu.hitax.R
 import com.limpu.hitax.databinding.DialogBottomUserAgreementBinding
-import com.limpu.hitax.utils.ImageUtils.dp2px
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
 
 @Suppress("DEPRECATION")
 class UserAgreementDialog :
     TransparentModeledBottomSheetDialog<UserAgreementViewModel, DialogBottomUserAgreementBinding>() {
+
+    var onResponseListener: OnResponseListener? = null
+    private var showActionButtons = false
+
+    interface OnResponseListener {
+        fun onAgree()
+        fun onRefuse()
+    }
+
+    fun setShowActionButtons(show: Boolean): UserAgreementDialog {
+        showActionButtons = show
+        return this
+    }
+
     override fun getLayoutId(): Int {
         return R.layout.dialog_bottom_user_agreement
     }
@@ -61,7 +74,6 @@ class UserAgreementDialog :
                 return views[position] as View
             }
         }
-
         binding?.tabs?.setupWithViewPager(binding?.pager)
         binding?.pager?.adapter = adapter
         viewModel.userAgreementPageLiveData.observe(this){
@@ -72,6 +84,20 @@ class UserAgreementDialog :
             val content = it.data?.takeIf { s -> s.isNotBlank() } ?: getString(R.string.privacy_policy)
             (views[1]?.findViewById(R.id.text) as TextView?)?.text = Html.fromHtml(content)
         }
+
+        if (showActionButtons || onResponseListener != null) {
+            binding?.agreementActions?.visibility = View.VISIBLE
+            binding?.buttonAgree?.setOnClickListener {
+                onResponseListener?.onAgree()
+                dismiss()
+            }
+            binding?.buttonRefuse?.setOnClickListener {
+                onResponseListener?.onRefuse()
+                dismiss()
+            }
+        } else {
+            binding?.agreementActions?.visibility = View.GONE
+        }
     }
 
     override fun onStart() {
@@ -79,5 +105,7 @@ class UserAgreementDialog :
         viewModel.refresh()
     }
 
-
+    override fun isCancelable(): Boolean {
+        return onResponseListener == null
+    }
 }

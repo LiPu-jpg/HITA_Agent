@@ -852,6 +852,8 @@
     <string name="name_ua_and_pp">用户与隐私协议</string>
     <string name="i_have_read">朕已阅</string>
     <string name="agree_and_login">同意协议并登录</string>
+    <string name="agree">同意</string>
+    <string name="refuse">拒绝</string>
     <string name="agree_and_signup">同意协议并注册</string>
     <string name="post_detail">帖子详情</string>
     <string name="reply">回复</string>

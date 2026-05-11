@@ -10,6 +10,7 @@ import android.text.TextWatcher
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.viewModels
 import com.limpu.component.data.DataState
@@ -17,6 +18,7 @@ import com.limpu.hitax.R
 import com.limpu.hitax.data.model.eas.EASToken
 import com.limpu.hitax.data.repository.EASRepository
 import com.limpu.hitax.databinding.DialogBottomEasVerifyBinding
+import com.limpu.hitax.ui.about.UserAgreementDialog
 import com.limpu.hitax.utils.ImageUtils
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
 import dagger.hilt.android.AndroidEntryPoint
@@ -35,6 +37,32 @@ class PopUpLoginEAS :
     private var silentWebLoginTried = false
 
     private val hiltViewModel: LoginEASViewModel by viewModels()
+
+    private fun isUserAgreementAccepted(): Boolean {
+        return requireContext().getSharedPreferences("user_agreement", android.content.Context.MODE_PRIVATE)
+            .getBoolean("accepted", false)
+    }
+
+    private fun markUserAgreementAccepted() {
+        requireContext().getSharedPreferences("user_agreement", android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean("accepted", true).apply()
+    }
+
+    private fun ensureAgreementThen(action: () -> Unit) {
+        if (isUserAgreementAccepted()) {
+            action()
+            return
+        }
+        UserAgreementDialog().apply {
+            onResponseListener = object : OnResponseListener {
+                override fun onAgree() {
+                    markUserAgreementAccepted()
+                    action()
+                }
+                override fun onRefuse() {}
+            }
+        }.show(childFragmentManager, "user_agreement_first")
+    }
 
     override fun getViewModelClass(): Class<LoginEASViewModel> {
         return LoginEASViewModel::class.java
@@ -154,20 +182,8 @@ class PopUpLoginEAS :
             val campus = getSelectedCampus() ?: return@setOnClickListener
             LogUtils.d( "click login campus=$campus")
             it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            when (campus) {
-                EASToken.Campus.SHENZHEN -> {
-                    if (!isFormValid()) return@setOnClickListener
-                    binding?.buttonLogin?.startAnimation()
-                    viewModel.startLogin(
-                        binding?.username?.text.toString(),
-                        binding?.password?.text.toString(),
-                        campus
-                    )
-                }
-
-                EASToken.Campus.BENBU, EASToken.Campus.WEIHAI -> {
-                    launchCampusWebLogin(campus)
-                }
+            ensureAgreementThen {
+                performLogin(campus)
             }
         }
         binding?.username?.addTextChangedListener(textWatcher)
@@ -310,10 +326,29 @@ class PopUpLoginEAS :
         if (autoLaunchTriggered) return
         if (!autoLaunchWebLogin) return
         if (targetCampus != EASToken.Campus.BENBU) return
+        if (!isUserAgreementAccepted()) return
         autoLaunchTriggered = true
         silentWebLoginTried = true
         LogUtils.d( "auto launch silent web login for session recovery campus=$targetCampus")
         launchCampusWebLogin(targetCampus, silentMode = true)
+    }
+
+    private fun performLogin(campus: EASToken.Campus) {
+        when (campus) {
+            EASToken.Campus.SHENZHEN -> {
+                if (!isFormValid()) return
+                binding?.buttonLogin?.startAnimation()
+                viewModel.startLogin(
+                    binding?.username?.text.toString(),
+                    binding?.password?.text.toString(),
+                    campus
+                )
+            }
+
+            EASToken.Campus.BENBU, EASToken.Campus.WEIHAI -> {
+                launchCampusWebLogin(campus)
+            }
+        }
     }
 
     private fun launchCampusWebLogin(campus: EASToken.Campus, silentMode: Boolean = false) {
