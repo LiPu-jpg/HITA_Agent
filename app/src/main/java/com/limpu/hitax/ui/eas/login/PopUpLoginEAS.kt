@@ -183,6 +183,7 @@ class PopUpLoginEAS :
             binding?.agreementContainer?.visibility = View.VISIBLE
             binding?.agreementCheckbox?.setOnCheckedChangeListener { _, isChecked ->
                 agreementChecked = isChecked
+                if (isChecked) markUserAgreementAccepted()
             }
             setupAgreementText()
         }
