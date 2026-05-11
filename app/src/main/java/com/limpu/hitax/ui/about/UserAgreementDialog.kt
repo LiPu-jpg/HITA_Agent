@@ -42,6 +42,13 @@ class UserAgreementDialog :
     @Suppress("UNUSED_PARAMETER")
     override fun initViews(view: View) {
         val views: MutableList<ViewGroup?> = mutableListOf(null, null)
+        val localUa = getString(R.string.user_agreement)
+        val localPp = getString(R.string.privacy_policy)
+
+        fun setViewText(position: Int, content: String) {
+            (views[position]?.findViewById(R.id.text) as TextView?)?.text = Html.fromHtml(content)
+        }
+
         val adapter = object : PagerAdapter() {
             override fun getCount(): Int {
                 return 2
@@ -70,6 +77,7 @@ class UserAgreementDialog :
                     val param = FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT)
                     views[position]?.layoutParams = param
                     container.addView(views[position])
+                    setViewText(position, if (position == 0) localUa else localPp)
                 }
                 return views[position] as View
             }
@@ -77,12 +85,12 @@ class UserAgreementDialog :
         binding?.tabs?.setupWithViewPager(binding?.pager)
         binding?.pager?.adapter = adapter
         viewModel.userAgreementPageLiveData.observe(this){
-            val content = it.data?.takeIf { s -> s.isNotBlank() } ?: getString(R.string.user_agreement)
-            (views[0]?.findViewById(R.id.text) as TextView?)?.text = Html.fromHtml(content)
+            val content = it.data?.takeIf { s -> s.isNotBlank() } ?: localUa
+            setViewText(0, content)
         }
         viewModel.privacyPolicyPageLiveData.observe(this){
-            val content = it.data?.takeIf { s -> s.isNotBlank() } ?: getString(R.string.privacy_policy)
-            (views[1]?.findViewById(R.id.text) as TextView?)?.text = Html.fromHtml(content)
+            val content = it.data?.takeIf { s -> s.isNotBlank() } ?: localPp
+            setViewText(1, content)
         }
 
         if (showActionButtons || onResponseListener != null) {
