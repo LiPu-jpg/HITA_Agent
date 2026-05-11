@@ -209,9 +209,9 @@ class PopUpLoginEAS :
 
     private fun updateAgreementDrawable(checked: Boolean) {
         val resId = if (checked)
-            android.R.drawable.btn_radio_on
+            android.R.drawable.checkbox_on_background
         else
-            android.R.drawable.btn_radio
+            android.R.drawable.checkbox_off_background
         binding?.agreementCheck?.setCompoundDrawablesWithIntrinsicBounds(resId, 0, 0, 0)
     }
 
