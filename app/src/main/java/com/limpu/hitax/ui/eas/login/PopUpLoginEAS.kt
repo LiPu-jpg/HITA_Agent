@@ -177,20 +177,14 @@ class PopUpLoginEAS :
 
         val alreadyAccepted = isUserAgreementAccepted()
         agreementChecked = alreadyAccepted
-        binding?.agreementCheck?.apply {
-            if (alreadyAccepted) {
-                visibility = View.GONE
-            } else {
-                updateAgreementDrawable(false)
-                setOnClickListener {
-                    agreementChecked = !agreementChecked
-                    updateAgreementDrawable(agreementChecked)
-                }
-                setOnLongClickListener {
-                    UserAgreementDialog().show(childFragmentManager, "user_agreement_view")
-                    true
-                }
+        if (alreadyAccepted) {
+            binding?.agreementContainer?.visibility = View.GONE
+        } else {
+            binding?.agreementContainer?.visibility = View.VISIBLE
+            binding?.agreementCheckbox?.setOnCheckedChangeListener { _, isChecked ->
+                agreementChecked = isChecked
             }
+            setupAgreementText()
         }
 
         binding?.username?.addTextChangedListener(textWatcher)
@@ -207,12 +201,35 @@ class PopUpLoginEAS :
         }
     }
 
-    private fun updateAgreementDrawable(checked: Boolean) {
-        val resId = if (checked)
-            android.R.drawable.checkbox_on_background
-        else
-            android.R.drawable.checkbox_off_background
-        binding?.agreementCheck?.setCompoundDrawablesWithIntrinsicBounds(resId, 0, 0, 0)
+    private fun setupAgreementText() {
+        val tv = binding?.agreementText ?: return
+        val hint = getString(R.string.user_agreement_hint)
+        val span = android.text.SpannableString(hint)
+        val uaStart = hint.indexOf("《")
+        val uaEnd = hint.indexOf("》") + 1
+        val ppStart = hint.indexOf("《", uaEnd)
+        val ppEnd = hint.indexOf("》", ppStart) + 1
+
+        if (uaStart >= 0 && uaEnd > uaStart) {
+            span.setSpan(object : android.text.style.ClickableSpan() {
+                override fun onClick(widget: android.view.View) {
+                    UserAgreementDialog().apply {
+                        setShowActionButtons(false)
+                    }.show(childFragmentManager, "user_agreement_view")
+                }
+            }, uaStart, uaEnd, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        if (ppStart >= 0 && ppEnd > ppStart) {
+            span.setSpan(object : android.text.style.ClickableSpan() {
+                override fun onClick(widget: android.view.View) {
+                    UserAgreementDialog().apply {
+                        setShowActionButtons(false)
+                    }.show(childFragmentManager, "privacy_view")
+                }
+            }, ppStart, ppEnd, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        tv.text = span
+        tv.movementMethod = android.text.method.LinkMovementMethod.getInstance()
     }
 
     fun isFormValid(): Boolean {
