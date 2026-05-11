@@ -84,14 +84,6 @@ class UserAgreementDialog :
         }
         binding?.tabs?.setupWithViewPager(binding?.pager)
         binding?.pager?.adapter = adapter
-        viewModel.userAgreementPageLiveData.observe(this){
-            val content = it.data?.takeIf { s -> s.isNotBlank() } ?: localUa
-            setViewText(0, content)
-        }
-        viewModel.privacyPolicyPageLiveData.observe(this){
-            val content = it.data?.takeIf { s -> s.isNotBlank() } ?: localPp
-            setViewText(1, content)
-        }
 
         if (showActionButtons || onResponseListener != null) {
             binding?.agreementActions?.visibility = View.VISIBLE
@@ -106,11 +98,6 @@ class UserAgreementDialog :
         } else {
             binding?.agreementActions?.visibility = View.GONE
         }
-    }
-
-    override fun onStart() {
-        super.onStart()
-        viewModel.refresh()
     }
 
     override fun isCancelable(): Boolean {
