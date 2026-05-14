@@ -12,8 +12,10 @@ import com.limpu.hitax.agent.timetable.TimetableAgentInput
 import com.limpu.hitax.agent.timetable.TimetableAgentOutput
 import com.limpu.hitax.databinding.DialogAgentChatBinding
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
+import dagger.hilt.android.AndroidEntryPoint
 import java.util.Calendar
 
+@AndroidEntryPoint
 class AgentChatDialog :
     TransparentModeledBottomSheetDialog<AgentChatViewModel, DialogAgentChatBinding>() {
 

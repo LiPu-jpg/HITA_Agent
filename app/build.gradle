@@ -5,8 +5,8 @@ plugins {
     id 'dagger.hilt.android.plugin'
 }
 
-def appVersionCodeValue = 2026051002
-def appVersionNameValue = "2.0.4"
+def appVersionCodeValue = 2026051201
+def appVersionNameValue = "2.0.5"
 
 
 android {

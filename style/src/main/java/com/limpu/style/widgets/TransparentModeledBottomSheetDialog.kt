@@ -91,7 +91,7 @@ abstract class TransparentModeledBottomSheetDialog<T : ViewModel, V : ViewBindin
                     ViewModelProvider.AndroidViewModelFactory.getInstance(requireActivity().application)
                 ).get(it)
             } else {
-                ViewModelProvider(this).get(it)
+                ViewModelProvider(this, defaultViewModelProviderFactory).get(it)
             }
         }
         viewModelInit = true

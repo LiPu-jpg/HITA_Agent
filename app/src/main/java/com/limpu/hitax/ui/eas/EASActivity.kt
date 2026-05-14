@@ -18,7 +18,7 @@ abstract class EASActivity<T : EASViewModel, V : ViewBinding> : HiltBaseActivity
 
     companion object {
         private const val REQUEST_CODE_SILENT_RELOGIN = 10001
-        private const val MAX_SESSION_RETRIES = 2
+        private const val MAX_SESSION_RETRIES = 3
     }
 
     @Inject

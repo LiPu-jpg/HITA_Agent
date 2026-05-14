@@ -8,7 +8,9 @@ import com.limpu.hitax.R
 import com.limpu.hitax.data.model.timetable.TimeInDay
 import com.limpu.hitax.databinding.FragmentTimetablePanelBinding
 import com.limpu.style.widgets.TransparentModeledBottomSheetDialog
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class FragmentTimetablePanel : TransparentModeledBottomSheetDialog<TimetablePanelViewModel, FragmentTimetablePanelBinding>() {
 
 

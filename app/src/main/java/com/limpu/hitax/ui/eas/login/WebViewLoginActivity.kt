@@ -204,20 +204,27 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
                             LogUtils.d("portal home detected, auto open jwts campus=${config.campus}")
                             autoOpenJwts(view)
                         }
+                        isIvpnRedirectPage(url) -> {
+                            autoOpeningJwts = false
+                            if (silentMode) {
+                                LogUtils.d("ivpn redirect page in silent mode, need user interaction")
+                                finishWithCancelledResult()
+                            } else {
+                                LogUtils.d("ivpn redirect page, waiting for CAS login: path=${uri.path}")
+                            }
+                        }
                         isSuccessPage(url) -> {
                             autoOpeningJwts = false
                             LogUtils.success("login success page detected campus=${config.campus}")
                             handleSuccessPage()
                         }
-                        isJwtsPage(url) -> {
-                            autoOpeningJwts = false
-                            LogUtils.d("jwts login page detected, starting cookie polling")
-                            startCookiePolling()
-                        }
                         autoOpeningJwts && uri.host?.contains("jwts") == true -> {
                             autoOpeningJwts = false
-                            LogUtils.d("jwts domain (non-loginCAS), starting cookie polling: path=${uri.path}")
+                            LogUtils.d("jwts domain (auto-open), starting cookie polling: path=${uri.path}")
                             startCookiePolling()
+                        }
+                        isJwtsPage(url) -> {
+                            LogUtils.d("jwts login page detected, waiting for CAS redirect")
                         }
                         else -> {
                             LogUtils.d("unhandled page: host=${uri.host} path=${uri.path}")
@@ -248,6 +255,12 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
         }
     }
 
+    private fun isIvpnRedirectPage(url: String): Boolean {
+        if (config.campus != EASToken.Campus.BENBU) return false
+        val uri = Uri.parse(url)
+        return uri.host == "ivpn.hit.edu.cn"
+    }
+
     private fun isJwtsPage(url: String): Boolean {
         if (config.campus == EASToken.Campus.WEIHAI) {
             return false
@@ -264,12 +277,19 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
 
         return when (config.campus) {
             EASToken.Campus.BENBU -> {
-                val cookies = collectCookies()
-                val hasRequiredCookies = cookies.containsKey("JSESSIONID") &&
-                                         cookies.containsKey("HIT")
+                val isLoginPage = path.contains("login")
+                val isOnJwtsDomain = host.contains("jwts")
 
-                if (hasRequiredCookies) {
-                    return true
+                // Only check cookies on JWTS domain — IVPN portal pages can have
+                // IVPN session cookies that don't represent an authenticated JWTS session
+                if (isOnJwtsDomain && !isLoginPage) {
+                    val cookies = collectCookies()
+                    val hasRequiredCookies = cookies.containsKey("JSESSIONID") &&
+                                             cookies.containsKey("HIT")
+
+                    if (hasRequiredCookies) {
+                        return true
+                    }
                 }
 
                 (host.contains("jwts") || host.contains("hit.edu.cn")) &&
@@ -323,7 +343,13 @@ class WebViewLoginActivity : HiltBaseActivity<ActivityWebviewLoginBinding>() {
             return
         }
 
-        if ((config.campus == EASToken.Campus.BENBU || config.campus == EASToken.Campus.SHENZHEN)
+        if (config.campus == EASToken.Campus.BENBU
+            && hasRequiredCookies(cookies, currentUrl)) {
+            handleSuccessPage()
+            return
+        }
+
+        if (config.campus == EASToken.Campus.SHENZHEN
             && hasRequiredCookies(cookies, currentUrl)) {
             finishWithCookies(cookies)
             return

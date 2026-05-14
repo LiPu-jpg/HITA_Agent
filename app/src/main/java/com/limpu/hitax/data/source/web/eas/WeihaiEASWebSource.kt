@@ -21,7 +21,9 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
 
-class WeihaiEASWebSource : EASService {
+class WeihaiEASWebSource(
+    private val onCookiesUpdated: ((EASToken) -> Unit)? = null
+) : EASService {
     private val hostName = "https://webvpn.hitwh.edu.cn/http/77726476706e69737468656265737421fae0558f693861446900c7a99c406d3667"
     private val timeout = AppConstants.Network.READ_TIMEOUT.toInt()
     private val executor = Executors.newCachedThreadPool()
@@ -123,20 +125,18 @@ class WeihaiEASWebSource : EASService {
                     .ignoreHttpErrors(true)
                     .method(Connection.Method.GET)
                     .execute()
-                token.cookies.putAll(response.cookies())
                 val body = response.body()
-                val loggedIn = response.statusCode() == 200 && body.contains("reAuth_success")
+                val valid = response.statusCode() == 200 && body.contains("reAuth_success")
 
-                // 威海校区：WebView已确认登录成功（有wengine_vpn_ticket），直接返回成功
-                if (loggedIn || true) {
-                    result.postValue(DataState(Pair(true, token), DataState.STATE.SUCCESS))
-                } else if (isWeihaiAuthExpiredResponse(response, body)) {
-                    result.postValue(DataState(Pair(false, token), DataState.STATE.SUCCESS))
+                if (valid) {
+                    token.cookies.putAll(response.cookies())
+                    onCookiesUpdated?.invoke(token)
                 }
+                LogUtils.d("loginCheck: valid=$valid status=${response.statusCode()}")
+                result.postValue(DataState(Pair(valid, token), DataState.STATE.SUCCESS))
             } catch (e: Exception) {
-                // 威海校区：即使reAuth失败，也认为登录成功（因为WebView已确认）
-                LogUtils.d("loginCheck: exception, treating as success, message=${e.message}")
-                result.postValue(DataState(Pair(true, token), DataState.STATE.SUCCESS))
+                LogUtils.w("loginCheck: exception, message=${e.message}")
+                result.postValue(DataState(Pair(false, token), DataState.STATE.SUCCESS))
             }
         }
 
@@ -438,7 +438,10 @@ class WeihaiEASWebSource : EASService {
                 .ignoreHttpErrors(true)
                 .method(Connection.Method.GET)
                 .execute()
-            token.cookies.putAll(response.cookies())
+            if (response.cookies().isNotEmpty()) {
+                token.cookies.putAll(response.cookies())
+                onCookiesUpdated?.invoke(token)
+            }
             return response
         }
 
@@ -1249,7 +1252,10 @@ class WeihaiEASWebSource : EASService {
                 .data(params)
                 .method(Connection.Method.POST)
                 .execute()
-            token.cookies.putAll(resp.cookies())
+            if (resp.cookies().isNotEmpty()) {
+                token.cookies.putAll(resp.cookies())
+                onCookiesUpdated?.invoke(token)
+            }
             return resp
         }
 
@@ -1261,14 +1267,8 @@ class WeihaiEASWebSource : EASService {
     }
 
     private fun tryRelogin(token: EASToken): Boolean {
-        val cookiesJson = token.password?.trim().orEmpty()
-        if (cookiesJson.isBlank()) return false
-        val refreshedCookies = parseCookiesFromJson(cookiesJson)
-        if (refreshedCookies.isEmpty()) return false
-        token.cookies.clear()
-        token.cookies.putAll(refreshedCookies)
-        token.username = extractLoginIdentity(refreshedCookies)
-        return true
+        // WebView-based relogin is handled at Activity level via handleSessionExpired
+        return false
     }
 
     private fun isWeihaiAuthExpiredResponse(resp: Connection.Response, body: String): Boolean {

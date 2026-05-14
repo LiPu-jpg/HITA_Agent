@@ -46,8 +46,12 @@ class EASRepository @Inject constructor(
     private val shenzhenService: EASWebSource = EASWebSource { token ->
         saveEasToken(token)
     }
-    private val benbuService: EASService = BenbuEASWebSource()
-    private val weihaiService: EASService = WeihaiEASWebSource()
+    private val benbuService: EASService = BenbuEASWebSource { token ->
+        saveEasToken(token)
+    }
+    private val weihaiService: EASService = WeihaiEASWebSource { token ->
+        saveEasToken(token)
+    }
     private var eventItemDao = AppDatabase.getDatabase(application).eventItemDao()
     private var timetableDao = AppDatabase.getDatabase(application).timetableDao()
     private var subjectDao = AppDatabase.getDatabase(application).subjectDao()

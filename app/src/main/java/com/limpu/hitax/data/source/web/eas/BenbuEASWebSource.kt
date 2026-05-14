@@ -20,7 +20,9 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.Executors
 
-class BenbuEASWebSource : EASService {
+class BenbuEASWebSource(
+    private val onCookiesUpdated: ((EASToken) -> Unit)? = null
+) : EASService {
     private val hostName = "http://jwts-hit-edu-cn.ivpn.hit.edu.cn:1080"
     private val experimentHostName = "http://sjjx-hit-edu-cn.ivpn.hit.edu.cn:1080"
     private val electronicExpHostName = "http://eelabinfo-hit-edu-cn.ivpn.hit.edu.cn:1080"
@@ -113,7 +115,33 @@ class BenbuEASWebSource : EASService {
     }
 
     override fun loginCheck(token: EASToken): LiveData<DataState<Pair<Boolean, EASToken>>> {
-        return MutableLiveData(DataState(Pair(true, token), DataState.STATE.SUCCESS))
+        val result = MutableLiveData<DataState<Pair<Boolean, EASToken>>>()
+        result.value = DataState(DataState.STATE.NOTHING)
+        executor.execute {
+            try {
+                val response = Jsoup.connect("$hostName/xswhxx/queryXswhxx")
+                    .cookies(token.cookies)
+                    .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .timeout(timeout)
+                    .ignoreContentType(true)
+                    .ignoreHttpErrors(true)
+                    .method(Connection.Method.GET)
+                    .execute()
+                val valid = response.statusCode() == 200 &&
+                    !isBenbuAuthExpiredResponse(response, response.body())
+                if (valid) {
+                    token.cookies.putAll(response.cookies())
+                    onCookiesUpdated?.invoke(token)
+                }
+                LogUtils.d("loginCheck: valid=$valid status=${response.statusCode()}")
+                result.postValue(DataState(Pair(valid, token), DataState.STATE.SUCCESS))
+            } catch (e: Exception) {
+                LogUtils.w("loginCheck: exception, message=${e.message}")
+                result.postValue(DataState(Pair(false, token), DataState.STATE.SUCCESS))
+            }
+        }
+        return result
     }
 
     override fun getAllTerms(token: EASToken): LiveData<DataState<List<TermItem>>> {
@@ -399,7 +427,10 @@ class BenbuEASWebSource : EASService {
                 .ignoreHttpErrors(true)
                 .method(Connection.Method.GET)
                 .execute()
-            token.cookies.putAll(response.cookies())
+            if (response.cookies().isNotEmpty()) {
+                token.cookies.putAll(response.cookies())
+                onCookiesUpdated?.invoke(token)
+            }
             return response
         }
 
@@ -1255,7 +1286,10 @@ class BenbuEASWebSource : EASService {
                 .data(params)
                 .method(Connection.Method.POST)
                 .execute()
-            token.cookies.putAll(resp.cookies())
+            if (resp.cookies().isNotEmpty()) {
+                token.cookies.putAll(resp.cookies())
+                onCookiesUpdated?.invoke(token)
+            }
             return resp
         }
 
@@ -1267,14 +1301,8 @@ class BenbuEASWebSource : EASService {
     }
 
     private fun tryRelogin(token: EASToken): Boolean {
-        val cookiesJson = token.password?.trim().orEmpty()
-        if (cookiesJson.isBlank()) return false
-        val refreshedCookies = parseCookiesFromJson(cookiesJson)
-        if (refreshedCookies.isEmpty()) return false
-        token.cookies.clear()
-        token.cookies.putAll(refreshedCookies)
-        token.username = extractLoginIdentity(refreshedCookies)
-        return true
+        // WebView-based relogin is handled at Activity level via handleSessionExpired
+        return false
     }
 
     private fun isBenbuAuthExpiredResponse(resp: Connection.Response, body: String): Boolean {
