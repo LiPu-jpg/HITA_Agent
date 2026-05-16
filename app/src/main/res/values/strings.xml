@@ -129,6 +129,14 @@
     <string name="course_resource_hint">输入课程名、课程代码或教师名</string>
     <string name="course_resource_empty">没有找到相关课程资源</string>
     <string name="course_resource_failed">课程资源加载失败</string>
+    <string name="external_resource_title">外部资料</string>
+    <string name="external_resource_hint">输入课程名搜索</string>
+    <string name="external_resource_empty">没有找到相关课程资料</string>
+    <string name="external_resource_failed">资料加载失败</string>
+    <string name="external_resource_source_hitcs">HITCS</string>
+    <string name="external_resource_source_fireworks">薪火笔记社</string>
+    <string name="external_resource_browse">浏览资料</string>
+    <string name="external_resource_toolbar_entry">外部资料</string>
     <string name="course_readme_loading">正在加载 README…</string>
     <string name="course_readme_source">来源：%s</string>
     <string name="course_readme_missing">还没有这门课程的内容，可以点击追加课程内容在临时仓库进行 PR。</string>
