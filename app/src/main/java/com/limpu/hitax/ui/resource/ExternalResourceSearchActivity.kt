@@ -152,8 +152,9 @@ class ExternalResourceSearchActivity :
 
     private fun navigateInto(entry: ExternalResourceEntry) {
         if (!entry.isDir) {
-            if (entry.downloadUrl.isNotBlank()) {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(entry.downloadUrl))
+            val url = resolveDownloadUrl(entry)
+            if (url.isNotBlank()) {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                 startActivity(intent)
             }
             return
@@ -197,6 +198,33 @@ class ExternalResourceSearchActivity :
             @Suppress("DEPRECATION")
             super.onBackPressed()
         }
+    }
+
+    /**
+     * Resolve a reliable download URL for a file entry.
+     * raw.githubusercontent.com may be blocked on some mobile networks,
+     * so prefer github.com/blob/ URLs which are more widely accessible.
+     */
+    private fun resolveDownloadUrl(entry: ExternalResourceEntry): String {
+        // If it's already a website URL (Fireworks links), use directly
+        if (entry.downloadUrl.startsWith("https://fireworks.jwyihao.top")) {
+            return entry.downloadUrl
+        }
+
+        // For GitHub files, use blob URL (more reliable on mobile than raw URL)
+        if (entry.path.isNotBlank()) {
+            val repo = when (entry.source) {
+                ResourceSource.HITCS -> "HITLittleZheng/HITCS"
+                ResourceSource.FIREWORKS -> "HIT-Fireworks/fireworks-notes-society"
+            }
+            val encodedPath = entry.path.split("/").joinToString("/") { segment ->
+                java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+            }
+            return "https://github.com/$repo/blob/main/$encodedPath"
+        }
+
+        // Fallback to raw download URL
+        return entry.downloadUrl
     }
 
     private fun applyStatusBarInsets() {
