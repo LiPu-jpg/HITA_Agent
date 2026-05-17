@@ -14,12 +14,13 @@ import org.jsoup.Connection
 import org.jsoup.Jsoup
 
 object FireworksWebSource {
+    private const val SITE_URL = "https://fireworks.jwyihao.top"
     private const val REPO = "HIT-Fireworks/fireworks-notes-society"
     private const val API_BASE = "https://api.github.com/repos/$REPO"
     private const val TIMEOUT = 30000
 
     @Volatile
-    private var courseCache: List<Triple<String, String, String>>? = null
+    private var courseCache: List<Pair<String, String>>? = null // (courseName, path)
 
     @Volatile
     private var cacheTimestamp: Long = 0L
@@ -42,9 +43,11 @@ object FireworksWebSource {
             try {
                 val courses = ensureCourseCache()
                 val keyword = query.trim().lowercase()
-                val matched = courses.filter { (_, courseName, _) ->
+                val matched = courses.filter { (courseName, _) ->
                     courseName.lowercase().contains(keyword)
-                }.map { (category, courseName, path) ->
+                }.map { (courseName, path) ->
+                    val parts = path.split("/")
+                    val category = parts.firstOrNull() ?: ""
                     ExternalCourseItem(
                         courseName = courseName,
                         category = category,
@@ -102,49 +105,56 @@ object FireworksWebSource {
     }
 
     @Synchronized
-    private fun ensureCourseCache(): List<Triple<String, String, String>> {
+    private fun ensureCourseCache(): List<Pair<String, String>> {
         val cached = courseCache
         if (cached != null && System.currentTimeMillis() - cacheTimestamp < CACHE_TTL_MS) {
             return cached
         }
-        LogUtils.d("Fireworks: loading course cache from Tree API")
-        val url = "$API_BASE/git/trees/main?recursive=1"
-        val response = withHeaders(Jsoup.connect(url))
+        LogUtils.d("Fireworks: loading course cache from website")
+
+        val response = Jsoup.connect(SITE_URL)
+            .ignoreContentType(true)
+            .ignoreHttpErrors(true)
+            .timeout(TIMEOUT)
+            .header("User-Agent", "HITA_L/${BuildConfig.VERSION_NAME}")
             .method(Connection.Method.GET)
             .execute()
 
         if (response.statusCode() >= 400) {
-            throw Exception("GitHub Tree API returned HTTP ${response.statusCode()}")
+            throw Exception("Website returned HTTP ${response.statusCode()}")
         }
 
-        val tree = JSONObject(response.body())
-        val treeArr = tree.optJSONArray("tree") ?: JSONArray()
-
-        val dirPaths = mutableSetOf<String>()
-        for (i in 0 until treeArr.length()) {
-            val item = treeArr.optJSONObject(i) ?: continue
-            if (item.optString("type") != "tree") continue
-            val itemPath = item.optString("path", "")
-            val depth = itemPath.count { it == '/' }
-            if (depth == 1) {
-                dirPaths.add(itemPath)
-            }
-        }
-
-        val courses = mutableListOf<Triple<String, String, String>>()
-        for (dirPath in dirPaths) {
-            val parts = dirPath.split("/", limit = 2)
-            if (parts.size == 2) {
-                val category = parts[0]
-                val courseName = parts[1]
-                if (!courseName.startsWith(".")) {
-                    courses.add(Triple(category, courseName, dirPath))
-                }
-            }
-        }
-        LogUtils.d("Fireworks: cached ${courses.size} courses")
+        val html = response.body()
+        val courses = parseCoursesFromHashMap(html)
+        LogUtils.d("Fireworks: cached ${courses.size} courses from website")
         courseCache = courses
         cacheTimestamp = System.currentTimeMillis()
+        return courses
+    }
+
+    /**
+     * Parse VitePress __VP_HASH_MAP__ to extract course paths.
+     * Format: "{\"category_course_index.md\":\"hash\",...}"
+     * Course name = last segment of path (without _index.md)
+     */
+    private fun parseCoursesFromHashMap(html: String): List<Pair<String, String>> {
+        val regex = """\\\"([^"\\]+_index\.md)\\\"""".toRegex()
+        val skip = setOf("index.md", "lessons_index.md", "parts_wip.md", "team.md", "README.md")
+        val courses = mutableListOf<Pair<String, String>>()
+
+        val match = regex.findAll(html)
+        for (m in match) {
+            val key = m.groupValues[1]
+            if (key in skip) continue
+            val rawPath = key.replace("_index.md", "")
+            val parts = rawPath.split("_")
+            // Path format: category_subcategory_course -> last part is course name
+            val path = parts.joinToString("/")
+            val courseName = parts.lastOrNull() ?: continue
+            if (courseName.isNotBlank()) {
+                courses.add(Pair(courseName, path))
+            }
+        }
         return courses
     }
 
