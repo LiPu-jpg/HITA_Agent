@@ -65,6 +65,8 @@ object FireworksWebSource {
         return result
     }
 
+    private const val ALIST_VIEW_BASE = "https://fireworks.jwyihao.top/lessons"
+
     fun listDirectory(path: String): LiveData<DataState<List<ExternalResourceEntry>>> {
         val result = MutableLiveData<DataState<List<ExternalResourceEntry>>>()
         Thread {
@@ -81,11 +83,23 @@ object FireworksWebSource {
 
                 val arr = JSONArray(response.body())
                 val entries = mutableListOf<ExternalResourceEntry>()
+
+                // Parse index.md to find OList path for file server link
+                var olistPath: String? = null
+
                 for (i in 0 until arr.length()) {
                     val obj = arr.optJSONObject(i) ?: continue
+                    val name = obj.optString("name", "")
+
+                    if (name == "index.md") {
+                        // Fetch index.md content to extract OList path
+                        olistPath = fetchOListPath(obj.optString("download_url", ""))
+                        continue
+                    }
+
                     entries.add(
                         ExternalResourceEntry(
-                            name = obj.optString("name", ""),
+                            name = name,
                             isDir = obj.optString("type") == "dir",
                             path = obj.optString("path", ""),
                             size = obj.optLong("size", 0),
@@ -94,6 +108,22 @@ object FireworksWebSource {
                         )
                     )
                 }
+
+                // Add a link to the website course page where files are browsable
+                val parts = path.split("/")
+                val coursePagePath = parts.joinToString("_")
+                val websiteUrl = "$ALIST_VIEW_BASE/$coursePagePath/"
+                entries.add(0,
+                    ExternalResourceEntry(
+                        name = "在薪火笔记社查看资料",
+                        isDir = false,
+                        path = "",
+                        size = 0,
+                        downloadUrl = websiteUrl,
+                        source = ResourceSource.FIREWORKS,
+                    )
+                )
+
                 entries.sortWith(compareByDescending<ExternalResourceEntry> { it.isDir }.thenBy { it.name })
                 result.postValue(DataState(entries, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
@@ -102,6 +132,25 @@ object FireworksWebSource {
             }
         }.start()
         return result
+    }
+
+    private fun fetchOListPath(downloadUrl: String): String? {
+        if (downloadUrl.isBlank()) return null
+        return try {
+            val response = Jsoup.connect(downloadUrl)
+                .ignoreContentType(true)
+                .ignoreHttpErrors(true)
+                .timeout(TIMEOUT)
+                .header("User-Agent", "HITA_L/${BuildConfig.VERSION_NAME}")
+                .method(Connection.Method.GET)
+                .execute()
+            val content = response.body()
+            val match = Regex("""OList\s+path="([^"]+)"""").find(content)
+            match?.groupValues?.get(1)
+        } catch (e: Exception) {
+            LogUtils.w("Fireworks: failed to fetch OList path: ${e.message}")
+            null
+        }
     }
 
     @Synchronized
