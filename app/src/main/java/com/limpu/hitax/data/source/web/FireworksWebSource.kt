@@ -14,10 +14,9 @@ import org.jsoup.Connection
 import org.jsoup.Jsoup
 
 object FireworksWebSource {
-    private const val ALIST_API = "https://olist-eo.jwyihao.top/api/fs/list"
-    private const val DOWNLOAD_BASE = "https://alist-d.jwyihao.top/d/Fireworks"
-    private const val ROOT_PATH = "/Fireworks"
-    private const val TIMEOUT = 15000
+    private const val REPO = "HIT-Fireworks/fireworks-notes-society"
+    private const val API_BASE = "https://api.github.com/repos/$REPO"
+    private const val TIMEOUT = 30000
 
     @Volatile
     private var courseCache: List<Triple<String, String, String>>? = null
@@ -27,41 +26,17 @@ object FireworksWebSource {
 
     private const val CACHE_TTL_MS = 3600_000L
 
-    private fun listAlistDir(path: String): JSONArray {
-        val body = JSONObject()
-        body.put("path", path)
-        body.put("password", "")
-        body.put("page", 1)
-        body.put("per_page", 0)
-        body.put("refresh", false)
-
-        val response = Jsoup.connect(ALIST_API)
-            .ignoreContentType(true)
+    private fun withHeaders(req: Connection): Connection {
+        req.ignoreContentType(true)
             .ignoreHttpErrors(true)
             .timeout(TIMEOUT)
-            .header("Content-Type", "application/json")
-            .header("Accept", "application/json")
+            .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "HITA_L/${BuildConfig.VERSION_NAME}")
-            .requestBody(body.toString())
-            .method(Connection.Method.POST)
-            .execute()
-
-        if (response.statusCode() >= 400) {
-            throw Exception("AList API returned HTTP ${response.statusCode()}")
-        }
-
-        val resObj = JSONObject(response.body())
-        val code = resObj.optInt("code", -1)
-        if (code != 200) {
-            val msg = resObj.optString("message", "Unknown error")
-            throw Exception("AList API error: $msg (code=$code)")
-        }
-
-        val data = resObj.optJSONObject("data")
-        return data?.optJSONArray("content") ?: JSONArray()
+        return req
     }
 
     fun searchCourses(query: String): LiveData<DataState<List<ExternalCourseItem>>> {
+        LogUtils.d("Fireworks: searchCourses called with query='$query'")
         val result = MutableLiveData<DataState<List<ExternalCourseItem>>>()
         Thread {
             try {
@@ -69,14 +44,15 @@ object FireworksWebSource {
                 val keyword = query.trim().lowercase()
                 val matched = courses.filter { (_, courseName, _) ->
                     courseName.lowercase().contains(keyword)
-                }.map { (category, courseName, fullPath) ->
+                }.map { (category, courseName, path) ->
                     ExternalCourseItem(
                         courseName = courseName,
                         category = category,
                         source = ResourceSource.FIREWORKS,
-                        path = fullPath,
+                        path = path,
                     )
                 }
+                LogUtils.d("Fireworks: matched ${matched.size} courses for '$query'")
                 result.postValue(DataState(matched, DataState.STATE.SUCCESS))
             } catch (e: Exception) {
                 LogUtils.e("Fireworks search failed: ${e.message}")
@@ -90,29 +66,27 @@ object FireworksWebSource {
         val result = MutableLiveData<DataState<List<ExternalResourceEntry>>>()
         Thread {
             try {
-                val content = listAlistDir(path)
+                val url = "$API_BASE/contents/${encodePath(path)}"
+                val response = withHeaders(Jsoup.connect(url))
+                    .method(Connection.Method.GET)
+                    .execute()
+
+                if (response.statusCode() >= 400) {
+                    result.postValue(DataState(DataState.STATE.FETCH_FAILED, "HTTP ${response.statusCode()}"))
+                    return@Thread
+                }
+
+                val arr = JSONArray(response.body())
                 val entries = mutableListOf<ExternalResourceEntry>()
-                for (i in 0 until content.length()) {
-                    val obj = content.optJSONObject(i) ?: continue
-                    val isDir = obj.optBoolean("is_dir", false)
-                    val name = obj.optString("name", "")
-                    val entryPath = obj.optString("path", "")
-                    val size = obj.optLong("size", 0)
-
-                    val downloadUrl = if (!isDir) {
-                        val encodedPath = entryPath.split("/").joinToString("/") { segment ->
-                            java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
-                        }
-                        "$DOWNLOAD_BASE$encodedPath"
-                    } else ""
-
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
                     entries.add(
                         ExternalResourceEntry(
-                            name = name,
-                            isDir = isDir,
-                            path = entryPath,
-                            size = size,
-                            downloadUrl = downloadUrl,
+                            name = obj.optString("name", ""),
+                            isDir = obj.optString("type") == "dir",
+                            path = obj.optString("path", ""),
+                            size = obj.optLong("size", 0),
+                            downloadUrl = obj.optString("download_url", ""),
                             source = ResourceSource.FIREWORKS,
                         )
                     )
@@ -133,41 +107,50 @@ object FireworksWebSource {
         if (cached != null && System.currentTimeMillis() - cacheTimestamp < CACHE_TTL_MS) {
             return cached
         }
-        LogUtils.d("Fireworks: loading course cache from AList")
+        LogUtils.d("Fireworks: loading course cache from Tree API")
+        val url = "$API_BASE/git/trees/main?recursive=1"
+        val response = withHeaders(Jsoup.connect(url))
+            .method(Connection.Method.GET)
+            .execute()
 
-        val rootContent = listAlistDir(ROOT_PATH)
-        val categories = mutableListOf<Pair<String, String>>()
-        for (i in 0 until rootContent.length()) {
-            val obj = rootContent.optJSONObject(i) ?: continue
-            if (obj.optBoolean("is_dir", false)) {
-                categories.add(Pair(obj.optString("name", ""), obj.optString("path", "")))
+        if (response.statusCode() >= 400) {
+            throw Exception("GitHub Tree API returned HTTP ${response.statusCode()}")
+        }
+
+        val tree = JSONObject(response.body())
+        val treeArr = tree.optJSONArray("tree") ?: JSONArray()
+
+        val dirPaths = mutableSetOf<String>()
+        for (i in 0 until treeArr.length()) {
+            val item = treeArr.optJSONObject(i) ?: continue
+            if (item.optString("type") != "tree") continue
+            val itemPath = item.optString("path", "")
+            val depth = itemPath.count { it == '/' }
+            if (depth == 1) {
+                dirPaths.add(itemPath)
             }
         }
 
         val courses = mutableListOf<Triple<String, String, String>>()
-        for ((categoryName, categoryPath) in categories) {
-            try {
-                val courseContent = listAlistDir(categoryPath)
-                for (j in 0 until courseContent.length()) {
-                    val obj = courseContent.optJSONObject(j) ?: continue
-                    if (obj.optBoolean("is_dir", false)) {
-                        courses.add(
-                            Triple(
-                                categoryName,
-                                obj.optString("name", ""),
-                                obj.optString("path", ""),
-                            )
-                        )
-                    }
+        for (dirPath in dirPaths) {
+            val parts = dirPath.split("/", limit = 2)
+            if (parts.size == 2) {
+                val category = parts[0]
+                val courseName = parts[1]
+                if (!courseName.startsWith(".")) {
+                    courses.add(Triple(category, courseName, dirPath))
                 }
-            } catch (e: Exception) {
-                LogUtils.w("Fireworks: failed to list category $categoryName: ${e.message}")
             }
         }
-
-        LogUtils.d("Fireworks: cached ${courses.size} courses from ${categories.size} categories")
+        LogUtils.d("Fireworks: cached ${courses.size} courses")
         courseCache = courses
         cacheTimestamp = System.currentTimeMillis()
         return courses
+    }
+
+    private fun encodePath(path: String): String {
+        return path.split("/").joinToString("/") { segment ->
+            java.net.URLEncoder.encode(segment, "UTF-8").replace("+", "%20")
+        }
     }
 }

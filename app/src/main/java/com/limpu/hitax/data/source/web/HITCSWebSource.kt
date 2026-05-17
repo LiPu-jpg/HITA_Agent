@@ -16,7 +16,7 @@ import org.jsoup.Jsoup
 object HITCSWebSource {
     private const val REPO = "HITLittleZheng/HITCS"
     private const val API_BASE = "https://api.github.com/repos/$REPO"
-    private const val TIMEOUT = 15000
+    private const val TIMEOUT = 30000
 
     @Volatile
     private var courseCache: List<Triple<String, String, String>>? = null
@@ -36,6 +36,7 @@ object HITCSWebSource {
     }
 
     fun searchCourses(query: String): LiveData<DataState<List<ExternalCourseItem>>> {
+        LogUtils.d("HITCS: searchCourses called with query='$query'")
         val result = MutableLiveData<DataState<List<ExternalCourseItem>>>()
         Thread {
             try {

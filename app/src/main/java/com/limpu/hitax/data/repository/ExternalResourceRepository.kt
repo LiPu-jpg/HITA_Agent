@@ -23,6 +23,10 @@ class ExternalResourceRepository @Inject constructor() {
         val fireworksLive = FireworksWebSource.searchCourses(query)
 
         fun mergeAndPost() {
+            val hitcsDone = hitcsResult != null || hitcsFailed
+            val fireworksDone = fireworksResult != null || fireworksFailed
+            if (!hitcsDone || !fireworksDone) return
+
             val merged = mutableListOf<ExternalCourseItem>()
             hitcsResult?.let { merged.addAll(it) }
             fireworksResult?.let { merged.addAll(it) }
@@ -32,6 +36,8 @@ class ExternalResourceRepository @Inject constructor() {
                 mediator.value = DataState(merged, DataState.STATE.SUCCESS)
             } else if (hitcsFailed && fireworksFailed) {
                 mediator.value = DataState(DataState.STATE.FETCH_FAILED, "所有数据源均不可用")
+            } else {
+                mediator.value = DataState(merged, DataState.STATE.SUCCESS)
             }
         }
 
